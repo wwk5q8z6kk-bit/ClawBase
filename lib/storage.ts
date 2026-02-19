@@ -7,6 +7,9 @@ import type {
   Task,
   TaskStatus,
   MemoryEntry,
+  CalendarEvent,
+  CRMContact,
+  CRMInteraction,
 } from './types';
 
 const KEYS = {
@@ -16,6 +19,8 @@ const KEYS = {
   MESSAGES: '@clawcockpit:messages',
   TASKS: '@clawcockpit:tasks',
   MEMORY: '@clawcockpit:memory',
+  CALENDAR: '@clawcockpit:calendar',
+  CRM_CONTACTS: '@clawcockpit:crm_contacts',
   BIOMETRIC_ENABLED: '@clawcockpit:biometricEnabled',
   HAS_ONBOARDED: '@clawcockpit:hasOnboarded',
 };
@@ -173,6 +178,14 @@ export const memoryStorage = {
     await setJSON(KEYS.MEMORY, all);
     return mem;
   },
+  async update(id: string, updates: Partial<MemoryEntry>): Promise<void> {
+    const all = await getJSON<MemoryEntry[]>(KEYS.MEMORY, []);
+    const idx = all.findIndex((m) => m.id === id);
+    if (idx >= 0) {
+      all[idx] = { ...all[idx], ...updates };
+      await setJSON(KEYS.MEMORY, all);
+    }
+  },
   async remove(id: string): Promise<void> {
     const all = await getJSON<MemoryEntry[]>(KEYS.MEMORY, []);
     await setJSON(
@@ -189,6 +202,104 @@ export const memoryStorage = {
         m.content.toLowerCase().includes(q) ||
         m.tags?.some((t) => t.toLowerCase().includes(q)),
     );
+  },
+};
+
+export const calendarStorage = {
+  async getAll(): Promise<CalendarEvent[]> {
+    const events = await getJSON<CalendarEvent[]>(KEYS.CALENDAR, []);
+    return events.sort((a, b) => a.startTime - b.startTime);
+  },
+  async create(
+    event: Omit<CalendarEvent, 'id'>,
+  ): Promise<CalendarEvent> {
+    const calEvent: CalendarEvent = {
+      ...event,
+      id: Crypto.randomUUID(),
+    };
+    const all = await getJSON<CalendarEvent[]>(KEYS.CALENDAR, []);
+    all.push(calEvent);
+    await setJSON(KEYS.CALENDAR, all);
+    return calEvent;
+  },
+  async update(id: string, updates: Partial<CalendarEvent>): Promise<void> {
+    const all = await getJSON<CalendarEvent[]>(KEYS.CALENDAR, []);
+    const idx = all.findIndex((e) => e.id === id);
+    if (idx >= 0) {
+      all[idx] = { ...all[idx], ...updates };
+      await setJSON(KEYS.CALENDAR, all);
+    }
+  },
+  async remove(id: string): Promise<void> {
+    const all = await getJSON<CalendarEvent[]>(KEYS.CALENDAR, []);
+    await setJSON(
+      KEYS.CALENDAR,
+      all.filter((e) => e.id !== id),
+    );
+  },
+  async getByDateRange(start: number, end: number): Promise<CalendarEvent[]> {
+    const all = await this.getAll();
+    return all.filter(
+      (e) =>
+        (e.startTime >= start && e.startTime < end) ||
+        (e.endTime > start && e.endTime <= end) ||
+        (e.startTime <= start && e.endTime >= end),
+    );
+  },
+};
+
+export const crmStorage = {
+  async getAll(): Promise<CRMContact[]> {
+    const contacts = await getJSON<CRMContact[]>(KEYS.CRM_CONTACTS, []);
+    return contacts.sort(
+      (a, b) => (b.lastInteraction || b.createdAt) - (a.lastInteraction || a.createdAt),
+    );
+  },
+  async create(
+    contact: Omit<CRMContact, 'id' | 'createdAt' | 'interactions'>,
+  ): Promise<CRMContact> {
+    const c: CRMContact = {
+      ...contact,
+      id: Crypto.randomUUID(),
+      createdAt: Date.now(),
+      interactions: [],
+    };
+    const all = await getJSON<CRMContact[]>(KEYS.CRM_CONTACTS, []);
+    all.push(c);
+    await setJSON(KEYS.CRM_CONTACTS, all);
+    return c;
+  },
+  async update(id: string, updates: Partial<CRMContact>): Promise<void> {
+    const all = await getJSON<CRMContact[]>(KEYS.CRM_CONTACTS, []);
+    const idx = all.findIndex((c) => c.id === id);
+    if (idx >= 0) {
+      all[idx] = { ...all[idx], ...updates };
+      await setJSON(KEYS.CRM_CONTACTS, all);
+    }
+  },
+  async remove(id: string): Promise<void> {
+    const all = await getJSON<CRMContact[]>(KEYS.CRM_CONTACTS, []);
+    await setJSON(
+      KEYS.CRM_CONTACTS,
+      all.filter((c) => c.id !== id),
+    );
+  },
+  async addInteraction(
+    contactId: string,
+    interaction: Omit<CRMInteraction, 'id' | 'contactId'>,
+  ): Promise<CRMInteraction> {
+    const all = await getJSON<CRMContact[]>(KEYS.CRM_CONTACTS, []);
+    const idx = all.findIndex((c) => c.id === contactId);
+    if (idx < 0) throw new Error('Contact not found');
+    const entry: CRMInteraction = {
+      ...interaction,
+      id: Crypto.randomUUID(),
+      contactId,
+    };
+    all[idx].interactions.push(entry);
+    all[idx].lastInteraction = entry.timestamp;
+    await setJSON(KEYS.CRM_CONTACTS, all);
+    return entry;
   },
 };
 

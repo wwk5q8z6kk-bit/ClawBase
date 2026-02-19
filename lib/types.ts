@@ -25,7 +25,7 @@ export interface Conversation {
   pinned?: boolean;
 }
 
-export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'deferred';
+export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'deferred' | 'archived';
 
 export interface Task {
   id: string;
@@ -37,16 +37,63 @@ export interface Task {
   updatedAt: number;
   dueDate?: number;
   tags?: string[];
+  source?: string;
+  assignee?: string;
+  column?: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  description?: string;
+  startTime: number;
+  endTime: number;
+  allDay?: boolean;
+  location?: string;
+  color?: string;
+  source?: 'google' | 'apple' | 'outlook' | 'agent' | 'manual';
+  attendees?: string[];
+  recurring?: boolean;
+  tags?: string[];
+}
+
+export interface CRMContact {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  role?: string;
+  avatar?: string;
+  stage: 'lead' | 'prospect' | 'active' | 'customer' | 'archived';
+  lastInteraction?: number;
+  notes?: string;
+  tags?: string[];
+  interactions: CRMInteraction[];
+  createdAt: number;
+}
+
+export interface CRMInteraction {
+  id: string;
+  contactId: string;
+  type: 'email' | 'meeting' | 'call' | 'note' | 'task';
+  title: string;
+  content?: string;
+  timestamp: number;
+  source?: string;
 }
 
 export interface MemoryEntry {
   id: string;
-  type: 'conversation' | 'note' | 'task' | 'event';
+  type: 'conversation' | 'note' | 'task' | 'event' | 'summary' | 'document';
   title: string;
   content: string;
   timestamp: number;
   tags?: string[];
   source?: string;
+  pinned?: boolean;
+  reviewStatus?: 'unread' | 'reviewed' | 'deferred';
+  linkedIds?: string[];
 }
 
 export interface QuickAction {
