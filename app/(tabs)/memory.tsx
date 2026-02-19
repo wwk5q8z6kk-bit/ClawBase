@@ -103,7 +103,19 @@ function MemoryItem({
           {item.pinned && <Ionicons name="pin" size={12} color={C.coral} />}
           {item.reviewStatus === 'deferred' && <Ionicons name="time" size={12} color="#8B7FFF" />}
         </View>
+        {item.summary && (
+          <Text style={styles.memorySummary} numberOfLines={1}>{item.summary}</Text>
+        )}
         <Text style={styles.memoryText} numberOfLines={3}>{item.content}</Text>
+        {typeof item.relevance === 'number' && (
+          <View style={styles.relevanceRow}>
+            <Text style={styles.relevanceLabel}>Relevance</Text>
+            <View style={styles.relevanceBarBg}>
+              <View style={[styles.relevanceBarFill, { width: `${Math.round(item.relevance * 100)}%` }]} />
+            </View>
+            <Text style={styles.relevanceValue}>{Math.round(item.relevance * 100)}%</Text>
+          </View>
+        )}
 
         {item.tags && item.tags.length > 0 && (
           <View style={styles.tagsRow}>
@@ -172,11 +184,30 @@ export default function MemoryScreen() {
   const [showTagBrowser, setShowTagBrowser] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
-  const allTags = useMemo(() => {
-    const tags = new Set<string>();
-    memoryEntries.forEach((e) => e.tags?.forEach((t) => tags.add(t)));
-    return Array.from(tags).sort();
+  const TAG_CLOUD_COLORS = [C.coral, C.accent, C.secondary, C.amber, C.purple, C.primary, C.success];
+
+  const tagFrequencies = useMemo(() => {
+    const freq: Record<string, number> = {};
+    memoryEntries.forEach((e) => e.tags?.forEach((t) => { freq[t] = (freq[t] || 0) + 1; }));
+    return freq;
   }, [memoryEntries]);
+
+  const allTags = useMemo(() => {
+    return Object.keys(tagFrequencies).sort((a, b) => tagFrequencies[b] - tagFrequencies[a]);
+  }, [tagFrequencies]);
+
+  const maxTagFreq = useMemo(() => Math.max(1, ...Object.values(tagFrequencies)), [tagFrequencies]);
+
+  const digestStats = useMemo(() => {
+    const total = memoryEntries.length;
+    const weekAgo = Date.now() - 7 * 86400000;
+    const thisWeek = memoryEntries.filter((e) => e.timestamp >= weekAgo).length;
+    const sourceCounts: Record<string, number> = {};
+    memoryEntries.forEach((e) => { if (e.source) sourceCounts[e.source] = (sourceCounts[e.source] || 0) + 1; });
+    const topSource = Object.entries(sourceCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
+    const topTag = allTags[0] || 'N/A';
+    return { total, thisWeek, topSource, topTag };
+  }, [memoryEntries, allTags]);
 
   const deferredCount = useMemo(
     () => memoryEntries.filter((e) => e.reviewStatus === 'deferred').length,
@@ -316,6 +347,40 @@ export default function MemoryScreen() {
         )}
       </View>
 
+      {memoryEntries.length > 0 && (
+        <View style={styles.digestCard}>
+          <LinearGradient
+            colors={C.gradient.cardElevated}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.digestGradient}
+          >
+            <View style={styles.digestHeader}>
+              <MaterialCommunityIcons name="chart-box-outline" size={16} color={C.coral} />
+              <Text style={styles.digestTitle}>Memory Digest</Text>
+            </View>
+            <View style={styles.digestGrid}>
+              <View style={styles.digestStat}>
+                <Text style={styles.digestStatValue}>{digestStats.total}</Text>
+                <Text style={styles.digestStatLabel}>Total</Text>
+              </View>
+              <View style={styles.digestStat}>
+                <Text style={styles.digestStatValue}>{digestStats.thisWeek}</Text>
+                <Text style={styles.digestStatLabel}>This Week</Text>
+              </View>
+              <View style={styles.digestStat}>
+                <Text style={[styles.digestStatValue, { color: C.secondary, fontSize: 13 }]}>{digestStats.topSource}</Text>
+                <Text style={styles.digestStatLabel}>Top Source</Text>
+              </View>
+              <View style={styles.digestStat}>
+                <Text style={[styles.digestStatValue, { color: C.accent, fontSize: 13 }]}>{digestStats.topTag}</Text>
+                <Text style={styles.digestStatLabel}>Top Tag</Text>
+              </View>
+            </View>
+          </LinearGradient>
+        </View>
+      )}
+
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reviewFilterRow}>
         {REVIEW_FILTERS.map((f) => (
           <Pressable
@@ -354,25 +419,36 @@ export default function MemoryScreen() {
 
       {showTagBrowser && allTags.length > 0 && (
         <View style={styles.tagBrowser}>
-          <Text style={styles.tagBrowserTitle}>Tags</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagBrowserScroll}>
-            <Pressable
-              style={[styles.tagBrowserItem, !selectedTag && styles.tagBrowserItemActive]}
-              onPress={() => { setSelectedTag(null); Haptics.selectionAsync(); }}
-            >
-              <Text style={[styles.tagBrowserItemText, !selectedTag && { color: C.coral }]}>All</Text>
-            </Pressable>
-            {allTags.map((tag) => (
-              <Pressable
-                key={tag}
-                style={[styles.tagBrowserItem, selectedTag === tag && styles.tagBrowserItemActive]}
-                onPress={() => { setSelectedTag(selectedTag === tag ? null : tag); Haptics.selectionAsync(); }}
-              >
-                <Ionicons name="pricetag" size={11} color={selectedTag === tag ? C.accent : C.textTertiary} />
-                <Text style={[styles.tagBrowserItemText, selectedTag === tag && { color: C.accent }]}>{tag}</Text>
+          <View style={styles.tagCloudHeader}>
+            <Text style={styles.tagBrowserTitle}>Tag Cloud</Text>
+            {selectedTag && (
+              <Pressable onPress={() => { setSelectedTag(null); Haptics.selectionAsync(); }}>
+                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: C.coral }}>Clear</Text>
               </Pressable>
-            ))}
-          </ScrollView>
+            )}
+          </View>
+          <View style={styles.tagCloud}>
+            {allTags.map((tag, i) => {
+              const freq = tagFrequencies[tag] || 1;
+              const ratio = freq / maxTagFreq;
+              const fontSize = 11 + Math.round(ratio * 5);
+              const tagColor = TAG_CLOUD_COLORS[i % TAG_CLOUD_COLORS.length];
+              const isActive = selectedTag === tag;
+              return (
+                <Pressable
+                  key={tag}
+                  style={[
+                    styles.tagCloudItem,
+                    { backgroundColor: tagColor + (isActive ? '25' : '12'), borderColor: isActive ? tagColor + '50' : 'transparent' },
+                  ]}
+                  onPress={() => { setSelectedTag(isActive ? null : tag); Haptics.selectionAsync(); }}
+                >
+                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize, color: isActive ? tagColor : tagColor + 'CC' }}>{tag}</Text>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 9, color: C.textTertiary }}>{freq}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       )}
 
@@ -407,7 +483,14 @@ export default function MemoryScreen() {
         ]}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <MaterialCommunityIcons name="brain" size={44} color={C.textTertiary} />
+            <LinearGradient
+              colors={[C.coral + '20', C.accent + '15', C.purple + '10']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.emptyIconBg}
+            >
+              <MaterialCommunityIcons name="brain" size={44} color={C.textSecondary} />
+            </LinearGradient>
             <Text style={styles.emptyTitle}>
               {search || selectedTag ? 'No results found' : 'No memories yet'}
             </Text>
@@ -450,10 +533,9 @@ const styles = StyleSheet.create({
   filterChipTextActive: { color: C.primary },
   tagBrowser: { marginHorizontal: 20, marginBottom: 4, backgroundColor: C.card, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: C.borderLight },
   tagBrowserTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.textTertiary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-  tagBrowserScroll: { gap: 6 },
-  tagBrowserItem: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, backgroundColor: C.surface },
-  tagBrowserItemActive: { backgroundColor: C.coral + '15' },
-  tagBrowserItemText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary },
+  tagCloudHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  tagCloud: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  tagCloudItem: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
   activeTagBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 20, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: C.accent + '12', borderRadius: 8, marginBottom: 4 },
   activeTagText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.accent, flex: 1 },
   listContent: { paddingHorizontal: 20 },
@@ -470,7 +552,13 @@ const styles = StyleSheet.create({
   memoryHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   typeIcon: { width: 28, height: 28, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
   memoryTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.text, flex: 1 },
+  memorySummary: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.accent, lineHeight: 16, opacity: 0.85 },
   memoryText: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textSecondary, lineHeight: 18 },
+  relevanceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  relevanceLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary },
+  relevanceBarBg: { flex: 1, height: 3, backgroundColor: C.surface, borderRadius: 2, maxWidth: 60 },
+  relevanceBarFill: { height: 3, backgroundColor: C.secondary, borderRadius: 2 },
+  relevanceValue: { fontFamily: 'Inter_500Medium', fontSize: 10, color: C.secondary },
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   tagChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: C.accent + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   tagChipText: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.accent },
@@ -484,7 +572,16 @@ const styles = StyleSheet.create({
   memoryTime: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary, marginLeft: 'auto' },
   actionRow: { flexDirection: 'row', gap: 4, marginTop: 4, borderTopWidth: 1, borderTopColor: C.borderLight, paddingTop: 6 },
   actionBtn: { width: 32, height: 28, borderRadius: 6, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
+  digestCard: { marginHorizontal: 20, marginTop: 10, marginBottom: 2 },
+  digestGradient: { borderRadius: 12, padding: 14, borderWidth: 1, borderColor: C.borderLight },
+  digestHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  digestTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.text },
+  digestGrid: { flexDirection: 'row', justifyContent: 'space-between' },
+  digestStat: { alignItems: 'center', flex: 1 },
+  digestStatValue: { fontFamily: 'Inter_700Bold', fontSize: 18, color: C.coral },
+  digestStatLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary, marginTop: 2 },
   emptyState: { alignItems: 'center', gap: 8, paddingVertical: 20 },
+  emptyIconBg: { width: 88, height: 88, borderRadius: 44, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 16, color: C.textSecondary, marginTop: 8 },
   emptySubtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary, textAlign: 'center' },
 });

@@ -93,6 +93,8 @@ export interface MemoryEntry {
   source?: string;
   pinned?: boolean;
   reviewStatus?: 'unread' | 'reviewed' | 'deferred';
+  relevance?: number;
+  summary?: string;
   linkedIds?: string[];
 }
 

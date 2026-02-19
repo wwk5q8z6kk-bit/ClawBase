@@ -56,6 +56,28 @@ function formatAge(ts: number) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function formatDueDate(ts: number): { text: string; isOverdue: boolean } {
+  const d = new Date(ts);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const isOverdue = ts < now.getTime();
+  return { text: `Due ${MONTHS[d.getMonth()]} ${d.getDate()}`, isOverdue };
+}
+
+function getInitials(name: string): string {
+  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+const STATUS_PROGRESS: Record<TaskStatus, number> = {
+  todo: 0,
+  in_progress: 0.5,
+  done: 1,
+  deferred: 0.25,
+  archived: 0,
+};
+
 function TaskCard({
   task,
   onStatusChange,
@@ -105,6 +127,28 @@ function TaskCard({
           ) : null}
         </View>
       </View>
+
+      {(task.dueDate || task.assignee) && (
+        <View style={styles.taskMetaRow}>
+          {task.dueDate ? (() => {
+            const { text, isOverdue } = formatDueDate(task.dueDate);
+            return (
+              <View style={styles.dueDatePill}>
+                <Ionicons name="time-outline" size={11} color={isOverdue ? C.primary : C.textSecondary} />
+                <Text style={[styles.dueDateText, isOverdue && { color: C.primary }]}>{text}</Text>
+              </View>
+            );
+          })() : null}
+          {task.assignee ? (
+            <View style={styles.assigneePill}>
+              <View style={styles.assigneeAvatar}>
+                <Text style={styles.assigneeInitials}>{getInitials(task.assignee)}</Text>
+              </View>
+              <Text style={styles.assigneeName} numberOfLines={1}>{task.assignee}</Text>
+            </View>
+          ) : null}
+        </View>
+      )}
 
       <View style={styles.taskCardBottom}>
         <View style={[styles.priorityPill, { backgroundColor: priority.color + '18' }]}>
@@ -225,38 +269,70 @@ function BoardColumn({ title, tasks: columnTasks, color, onMove, onDelete }: {
 }) {
   return (
     <View style={styles.boardColumn}>
-      <View style={styles.boardColHeader}>
+      <LinearGradient
+        colors={[color + '20', color + '08']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.boardColHeaderGradient}
+      >
         <View style={[styles.boardColDot, { backgroundColor: color }]} />
         <Text style={styles.boardColTitle}>{title}</Text>
         <View style={styles.boardColCount}>
           <Text style={styles.boardColCountText}>{columnTasks.length}</Text>
         </View>
-      </View>
+      </LinearGradient>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 100 }}>
-        {columnTasks.map((task) => (
-          <Pressable
-            key={task.id}
-            style={({ pressed }) => [styles.boardTaskCard, pressed && { backgroundColor: C.cardElevated }]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onMove(task);
-            }}
-            onLongPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              onDelete(task);
-            }}
-          >
-            <Text style={[styles.boardTaskTitle, task.status === 'done' && styles.taskTitleDone, task.status === 'archived' && styles.taskTitleArchived]} numberOfLines={2}>{task.title}</Text>
-            {task.description && <Text style={styles.boardTaskDesc} numberOfLines={1}>{task.description}</Text>}
-            <View style={styles.boardTaskFooter}>
-              <View style={[styles.priorityPill, { backgroundColor: PRIORITY_CONFIG[task.priority].color + '18' }]}>
-                <View style={[styles.priorityDot, { backgroundColor: PRIORITY_CONFIG[task.priority].color }]} />
-                <Text style={[styles.priorityText, { color: PRIORITY_CONFIG[task.priority].color }]}>{PRIORITY_CONFIG[task.priority].label}</Text>
+        {columnTasks.map((task) => {
+          const progress = STATUS_PROGRESS[task.status];
+          const statusColor = STATUS_CONFIG[task.status].color;
+          return (
+            <Pressable
+              key={task.id}
+              style={({ pressed }) => [styles.boardTaskCard, pressed && { backgroundColor: C.cardElevated }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onMove(task);
+              }}
+              onLongPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                onDelete(task);
+              }}
+            >
+              <Text style={[styles.boardTaskTitle, task.status === 'done' && styles.taskTitleDone, task.status === 'archived' && styles.taskTitleArchived]} numberOfLines={2}>{task.title}</Text>
+              {task.description && <Text style={styles.boardTaskDesc} numberOfLines={1}>{task.description}</Text>}
+              {(task.dueDate || task.assignee) && (
+                <View style={styles.boardTaskMeta}>
+                  {task.dueDate ? (() => {
+                    const { text, isOverdue } = formatDueDate(task.dueDate);
+                    return (
+                      <View style={styles.dueDatePillCompact}>
+                        <Ionicons name="time-outline" size={10} color={isOverdue ? C.primary : C.textTertiary} />
+                        <Text style={[styles.dueDateTextCompact, isOverdue && { color: C.primary }]}>{text}</Text>
+                      </View>
+                    );
+                  })() : null}
+                  {task.assignee ? (
+                    <View style={styles.assigneePillCompact}>
+                      <View style={styles.assigneeAvatarSmall}>
+                        <Text style={styles.assigneeInitialsSmall}>{getInitials(task.assignee)}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+              )}
+              <View style={styles.boardTaskFooter}>
+                <View style={[styles.priorityPill, { backgroundColor: PRIORITY_CONFIG[task.priority].color + '18' }]}>
+                  <View style={[styles.priorityDot, { backgroundColor: PRIORITY_CONFIG[task.priority].color }]} />
+                  <Text style={[styles.priorityText, { color: PRIORITY_CONFIG[task.priority].color }]}>{PRIORITY_CONFIG[task.priority].label}</Text>
+                </View>
+                <Text style={styles.taskAge}>{formatAge(task.updatedAt)}</Text>
               </View>
-              <Text style={styles.taskAge}>{formatAge(task.updatedAt)}</Text>
-            </View>
-          </Pressable>
-        ))}
+              <View style={styles.boardProgressTrack}>
+                <View style={[styles.boardProgressFill, { width: `${progress * 100}%`, backgroundColor: statusColor }]} />
+              </View>
+            </Pressable>
+          );
+        })}
         {columnTasks.length === 0 && (
           <View style={styles.boardEmptyCol}>
             <Text style={styles.boardEmptyText}>No tasks</Text>
@@ -364,6 +440,21 @@ export default function TasksScreen() {
       </View>
 
       <StatsBar tasks={tasks} />
+
+      {(() => {
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const overdueCount = tasks.filter(t => t.dueDate && t.dueDate < now.getTime() && t.status !== 'done' && t.status !== 'archived').length;
+        if (overdueCount === 0) return null;
+        return (
+          <View style={styles.overdueBanner}>
+            <Ionicons name="warning" size={16} color={C.amber} />
+            <Text style={styles.overdueBannerText}>
+              {overdueCount} overdue task{overdueCount > 1 ? 's' : ''} need{overdueCount === 1 ? 's' : ''} attention
+            </Text>
+          </View>
+        );
+      })()}
 
       {viewMode === 'list' && (
         <>
@@ -586,10 +677,19 @@ const styles = StyleSheet.create({
   sourcePill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   sourceText: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary },
   taskAge: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary, marginLeft: 'auto' },
+  taskMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 30 },
+  dueDatePill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  dueDateText: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textSecondary },
+  assigneePill: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  assigneeAvatar: { width: 18, height: 18, borderRadius: 9, backgroundColor: C.accent + '30', alignItems: 'center', justifyContent: 'center' },
+  assigneeInitials: { fontFamily: 'Inter_600SemiBold', fontSize: 8, color: C.accent },
+  assigneeName: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textSecondary, maxWidth: 80 },
+  overdueBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 20, marginTop: 10, backgroundColor: C.amberMuted, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: C.amber + '30' },
+  overdueBannerText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.amber, flex: 1 },
   boardContainer: { flex: 1, paddingTop: 12 },
   boardScroll: { paddingHorizontal: 12, gap: 12 },
   boardColumn: { width: 260, gap: 10 },
-  boardColHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, paddingHorizontal: 4 },
+  boardColHeaderGradient: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10 },
   boardColDot: { width: 8, height: 8, borderRadius: 4 },
   boardColTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.text },
   boardColCount: { backgroundColor: C.cardElevated, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
@@ -597,6 +697,14 @@ const styles = StyleSheet.create({
   boardTaskCard: { backgroundColor: C.card, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: C.borderLight, gap: 6 },
   boardTaskTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.text, lineHeight: 18 },
   boardTaskDesc: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textSecondary },
+  boardTaskMeta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  dueDatePillCompact: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  dueDateTextCompact: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary },
+  assigneePillCompact: { flexDirection: 'row', alignItems: 'center' },
+  assigneeAvatarSmall: { width: 16, height: 16, borderRadius: 8, backgroundColor: C.accent + '30', alignItems: 'center', justifyContent: 'center' },
+  assigneeInitialsSmall: { fontFamily: 'Inter_600SemiBold', fontSize: 7, color: C.accent },
+  boardProgressTrack: { height: 2, borderRadius: 1, backgroundColor: C.border, marginTop: 2, overflow: 'hidden' as const },
+  boardProgressFill: { height: 2, borderRadius: 1 },
   boardTaskFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   boardEmptyCol: { alignItems: 'center', paddingVertical: 24 },
   boardEmptyText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary },
