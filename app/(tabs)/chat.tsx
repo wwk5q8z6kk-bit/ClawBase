@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -52,25 +52,28 @@ function ConversationItem({
         onDelete();
       }}
     >
-      <View style={styles.convoIcon}>
-        <Ionicons name="chatbubble" size={20} color={C.accent} />
-      </View>
+      <LinearGradient
+        colors={item.pinned ? C.gradient.lobster : ['#1E2440', '#1A2040']}
+        style={styles.convoIcon}
+      >
+        <Ionicons name={item.pinned ? 'pin' : 'chatbubble'} size={18} color={item.pinned ? '#fff' : C.coral} />
+      </LinearGradient>
       <View style={styles.convoContent}>
         <View style={styles.convoHeader}>
-          <Text style={styles.convoTitle} numberOfLines={1}>
-            {item.title}
-          </Text>
+          <Text style={styles.convoTitle} numberOfLines={1}>{item.title}</Text>
           <Text style={styles.convoTime}>{formatTime(item.lastMessageTime)}</Text>
         </View>
         {item.lastMessage ? (
-          <Text style={styles.convoPreview} numberOfLines={2}>
-            {item.lastMessage}
-          </Text>
+          <Text style={styles.convoPreview} numberOfLines={2}>{item.lastMessage}</Text>
         ) : (
-          <Text style={[styles.convoPreview, { fontStyle: 'italic' }]}>
-            No messages yet
-          </Text>
+          <Text style={[styles.convoPreview, { fontStyle: 'italic' }]}>No messages yet</Text>
         )}
+        <View style={styles.convoMeta}>
+          <View style={styles.msgCountBadge}>
+            <Ionicons name="chatbubble-outline" size={10} color={C.textTertiary} />
+            <Text style={styles.msgCountText}>{item.messageCount}</Text>
+          </View>
+        </View>
       </View>
     </Pressable>
   );
@@ -96,11 +99,7 @@ export default function ChatListScreen() {
       }
       Alert.alert('Delete Conversation', `Remove "${item.title}"?`, [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => deleteConversation(item.id),
-        },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteConversation(item.id) },
       ]);
     },
     [deleteConversation],
@@ -114,12 +113,11 @@ export default function ChatListScreen() {
         <Text style={styles.headerTitle}>Chat</Text>
         <Pressable
           onPress={handleNewChat}
-          style={({ pressed }) => [
-            styles.newBtn,
-            pressed && { opacity: 0.7 },
-          ]}
+          style={({ pressed }) => [styles.newBtn, pressed && { opacity: 0.7 }]}
         >
-          <Ionicons name="create-outline" size={24} color={C.primary} />
+          <LinearGradient colors={C.gradient.lobster} style={styles.newBtnGrad}>
+            <Ionicons name="create-outline" size={20} color="#fff" />
+          </LinearGradient>
         </Pressable>
       </View>
 
@@ -129,9 +127,7 @@ export default function ChatListScreen() {
         renderItem={({ item }) => (
           <ConversationItem
             item={item}
-            onPress={() =>
-              router.push({ pathname: '/chat/[id]', params: { id: item.id } })
-            }
+            onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.id } })}
             onDelete={() => handleDelete(item)}
           />
         )}
@@ -141,29 +137,27 @@ export default function ChatListScreen() {
           conversations.length === 0 && styles.emptyListContent,
         ]}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
+        scrollEnabled={conversations.length > 0}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <View style={styles.emptyIconWrap}>
-              <Ionicons name="chatbubbles-outline" size={48} color={C.textTertiary} />
-            </View>
+            <LinearGradient colors={C.gradient.lobster} style={styles.emptyIconWrap}>
+              <Ionicons name="chatbubbles-outline" size={36} color="#fff" />
+            </LinearGradient>
             <Text style={styles.emptyTitle}>No conversations yet</Text>
             <Text style={styles.emptySubtitle}>
               Tap the compose button to start chatting with your agent
             </Text>
             <Pressable
               onPress={handleNewChat}
-              style={({ pressed }) => [
-                styles.emptyBtn,
-                pressed && { opacity: 0.8 },
-              ]}
+              style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.8 }]}
             >
               <LinearGradient
-                colors={[C.primary, '#E63E3E']}
+                colors={C.gradient.lobster}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.emptyBtnGradient}
               >
-                <Ionicons name="add" size={20} color={C.text} />
+                <Ionicons name="add" size={20} color="#fff" />
                 <Text style={styles.emptyBtnText}>New Chat</Text>
               </LinearGradient>
             </Pressable>
@@ -192,8 +186,13 @@ const styles = StyleSheet.create({
     color: C.text,
   },
   newBtn: {
-    width: 44,
-    height: 44,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  newBtnGrad: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -214,7 +213,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: C.accentMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -244,6 +242,22 @@ const styles = StyleSheet.create({
     color: C.textSecondary,
     marginTop: 3,
   },
+  convoMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    gap: 8,
+  },
+  msgCountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  msgCountText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: C.textTertiary,
+  },
   separator: {
     height: 1,
     backgroundColor: C.borderLight,
@@ -258,7 +272,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: C.card,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
@@ -290,6 +303,6 @@ const styles = StyleSheet.create({
   emptyBtnText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 15,
-    color: C.text,
+    color: '#fff',
   },
 });

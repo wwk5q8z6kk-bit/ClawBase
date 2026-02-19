@@ -7,11 +7,12 @@ import {
   TextInput,
   Pressable,
   Platform,
-  ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -20,7 +21,7 @@ import type { ChatMessage } from '@/lib/types';
 
 const C = Colors.dark;
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({ message, showAvatar }: { message: ChatMessage; showAvatar: boolean }) {
   const isUser = message.role === 'user';
 
   return (
@@ -30,11 +31,15 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         isUser ? styles.bubbleWrapUser : styles.bubbleWrapAssistant,
       ]}
     >
-      {!isUser && (
-        <View style={styles.assistantAvatar}>
-          <Ionicons name="sparkles" size={14} color={C.primary} />
-        </View>
+      {!isUser && showAvatar && (
+        <LinearGradient
+          colors={C.gradient.lobster}
+          style={styles.assistantAvatar}
+        >
+          <Ionicons name="sparkles" size={12} color="#fff" />
+        </LinearGradient>
       )}
+      {!isUser && !showAvatar && <View style={{ width: 28 }} />}
       <View
         style={[
           styles.bubble,
@@ -66,32 +71,67 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 }
 
 function TypingIndicator() {
+  const dot1 = useRef(new Animated.Value(0.3)).current;
+  const dot2 = useRef(new Animated.Value(0.3)).current;
+  const dot3 = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const animate = (dot: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, { toValue: 1, duration: 400, useNativeDriver: Platform.OS !== 'web' }),
+          Animated.timing(dot, { toValue: 0.3, duration: 400, useNativeDriver: Platform.OS !== 'web' }),
+        ]),
+      );
+    const a1 = animate(dot1, 0);
+    const a2 = animate(dot2, 200);
+    const a3 = animate(dot3, 400);
+    a1.start(); a2.start(); a3.start();
+    return () => { a1.stop(); a2.stop(); a3.stop(); };
+  }, [dot1, dot2, dot3]);
+
   return (
     <View style={[styles.bubbleWrap, styles.bubbleWrapAssistant]}>
-      <View style={styles.assistantAvatar}>
-        <Ionicons name="sparkles" size={14} color={C.primary} />
-      </View>
+      <LinearGradient colors={C.gradient.lobster} style={styles.assistantAvatar}>
+        <Ionicons name="sparkles" size={12} color="#fff" />
+      </LinearGradient>
       <View style={[styles.bubble, styles.bubbleAssistant, styles.typingBubble]}>
         <View style={styles.typingDots}>
-          <View style={[styles.typingDot, { opacity: 0.4 }]} />
-          <View style={[styles.typingDot, { opacity: 0.6 }]} />
-          <View style={[styles.typingDot, { opacity: 0.8 }]} />
+          {[dot1, dot2, dot3].map((dot, i) => (
+            <Animated.View
+              key={i}
+              style={[styles.typingDot, { opacity: dot }]}
+            />
+          ))}
         </View>
       </View>
     </View>
   );
 }
 
+function SuggestionChip({ text, onPress }: { text: string; onPress: () => void }) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.suggestionChip, pressed && { opacity: 0.7 }]}
+      onPress={onPress}
+    >
+      <Text style={styles.suggestionText}>{text}</Text>
+    </Pressable>
+  );
+}
+
 export default function ChatDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getMessages, sendMessage, conversations } = useApp();
+  const { getMessages, sendMessage, conversations, activeConnection } = useApp();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
   const conversation = conversations.find((c) => c.id === id);
+  const connected = !!activeConnection;
 
   const loadMessages = useCallback(async () => {
     if (!id) return;
@@ -103,9 +143,9 @@ export default function ChatDetailScreen() {
     loadMessages();
   }, [loadMessages]);
 
-  const handleSend = useCallback(async () => {
-    if (!inputText.trim() || isSending || !id) return;
-    const text = inputText.trim();
+  const handleSend = useCallback(async (text?: string) => {
+    const content = (text || inputText).trim();
+    if (!content || isSending || !id) return;
     setInputText('');
     setIsSending(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -114,14 +154,14 @@ export default function ChatDetailScreen() {
       id: 'temp-' + Date.now(),
       conversationId: id,
       role: 'user',
-      content: text,
+      content,
       timestamp: Date.now(),
       status: 'sent',
     };
     setMessages((prev) => [...prev, userMsg]);
 
     try {
-      await sendMessage(id, text);
+      await sendMessage(id, content);
       const updated = await getMessages(id);
       setMessages(updated);
     } catch {
@@ -132,6 +172,16 @@ export default function ChatDetailScreen() {
     }
   }, [inputText, isSending, id, sendMessage, getMessages]);
 
+  const suggestions = messages.length === 0
+    ? ['Summarize my inbox', 'What tasks are pending?', 'System health check']
+    : [];
+
+  const shouldShowAvatar = (index: number) => {
+    if (messages[index].role === 'user') return false;
+    if (index === 0) return true;
+    return messages[index - 1].role !== 'assistant';
+  };
+
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   return (
@@ -139,25 +189,26 @@ export default function ChatDetailScreen() {
       <View style={styles.header}>
         <Pressable
           onPress={() => router.back()}
-          style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
         >
-          <Ionicons name="chevron-back" size={28} color={C.text} />
+          <Ionicons name="chevron-back" size={26} color={C.text} />
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} numberOfLines={1}>
             {conversation?.title || 'Chat'}
           </Text>
           <View style={styles.headerStatus}>
-            <View style={styles.headerDot} />
-            <Text style={styles.headerStatusText}>Agent Online</Text>
+            <View style={[styles.headerDot, { backgroundColor: connected ? C.success : C.textTertiary }]} />
+            <Text style={[styles.headerStatusText, { color: connected ? C.success : C.textTertiary }]}>
+              {connected ? 'Online' : 'Offline'}
+            </Text>
           </View>
         </View>
         <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
+          onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+          style={styles.moreBtn}
         >
-          <Ionicons name="ellipsis-horizontal" size={24} color={C.textSecondary} />
+          <Ionicons name="ellipsis-horizontal" size={22} color={C.textSecondary} />
         </Pressable>
       </View>
 
@@ -165,7 +216,9 @@ export default function ChatDetailScreen() {
         <FlatList
           data={messages}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <MessageBubble message={item} />}
+          renderItem={({ item, index }) => (
+            <MessageBubble message={item} showAvatar={shouldShowAvatar(index)} />
+          )}
           contentContainerStyle={[
             styles.messageList,
             messages.length === 0 && styles.emptyMessages,
@@ -175,16 +228,27 @@ export default function ChatDetailScreen() {
           ListFooterComponent={isSending ? <TypingIndicator /> : null}
           ListEmptyComponent={
             <View style={styles.welcomeState}>
-              <View style={styles.welcomeIcon}>
-                <Ionicons name="sparkles" size={32} color={C.primary} />
-              </View>
+              <LinearGradient
+                colors={C.gradient.lobster}
+                style={styles.welcomeIcon}
+              >
+                <Ionicons name="sparkles" size={28} color="#fff" />
+              </LinearGradient>
               <Text style={styles.welcomeTitle}>Start a conversation</Text>
               <Text style={styles.welcomeSubtitle}>
-                Ask your agent anything - it's ready to help
+                Ask your agent anything{'\n'}it's ready to help
               </Text>
             </View>
           }
         />
+
+        {suggestions.length > 0 && (
+          <View style={styles.suggestionsRow}>
+            {suggestions.map((s) => (
+              <SuggestionChip key={s} text={s} onPress={() => handleSend(s)} />
+            ))}
+          </View>
+        )}
 
         <View
           style={[
@@ -193,6 +257,12 @@ export default function ChatDetailScreen() {
           ]}
         >
           <View style={styles.inputWrap}>
+            <Pressable
+              style={styles.attachBtn}
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            >
+              <Ionicons name="add-circle-outline" size={24} color={C.textSecondary} />
+            </Pressable>
             <TextInput
               ref={inputRef}
               style={styles.textInput}
@@ -205,7 +275,13 @@ export default function ChatDetailScreen() {
               returnKeyType="default"
             />
             <Pressable
-              onPress={handleSend}
+              style={styles.voiceBtn}
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            >
+              <Ionicons name="mic-outline" size={22} color={C.textSecondary} />
+            </Pressable>
+            <Pressable
+              onPress={() => handleSend()}
               style={({ pressed }) => [
                 styles.sendBtn,
                 !!inputText.trim() && styles.sendBtnActive,
@@ -213,15 +289,11 @@ export default function ChatDetailScreen() {
               ]}
               disabled={!inputText.trim() || isSending}
             >
-              {isSending ? (
-                <ActivityIndicator size="small" color={C.text} />
-              ) : (
-                <Ionicons
-                  name="arrow-up"
-                  size={20}
-                  color={inputText.trim() ? C.text : C.textTertiary}
-                />
-              )}
+              <Ionicons
+                name="arrow-up"
+                size={18}
+                color={inputText.trim() ? '#fff' : C.textTertiary}
+              />
             </Pressable>
           </View>
         </View>
@@ -238,11 +310,17 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: C.borderLight,
-    gap: 8,
+    gap: 4,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerCenter: {
     flex: 1,
@@ -262,18 +340,22 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: C.success,
   },
   headerStatusText: {
     fontFamily: 'Inter_400Regular',
     fontSize: 11,
-    color: C.success,
+  },
+  moreBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   messageList: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 12,
-    gap: 8,
+    gap: 6,
   },
   emptyMessages: {
     flex: 1,
@@ -281,7 +363,7 @@ const styles = StyleSheet.create({
   },
   bubbleWrap: {
     flexDirection: 'row',
-    marginBottom: 4,
+    marginBottom: 2,
     gap: 8,
     maxWidth: '85%',
   },
@@ -295,7 +377,6 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: C.primaryMuted,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 4,
@@ -334,7 +415,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   bubbleTimeUser: {
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.55)',
     textAlign: 'right',
   },
   bubbleTimeAssistant: {
@@ -346,7 +427,7 @@ const styles = StyleSheet.create({
   },
   typingDots: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 5,
   },
   typingDot: {
     width: 7,
@@ -362,7 +443,6 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: C.primaryMuted,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
@@ -377,10 +457,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: C.textSecondary,
     textAlign: 'center',
-    paddingHorizontal: 40,
+    lineHeight: 20,
+  },
+  suggestionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 14,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  suggestionChip: {
+    backgroundColor: C.card,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  suggestionText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: C.primary,
   },
   inputContainer: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: C.borderLight,
@@ -393,10 +493,16 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
     borderColor: C.border,
-    paddingLeft: 16,
-    paddingRight: 6,
-    paddingVertical: 6,
-    gap: 8,
+    paddingLeft: 4,
+    paddingRight: 4,
+    paddingVertical: 4,
+    gap: 2,
+  },
+  attachBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   textInput: {
     flex: 1,
@@ -406,11 +512,17 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     paddingVertical: 6,
   },
+  voiceBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sendBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: C.card,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: C.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
