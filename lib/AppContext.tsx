@@ -47,6 +47,7 @@ interface AppContextValue {
 
   conversations: Conversation[];
   createConversation: (title: string) => Promise<Conversation>;
+  updateConversation: (id: string, updates: Partial<Conversation>) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
 
   getMessages: (conversationId: string) => Promise<ChatMessage[]>;
@@ -228,6 +229,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const convo = await conversationStorage.create(title);
     setConversations((prev) => [convo, ...prev]);
     return convo;
+  }, []);
+
+  const updateConversation = useCallback(async (id: string, updates: Partial<Conversation>) => {
+    await conversationStorage.update(id, updates);
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ...updates } : c)),
+    );
   }, []);
 
   const deleteConversation = useCallback(async (id: string) => {
@@ -422,6 +430,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActiveConnection: setActiveConnectionFn,
       conversations,
       createConversation,
+      updateConversation,
       deleteConversation,
       getMessages,
       sendMessage,
@@ -450,7 +459,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }),
     [
       connections, activeConnection, addConnection, removeConnection,
-      setActiveConnectionFn, conversations, createConversation,
+      setActiveConnectionFn, conversations, createConversation, updateConversation,
       deleteConversation, getMessages, sendMessage, tasks, createTask,
       updateTask, deleteTask, memoryEntries, searchMemory, updateMemoryEntry,
       calendarEvents, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent,

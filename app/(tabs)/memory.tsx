@@ -8,6 +8,7 @@ import {
   Pressable,
   Platform,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -46,6 +47,15 @@ const REVIEW_FILTERS = [
   { key: 'reviewed', label: 'Reviewed', icon: 'checkmark-outline' },
 ] as const;
 
+type SortOption = 'newest' | 'oldest' | 'relevance' | 'alphabetical';
+
+const SORT_OPTIONS: { key: SortOption; label: string; icon: string }[] = [
+  { key: 'newest', label: 'Newest First', icon: 'arrow-down-outline' },
+  { key: 'oldest', label: 'Oldest First', icon: 'arrow-up-outline' },
+  { key: 'relevance', label: 'By Relevance', icon: 'trending-up-outline' },
+  { key: 'alphabetical', label: 'Alphabetical', icon: 'text-outline' },
+];
+
 function getDateLabel(ts: number): string {
   const now = new Date();
   const date = new Date(ts);
@@ -58,6 +68,18 @@ function getDateLabel(ts: number): string {
   const daysAgo = Math.floor((today.getTime() - dateStart.getTime()) / 86400000);
   if (daysAgo < 7) return `${daysAgo} days ago`;
   return date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+}
+
+function formatFullTimestamp(ts: number): string {
+  const d = new Date(ts);
+  return d.toLocaleDateString(undefined, {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function DateHeader({ label }: { label: string }) {
@@ -75,11 +97,13 @@ function MemoryItem({
   onPin,
   onReview,
   onDefer,
+  onPress,
 }: {
   item: MemoryEntry;
   onPin: () => void;
   onReview: () => void;
   onDefer: () => void;
+  onPress: () => void;
 }) {
   const config = TYPE_CONFIG[item.type] || TYPE_CONFIG.note;
   const source = item.source ? SOURCE_CONFIG[item.source] : null;
@@ -94,7 +118,15 @@ function MemoryItem({
         <View style={[styles.timelineDot, { backgroundColor: config.color }]} />
         <View style={styles.timelineLine} />
       </View>
-      <View style={[styles.memoryCard, item.pinned && styles.memoryCardPinned]}>
+      <Pressable
+        style={[
+          styles.memoryCard,
+          item.pinned && styles.memoryCardPinned,
+          C.shadow.card as any,
+          { borderLeftWidth: 3, borderLeftColor: config.color + '60' },
+        ]}
+        onPress={onPress}
+      >
         <View style={styles.memoryHeader}>
           <View style={[styles.typeIcon, { backgroundColor: config.color + '15' }]}>
             <Ionicons name={config.icon as any} size={16} color={config.color} />
@@ -157,18 +189,201 @@ function MemoryItem({
         </View>
 
         <View style={styles.actionRow}>
-          <Pressable style={styles.actionBtn} onPress={() => { Haptics.selectionAsync(); onPin(); }}>
+          <Pressable style={styles.actionBtn} onPress={(e) => { e.stopPropagation(); Haptics.selectionAsync(); onPin(); }}>
             <Ionicons name={item.pinned ? 'pin' : 'pin-outline'} size={14} color={item.pinned ? C.coral : C.textTertiary} />
+            <Text style={[styles.actionBtnLabel, item.pinned && { color: C.coral }]}>Pin</Text>
           </Pressable>
-          <Pressable style={styles.actionBtn} onPress={() => { Haptics.selectionAsync(); onReview(); }}>
+          <Pressable style={styles.actionBtn} onPress={(e) => { e.stopPropagation(); Haptics.selectionAsync(); onReview(); }}>
             <Ionicons name={item.reviewStatus === 'reviewed' ? 'checkmark-circle' : 'checkmark-circle-outline'} size={14} color={item.reviewStatus === 'reviewed' ? C.success : C.textTertiary} />
+            <Text style={[styles.actionBtnLabel, item.reviewStatus === 'reviewed' && { color: C.success }]}>Review</Text>
           </Pressable>
-          <Pressable style={styles.actionBtn} onPress={() => { Haptics.selectionAsync(); onDefer(); }}>
+          <Pressable style={styles.actionBtn} onPress={(e) => { e.stopPropagation(); Haptics.selectionAsync(); onDefer(); }}>
             <Ionicons name="time-outline" size={14} color={item.reviewStatus === 'deferred' ? '#8B7FFF' : C.textTertiary} />
+            <Text style={[styles.actionBtnLabel, item.reviewStatus === 'deferred' && { color: '#8B7FFF' }]}>Defer</Text>
           </Pressable>
         </View>
-      </View>
+      </Pressable>
     </View>
+  );
+}
+
+function MemoryDetailModal({
+  item,
+  visible,
+  onClose,
+  onPin,
+  onReview,
+  onDefer,
+}: {
+  item: MemoryEntry | null;
+  visible: boolean;
+  onClose: () => void;
+  onPin: () => void;
+  onReview: () => void;
+  onDefer: () => void;
+}) {
+  if (!item) return null;
+  const config = TYPE_CONFIG[item.type] || TYPE_CONFIG.note;
+  const source = item.source ? SOURCE_CONFIG[item.source] : null;
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <View style={modalStyles.overlay}>
+        <View style={modalStyles.container}>
+          <View style={modalStyles.handle} />
+
+          <ScrollView style={modalStyles.scroll} showsVerticalScrollIndicator={false}>
+            <Text style={modalStyles.title}>{item.title}</Text>
+
+            <View style={modalStyles.badgeRow}>
+              <View style={[modalStyles.typeBadge, { backgroundColor: config.color + '20' }]}>
+                <Ionicons name={config.icon as any} size={14} color={config.color} />
+                <Text style={[modalStyles.typeBadgeText, { color: config.color }]}>{config.label}</Text>
+              </View>
+
+              {source && (
+                <View style={modalStyles.sourceBadge}>
+                  <Ionicons name={source.icon as any} size={12} color={source.color} />
+                  <Text style={modalStyles.sourceText}>{item.source}</Text>
+                </View>
+              )}
+
+              {item.reviewStatus && (
+                <View style={[
+                  modalStyles.reviewBadge,
+                  item.reviewStatus === 'unread' && { backgroundColor: C.coral + '18' },
+                  item.reviewStatus === 'deferred' && { backgroundColor: '#8B7FFF18' },
+                  item.reviewStatus === 'reviewed' && { backgroundColor: C.success + '18' },
+                ]}>
+                  <Ionicons
+                    name={
+                      item.reviewStatus === 'reviewed' ? 'checkmark-circle' :
+                      item.reviewStatus === 'deferred' ? 'time' : 'eye-off'
+                    }
+                    size={12}
+                    color={
+                      item.reviewStatus === 'reviewed' ? C.success :
+                      item.reviewStatus === 'deferred' ? '#8B7FFF' : C.coral
+                    }
+                  />
+                  <Text style={[
+                    modalStyles.reviewText,
+                    item.reviewStatus === 'unread' && { color: C.coral },
+                    item.reviewStatus === 'deferred' && { color: '#8B7FFF' },
+                    item.reviewStatus === 'reviewed' && { color: C.success },
+                  ]}>{item.reviewStatus}</Text>
+                </View>
+              )}
+
+              {item.pinned && (
+                <View style={[modalStyles.typeBadge, { backgroundColor: C.coral + '18' }]}>
+                  <Ionicons name="pin" size={12} color={C.coral} />
+                  <Text style={[modalStyles.typeBadgeText, { color: C.coral }]}>Pinned</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={modalStyles.section}>
+              <Text style={modalStyles.sectionLabel}>Content</Text>
+              <Text style={modalStyles.contentText}>{item.content}</Text>
+            </View>
+
+            {item.summary && (
+              <View style={modalStyles.summaryBox}>
+                <Ionicons name="sparkles" size={14} color={C.accent} />
+                <Text style={modalStyles.summaryText}>{item.summary}</Text>
+              </View>
+            )}
+
+            {typeof item.relevance === 'number' && (
+              <View style={modalStyles.section}>
+                <Text style={modalStyles.sectionLabel}>Relevance</Text>
+                <View style={modalStyles.relevanceRow}>
+                  <View style={modalStyles.relevanceBarBg}>
+                    <LinearGradient
+                      colors={[C.secondary, C.accent]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[modalStyles.relevanceBarFill, { width: `${Math.round(item.relevance * 100)}%` }]}
+                    />
+                  </View>
+                  <Text style={modalStyles.relevanceValue}>{Math.round(item.relevance * 100)}%</Text>
+                </View>
+              </View>
+            )}
+
+            {item.tags && item.tags.length > 0 && (
+              <View style={modalStyles.section}>
+                <Text style={modalStyles.sectionLabel}>Tags</Text>
+                <View style={modalStyles.tagsWrap}>
+                  {item.tags.map((tag, i) => (
+                    <View key={i} style={modalStyles.tagChip}>
+                      <Ionicons name="pricetag-outline" size={11} color={C.accent} />
+                      <Text style={modalStyles.tagText}>{tag}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {item.linkedIds && item.linkedIds.length > 0 && (
+              <View style={modalStyles.section}>
+                <Text style={modalStyles.sectionLabel}>Linked Items</Text>
+                {item.linkedIds.map((lid, i) => (
+                  <View key={i} style={modalStyles.linkedItem}>
+                    <Ionicons name="link-outline" size={12} color={C.textTertiary} />
+                    <Text style={modalStyles.linkedText}>{lid}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <View style={modalStyles.section}>
+              <Text style={modalStyles.sectionLabel}>Timestamp</Text>
+              <Text style={modalStyles.timestampText}>{formatFullTimestamp(item.timestamp)}</Text>
+            </View>
+
+            <View style={{ height: 80 }} />
+          </ScrollView>
+
+          <View style={modalStyles.actionBar}>
+            <Pressable
+              style={[modalStyles.actionBtn, item.pinned && { backgroundColor: C.coral + '20' }]}
+              onPress={() => { Haptics.selectionAsync(); onPin(); }}
+            >
+              <Ionicons name={item.pinned ? 'pin' : 'pin-outline'} size={18} color={item.pinned ? C.coral : C.textSecondary} />
+              <Text style={[modalStyles.actionLabel, item.pinned && { color: C.coral }]}>{item.pinned ? 'Unpin' : 'Pin'}</Text>
+            </Pressable>
+            <Pressable
+              style={[modalStyles.actionBtn, item.reviewStatus === 'reviewed' && { backgroundColor: C.success + '20' }]}
+              onPress={() => { Haptics.selectionAsync(); onReview(); }}
+            >
+              <Ionicons name={item.reviewStatus === 'reviewed' ? 'checkmark-circle' : 'checkmark-circle-outline'} size={18} color={item.reviewStatus === 'reviewed' ? C.success : C.textSecondary} />
+              <Text style={[modalStyles.actionLabel, item.reviewStatus === 'reviewed' && { color: C.success }]}>Reviewed</Text>
+            </Pressable>
+            <Pressable
+              style={[modalStyles.actionBtn, item.reviewStatus === 'deferred' && { backgroundColor: '#8B7FFF20' }]}
+              onPress={() => { Haptics.selectionAsync(); onDefer(); }}
+            >
+              <Ionicons name="time-outline" size={18} color={item.reviewStatus === 'deferred' ? '#8B7FFF' : C.textSecondary} />
+              <Text style={[modalStyles.actionLabel, item.reviewStatus === 'deferred' && { color: '#8B7FFF' }]}>Defer</Text>
+            </Pressable>
+            <Pressable
+              style={modalStyles.actionBtn}
+              onPress={() => { Haptics.selectionAsync(); onClose(); }}
+            >
+              <Ionicons name="close-outline" size={18} color={C.textSecondary} />
+              <Text style={modalStyles.actionLabel}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -183,6 +398,10 @@ export default function MemoryScreen() {
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>('all');
   const [showTagBrowser, setShowTagBrowser] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [sortOption, setSortOption] = useState<SortOption>('newest');
+  const [showSortModal, setShowSortModal] = useState(false);
+  const [selectedMemory, setSelectedMemory] = useState<MemoryEntry | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
   const TAG_CLOUD_COLORS = [C.coral, C.accent, C.secondary, C.amber, C.purple, C.primary, C.success];
 
@@ -243,10 +462,20 @@ export default function MemoryScreen() {
     entries.sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
-      return b.timestamp - a.timestamp;
+      switch (sortOption) {
+        case 'oldest':
+          return a.timestamp - b.timestamp;
+        case 'relevance':
+          return (b.relevance ?? 0) - (a.relevance ?? 0);
+        case 'alphabetical':
+          return a.title.localeCompare(b.title);
+        case 'newest':
+        default:
+          return b.timestamp - a.timestamp;
+      }
     });
     return entries;
-  }, [memoryEntries, filter, reviewFilter, selectedTag, search]);
+  }, [memoryEntries, filter, reviewFilter, selectedTag, search, sortOption]);
 
   const groupedEntries = useMemo(() => {
     const groups: { label: string; data: MemoryEntry[] }[] = [];
@@ -286,27 +515,54 @@ export default function MemoryScreen() {
     updateMemoryEntry(id, { reviewStatus: currentStatus === 'deferred' ? 'unread' : 'deferred' });
   }, [updateMemoryEntry]);
 
+  const openDetail = useCallback((entry: MemoryEntry) => {
+    setSelectedMemory(entry);
+    setShowDetailModal(true);
+    Haptics.selectionAsync();
+  }, []);
+
+  const currentSelectedMemory = useMemo(() => {
+    if (!selectedMemory) return null;
+    return memoryEntries.find((e) => e.id === selectedMemory.id) || selectedMemory;
+  }, [selectedMemory, memoryEntries]);
+
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Memory</Text>
-        <View style={styles.headerRight}>
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>{memoryEntries.length}</Text>
+      <LinearGradient
+        colors={C.gradient.ocean}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Memory</Text>
+          <View style={styles.headerRight}>
+            <View style={styles.countBadge}>
+              <Text style={styles.countText}>{memoryEntries.length}</Text>
+            </View>
+            <Pressable
+              style={styles.headerBtn}
+              onPress={() => {
+                setShowSortModal(true);
+                Haptics.selectionAsync();
+              }}
+            >
+              <Ionicons name="swap-vertical-outline" size={18} color={sortOption !== 'newest' ? C.coral : C.textSecondary} />
+            </Pressable>
+            <Pressable
+              style={styles.headerBtn}
+              onPress={() => {
+                setShowTagBrowser(!showTagBrowser);
+                Haptics.selectionAsync();
+              }}
+            >
+              <Ionicons name="pricetags-outline" size={18} color={showTagBrowser ? C.coral : C.textSecondary} />
+            </Pressable>
           </View>
-          <Pressable
-            style={styles.tagBrowserBtn}
-            onPress={() => {
-              setShowTagBrowser(!showTagBrowser);
-              Haptics.selectionAsync();
-            }}
-          >
-            <Ionicons name="pricetags-outline" size={18} color={showTagBrowser ? C.coral : C.textSecondary} />
-          </Pressable>
         </View>
-      </View>
+      </LinearGradient>
 
       {deferredCount > 0 && reviewFilter !== 'deferred' && (
         <Pressable
@@ -348,7 +604,7 @@ export default function MemoryScreen() {
       </View>
 
       {memoryEntries.length > 0 && (
-        <View style={styles.digestCard}>
+        <View style={[styles.digestCard, C.shadow.elevated as any]}>
           <LinearGradient
             colors={C.gradient.cardElevated}
             start={{ x: 0, y: 0 }}
@@ -462,6 +718,7 @@ export default function MemoryScreen() {
 
       <FlatList
         data={flatData}
+        scrollEnabled={!!flatData.length}
         keyExtractor={(item, i) => item.type === 'header' ? `header-${i}-${item.label}` : `item-${item.entry.id}`}
         renderItem={({ item }) => {
           if (item.type === 'header') {
@@ -473,6 +730,7 @@ export default function MemoryScreen() {
               onPin={() => handlePin(item.entry.id, item.entry.pinned)}
               onReview={() => handleReview(item.entry.id)}
               onDefer={() => handleDefer(item.entry.id, item.entry.reviewStatus)}
+              onPress={() => openDetail(item.entry)}
             />
           );
         }}
@@ -504,18 +762,258 @@ export default function MemoryScreen() {
           </View>
         }
       />
+
+      <Modal
+        visible={showSortModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSortModal(false)}
+      >
+        <Pressable style={styles.sortOverlay} onPress={() => setShowSortModal(false)}>
+          <View style={styles.sortModal}>
+            <Text style={styles.sortModalTitle}>Sort By</Text>
+            {SORT_OPTIONS.map((opt) => (
+              <Pressable
+                key={opt.key}
+                style={[styles.sortOption, sortOption === opt.key && styles.sortOptionActive]}
+                onPress={() => {
+                  setSortOption(opt.key);
+                  setShowSortModal(false);
+                  Haptics.selectionAsync();
+                }}
+              >
+                <Ionicons name={opt.icon as any} size={16} color={sortOption === opt.key ? C.coral : C.textSecondary} />
+                <Text style={[styles.sortOptionText, sortOption === opt.key && styles.sortOptionTextActive]}>{opt.label}</Text>
+                {sortOption === opt.key && <Ionicons name="checkmark" size={16} color={C.coral} />}
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <MemoryDetailModal
+        item={currentSelectedMemory}
+        visible={showDetailModal}
+        onClose={() => setShowDetailModal(false)}
+        onPin={() => {
+          if (currentSelectedMemory) handlePin(currentSelectedMemory.id, currentSelectedMemory.pinned);
+        }}
+        onReview={() => {
+          if (currentSelectedMemory) handleReview(currentSelectedMemory.id);
+        }}
+        onDefer={() => {
+          if (currentSelectedMemory) handleDefer(currentSelectedMemory.id, currentSelectedMemory.reviewStatus);
+        }}
+      />
     </View>
   );
 }
 
+const modalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  container: {
+    backgroundColor: C.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '85%',
+    minHeight: '50%',
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    borderBottomWidth: 0,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: C.textTertiary,
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  scroll: {
+    paddingHorizontal: 20,
+  },
+  title: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 22,
+    color: C.text,
+    marginBottom: 12,
+    lineHeight: 28,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  typeBadgeText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+  },
+  sourceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  sourceText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: C.textSecondary,
+    textTransform: 'capitalize' as const,
+  },
+  reviewBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  reviewText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    textTransform: 'capitalize' as const,
+  },
+  section: {
+    marginBottom: 16,
+  },
+  sectionLabel: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    color: C.textTertiary,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  contentText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: C.textSecondary,
+    lineHeight: 22,
+  },
+  summaryBox: {
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: C.accent + '10',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: C.accent + '20',
+  },
+  summaryText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: C.accent,
+    lineHeight: 20,
+    flex: 1,
+  },
+  relevanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  relevanceBarBg: {
+    flex: 1,
+    height: 6,
+    backgroundColor: C.surface,
+    borderRadius: 3,
+    overflow: 'hidden' as const,
+  },
+  relevanceBarFill: {
+    height: 6,
+    borderRadius: 3,
+  },
+  relevanceValue: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: C.secondary,
+  },
+  tagsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: C.accent + '15',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  tagText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: C.accent,
+  },
+  linkedItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  linkedText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: C.textTertiary,
+  },
+  timestampText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: C.textSecondary,
+  },
+  actionBar: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: C.borderLight,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    gap: 8,
+    backgroundColor: C.surface,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 3,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: C.card,
+  },
+  actionLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+    color: C.textSecondary,
+  },
+});
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background },
+  headerGradient: { paddingBottom: 2 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
   headerTitle: { fontFamily: 'Inter_700Bold', fontSize: 26, color: C.text },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   countBadge: { backgroundColor: C.primaryMuted, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   countText: { fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.primary },
-  tagBrowserBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' },
+  headerBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' },
   deferredBanner: { marginHorizontal: 20, marginBottom: 8 },
   deferredBannerGrad: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#8B7FFF30' },
   deferredBannerText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: '#8B7FFF', flex: 1 },
@@ -570,9 +1068,10 @@ const styles = StyleSheet.create({
   reviewBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   reviewBadgeText: { fontFamily: 'Inter_500Medium', fontSize: 10, textTransform: 'capitalize' },
   memoryTime: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary, marginLeft: 'auto' },
-  actionRow: { flexDirection: 'row', gap: 4, marginTop: 4, borderTopWidth: 1, borderTopColor: C.borderLight, paddingTop: 6 },
-  actionBtn: { width: 32, height: 28, borderRadius: 6, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
-  digestCard: { marginHorizontal: 20, marginTop: 10, marginBottom: 2 },
+  actionRow: { flexDirection: 'row', gap: 8, marginTop: 4, borderTopWidth: 1, borderTopColor: C.borderLight, paddingTop: 6 },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, height: 28, borderRadius: 6, backgroundColor: C.surface },
+  actionBtnLabel: { fontFamily: 'Inter_500Medium', fontSize: 10, color: C.textTertiary },
+  digestCard: { marginHorizontal: 20, marginTop: 10, marginBottom: 2, borderRadius: 12 },
   digestGradient: { borderRadius: 12, padding: 14, borderWidth: 1, borderColor: C.borderLight },
   digestHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
   digestTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.text },
@@ -584,4 +1083,11 @@ const styles = StyleSheet.create({
   emptyIconBg: { width: 88, height: 88, borderRadius: 44, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 16, color: C.textSecondary, marginTop: 8 },
   emptySubtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary, textAlign: 'center' },
+  sortOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  sortModal: { backgroundColor: C.card, borderRadius: 14, padding: 16, width: 240, borderWidth: 1, borderColor: C.borderLight },
+  sortModalTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.text, marginBottom: 12, textAlign: 'center' },
+  sortOption: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 8 },
+  sortOptionActive: { backgroundColor: C.coral + '12' },
+  sortOptionText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.textSecondary, flex: 1 },
+  sortOptionTextActive: { color: C.coral },
 });

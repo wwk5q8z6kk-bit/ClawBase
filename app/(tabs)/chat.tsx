@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,6 +7,8 @@ import {
   Pressable,
   Platform,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,11 +35,11 @@ const AGENT_PATTERNS = /^(I found|Here's|Update:|I've |Let me|Based on|According
 function ConversationItem({
   item,
   onPress,
-  onDelete,
+  onLongPress,
 }: {
   item: Conversation;
   onPress: () => void;
-  onDelete: () => void;
+  onLongPress: () => void;
 }) {
   const formatTime = (ts: number) => {
     const diff = Date.now() - ts;
@@ -65,7 +67,7 @@ function ConversationItem({
       onPress={onPress}
       onLongPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        onDelete();
+        onLongPress();
       }}
     >
       <LinearGradient
@@ -121,7 +123,42 @@ function ConversationItem({
 
 export default function ChatListScreen() {
   const insets = useSafeAreaInsets();
-  const { conversations, createConversation, deleteConversation } = useApp();
+  const { conversations, createConversation, updateConversation, deleteConversation } = useApp();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [actionSheetVisible, setActionSheetVisible] = useState(false);
+  const [selectedConvo, setSelectedConvo] = useState<Conversation | null>(null);
+  const [renameMode, setRenameMode] = useState(false);
+  const [renameText, setRenameText] = useState('');
+
+  const filteredAndSorted = useMemo(() => {
+    let filtered = conversations;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = conversations.filter(
+        (c) =>
+          c.title.toLowerCase().includes(q) ||
+          (c.lastMessage && c.lastMessage.toLowerCase().includes(q)),
+      );
+    }
+    return [...filtered].sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return b.lastMessageTime - a.lastMessageTime;
+    });
+  }, [conversations, searchQuery]);
+
+  const stats = useMemo(() => {
+    const totalMessages = conversations.reduce((sum, c) => sum + c.messageCount, 0);
+    const pinnedCount = conversations.filter((c) => c.pinned).length;
+    return { total: conversations.length, messages: totalMessages, pinned: pinnedCount };
+  }, [conversations]);
+
+  const hasPinned = useMemo(() => filteredAndSorted.some((c) => c.pinned), [filteredAndSorted]);
+  const firstUnpinnedIndex = useMemo(
+    () => filteredAndSorted.findIndex((c) => !c.pinned),
+    [filteredAndSorted],
+  );
 
   const handleNewChat = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -131,45 +168,129 @@ export default function ChatListScreen() {
     router.push({ pathname: '/chat/[id]', params: { id: convo.id } });
   }, [createConversation]);
 
-  const handleDelete = useCallback(
-    (item: Conversation) => {
-      if (Platform.OS === 'web') {
-        deleteConversation(item.id);
-        return;
-      }
-      Alert.alert('Delete Conversation', `Remove "${item.title}"?`, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => deleteConversation(item.id) },
-      ]);
-    },
-    [deleteConversation],
-  );
+  const openActionSheet = useCallback((item: Conversation) => {
+    setSelectedConvo(item);
+    setRenameMode(false);
+    setRenameText(item.title);
+    setActionSheetVisible(true);
+  }, []);
+
+  const closeActionSheet = useCallback(() => {
+    setActionSheetVisible(false);
+    setSelectedConvo(null);
+    setRenameMode(false);
+  }, []);
+
+  const handlePin = useCallback(async () => {
+    if (!selectedConvo) return;
+    await updateConversation(selectedConvo.id, { pinned: !selectedConvo.pinned });
+    closeActionSheet();
+  }, [selectedConvo, updateConversation, closeActionSheet]);
+
+  const handleRename = useCallback(async () => {
+    if (!selectedConvo || !renameText.trim()) return;
+    await updateConversation(selectedConvo.id, { title: renameText.trim() });
+    closeActionSheet();
+  }, [selectedConvo, renameText, updateConversation, closeActionSheet]);
+
+  const handleDelete = useCallback(() => {
+    if (!selectedConvo) return;
+    if (Platform.OS === 'web') {
+      deleteConversation(selectedConvo.id);
+      closeActionSheet();
+      return;
+    }
+    Alert.alert('Delete Conversation', `Remove "${selectedConvo.title}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          deleteConversation(selectedConvo.id);
+          closeActionSheet();
+        },
+      },
+    ]);
+  }, [selectedConvo, deleteConversation, closeActionSheet]);
 
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Chat</Text>
+      <LinearGradient colors={C.gradient.ocean} style={styles.headerGradient}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Chat</Text>
+        </View>
+      </LinearGradient>
+
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color={C.textTertiary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search conversations..."
+            placeholderTextColor={C.textTertiary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <Pressable onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={18} color={C.textTertiary} />
+            </Pressable>
+          )}
+        </View>
       </View>
 
+      {conversations.length > 0 && (
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Ionicons name="chatbubbles-outline" size={14} color={C.textSecondary} />
+            <Text style={styles.statText}>{stats.total}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Ionicons name="mail-outline" size={14} color={C.textSecondary} />
+            <Text style={styles.statText}>{stats.messages}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Ionicons name="pin-outline" size={14} color={C.textSecondary} />
+            <Text style={styles.statText}>{stats.pinned}</Text>
+          </View>
+        </View>
+      )}
+
       <FlatList
-        data={conversations}
+        data={filteredAndSorted}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <ConversationItem
-            item={item}
-            onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.id } })}
-            onDelete={() => handleDelete(item)}
-          />
+        renderItem={({ item, index }) => (
+          <View>
+            {hasPinned && index === 0 && item.pinned && (
+              <View style={styles.sectionHeader}>
+                <Ionicons name="pin" size={12} color={C.coral} />
+                <Text style={styles.sectionHeaderText}>Pinned</Text>
+              </View>
+            )}
+            {hasPinned && index === firstUnpinnedIndex && (
+              <View style={styles.sectionHeader}>
+                <Ionicons name="time-outline" size={12} color={C.textTertiary} />
+                <Text style={styles.sectionHeaderText}>Recent</Text>
+              </View>
+            )}
+            <View style={styles.conversationItemWrapper}>
+              <ConversationItem
+                item={item}
+                onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.id } })}
+                onLongPress={() => openActionSheet(item)}
+              />
+            </View>
+          </View>
         )}
         contentContainerStyle={[
           styles.listContent,
           { paddingBottom: insets.bottom + 100 },
-          conversations.length === 0 && styles.emptyListContent,
+          filteredAndSorted.length === 0 && styles.emptyListContent,
         ]}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
-        scrollEnabled={conversations.length > 0}
+        scrollEnabled={!!conversations.length}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <LinearGradient colors={C.gradient.lobster} style={styles.emptyIconWrap}>
@@ -209,6 +330,89 @@ export default function ChatListScreen() {
           <Ionicons name="add" size={28} color="#fff" />
         </LinearGradient>
       </Pressable>
+
+      <Modal
+        visible={actionSheetVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeActionSheet}
+      >
+        <Pressable style={styles.modalOverlay} onPress={closeActionSheet}>
+          <View style={styles.actionSheet}>
+            {selectedConvo && !renameMode && (
+              <>
+                <Text style={styles.actionSheetTitle} numberOfLines={1}>
+                  {selectedConvo.title}
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [styles.actionSheetOption, pressed && { backgroundColor: C.cardElevated }]}
+                  onPress={handlePin}
+                >
+                  <Ionicons
+                    name={selectedConvo.pinned ? 'pin-outline' : 'pin'}
+                    size={20}
+                    color={C.text}
+                  />
+                  <Text style={styles.actionSheetOptionText}>
+                    {selectedConvo.pinned ? 'Unpin' : 'Pin'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.actionSheetOption, pressed && { backgroundColor: C.cardElevated }]}
+                  onPress={() => setRenameMode(true)}
+                >
+                  <Ionicons name="pencil" size={20} color={C.text} />
+                  <Text style={styles.actionSheetOptionText}>Rename</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.actionSheetOption, pressed && { backgroundColor: C.cardElevated }]}
+                  onPress={handleDelete}
+                >
+                  <Ionicons name="trash" size={20} color={C.error} />
+                  <Text style={[styles.actionSheetOptionText, { color: C.error }]}>Delete</Text>
+                </Pressable>
+                <View style={styles.actionSheetSep} />
+                <Pressable
+                  style={({ pressed }) => [styles.actionSheetOption, pressed && { backgroundColor: C.cardElevated }]}
+                  onPress={closeActionSheet}
+                >
+                  <Text style={[styles.actionSheetOptionText, { textAlign: 'center', color: C.textSecondary }]}>
+                    Cancel
+                  </Text>
+                </Pressable>
+              </>
+            )}
+            {selectedConvo && renameMode && (
+              <>
+                <Text style={styles.actionSheetTitle}>Rename Conversation</Text>
+                <TextInput
+                  style={styles.renameInput}
+                  value={renameText}
+                  onChangeText={setRenameText}
+                  placeholder="Enter new name..."
+                  placeholderTextColor={C.textTertiary}
+                  autoFocus
+                  selectTextOnFocus
+                />
+                <View style={styles.renameButtons}>
+                  <Pressable
+                    style={({ pressed }) => [styles.renameBtnCancel, pressed && { opacity: 0.7 }]}
+                    onPress={() => setRenameMode(false)}
+                  >
+                    <Text style={styles.renameBtnCancelText}>Back</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [styles.renameBtnSave, pressed && { opacity: 0.7 }]}
+                    onPress={handleRename}
+                  >
+                    <Text style={styles.renameBtnSaveText}>Save</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -217,6 +421,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: C.background,
+  },
+  headerGradient: {
+    borderBottomWidth: 1,
+    borderBottomColor: C.borderLight,
   },
   header: {
     flexDirection: 'row',
@@ -230,13 +438,72 @@ const styles = StyleSheet.create({
     fontSize: 26,
     color: C.text,
   },
+  searchContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    borderRadius: 12,
+    height: 44,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: C.text,
+    height: 44,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 4,
+    backgroundColor: C.card,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    gap: 20,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  statText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: C.textSecondary,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  sectionHeaderText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: C.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   fab: {
     position: 'absolute',
     right: 20,
     zIndex: 10,
     borderRadius: 30,
     overflow: 'hidden',
-    ...C.shadow.elevated,
+    ...C.shadow.glow,
   },
   fabGrad: {
     width: 56,
@@ -251,6 +518,10 @@ const styles = StyleSheet.create({
   emptyListContent: {
     flex: 1,
     justifyContent: 'center',
+  },
+  conversationItemWrapper: {
+    borderRadius: 8,
+    ...C.shadow.card,
   },
   conversationItem: {
     flexDirection: 'row',
@@ -342,9 +613,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   separator: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     backgroundColor: C.borderLight,
     marginLeft: 58,
+    opacity: 0.6,
   },
   emptyState: {
     alignItems: 'center',
@@ -384,6 +656,84 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    color: '#fff',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: C.overlay,
+    justifyContent: 'flex-end',
+  },
+  actionSheet: {
+    backgroundColor: C.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
+    paddingHorizontal: 20,
+  },
+  actionSheetTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
+    color: C.text,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  actionSheetOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  actionSheetOptionText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    color: C.text,
+  },
+  actionSheetSep: {
+    height: 1,
+    backgroundColor: C.borderLight,
+    marginVertical: 4,
+  },
+  renameInput: {
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    color: C.text,
+    marginBottom: 16,
+  },
+  renameButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  renameBtnCancel: {
+    flex: 1,
+    backgroundColor: C.card,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  renameBtnCancelText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    color: C.textSecondary,
+  },
+  renameBtnSave: {
+    flex: 1,
+    backgroundColor: C.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  renameBtnSaveText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 15,
     color: '#fff',
