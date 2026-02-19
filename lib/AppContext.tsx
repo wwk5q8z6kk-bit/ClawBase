@@ -17,6 +17,14 @@ import {
   crmStorage,
   settingsStorage,
 } from './storage';
+import {
+  generateSeedTasks,
+  generateSeedEvents,
+  generateSeedContacts,
+  generateSeedMemory,
+  generateSeedInteractions,
+} from './seedData';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   GatewayConnection,
   Conversation,
@@ -92,8 +100,65 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [hasOnboarded, setHasOnboardedState] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  const seedIfNeeded = useCallback(async () => {
+    const seeded = await AsyncStorage.getItem('@clawcockpit:seeded');
+    if (seeded) return;
+
+    const seedTasks = generateSeedTasks();
+    for (const t of seedTasks) {
+      await taskStorage.create(t.title, t.status, t.priority, t.description);
+      const all = await taskStorage.getAll();
+      const created = all[all.length - 1];
+      if (created) {
+        await taskStorage.update(created.id, {
+          dueDate: t.dueDate,
+          tags: t.tags,
+          source: t.source,
+          assignee: t.assignee,
+          createdAt: t.createdAt,
+          updatedAt: t.updatedAt,
+        });
+      }
+    }
+
+    const seedEvents = generateSeedEvents();
+    for (const e of seedEvents) {
+      await calendarStorage.create(e);
+    }
+
+    const seedContacts = generateSeedContacts();
+    for (const c of seedContacts) {
+      const created = await crmStorage.create(c);
+      if (created.stage === 'customer' || created.stage === 'active') {
+        const interactions = generateSeedInteractions(created.id);
+        for (const inter of interactions) {
+          await crmStorage.addInteraction(created.id, inter);
+        }
+      }
+    }
+
+    const seedMemory = generateSeedMemory();
+    for (const m of seedMemory) {
+      const entry = await memoryStorage.add({
+        type: m.type,
+        title: m.title,
+        content: m.content,
+        source: m.source,
+        tags: m.tags,
+        pinned: m.pinned,
+        reviewStatus: m.reviewStatus,
+      });
+      if (m.timestamp !== undefined) {
+        await memoryStorage.update(entry.id, { timestamp: m.timestamp });
+      }
+    }
+
+    await AsyncStorage.setItem('@clawcockpit:seeded', 'true');
+  }, []);
+
   const loadAll = useCallback(async () => {
     try {
+      await seedIfNeeded();
       const [conns, convos, allTasks, memory, events, contacts, bioEnabled, onboarded, activeId] =
         await Promise.all([
           connectionStorage.getAll(),
@@ -120,7 +185,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [seedIfNeeded]);
 
   useEffect(() => {
     loadAll();
