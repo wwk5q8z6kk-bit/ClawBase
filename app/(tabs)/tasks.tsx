@@ -352,6 +352,7 @@ export default function TasksScreen() {
             </Pressable>
           </View>
           <Pressable
+            testID="add-task-btn"
             onPress={() => setShowAddModal(true)}
             style={({ pressed }) => [pressed && { opacity: 0.7 }]}
           >
