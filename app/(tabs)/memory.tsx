@@ -462,7 +462,7 @@ export default function MemoryScreen() {
 
       <FlatList
         data={flatData}
-        keyExtractor={(item, i) => item.type === 'header' ? `header-${item.label}` : `item-${item.entry.id}`}
+        keyExtractor={(item, i) => item.type === 'header' ? `header-${i}-${item.label}` : `item-${item.entry.id}`}
         renderItem={({ item }) => {
           if (item.type === 'header') {
             return <DateHeader label={item.label} />;
