@@ -13,6 +13,8 @@ import {
   messageStorage,
   taskStorage,
   memoryStorage,
+  calendarStorage,
+  crmStorage,
   settingsStorage,
 } from './storage';
 import type {
@@ -22,6 +24,9 @@ import type {
   Task,
   TaskStatus,
   MemoryEntry,
+  CalendarEvent,
+  CRMContact,
+  CRMInteraction,
 } from './types';
 import * as Crypto from 'expo-crypto';
 
@@ -51,6 +56,18 @@ interface AppContextValue {
 
   memoryEntries: MemoryEntry[];
   searchMemory: (query: string) => Promise<MemoryEntry[]>;
+  updateMemoryEntry: (id: string, updates: Partial<MemoryEntry>) => Promise<void>;
+
+  calendarEvents: CalendarEvent[];
+  createCalendarEvent: (event: Omit<CalendarEvent, 'id'>) => Promise<void>;
+  updateCalendarEvent: (id: string, updates: Partial<CalendarEvent>) => Promise<void>;
+  deleteCalendarEvent: (id: string) => Promise<void>;
+
+  crmContacts: CRMContact[];
+  createCRMContact: (contact: Omit<CRMContact, 'id' | 'createdAt' | 'interactions'>) => Promise<void>;
+  updateCRMContact: (id: string, updates: Partial<CRMContact>) => Promise<void>;
+  deleteCRMContact: (id: string) => Promise<void>;
+  addCRMInteraction: (contactId: string, interaction: Omit<CRMInteraction, 'id' | 'contactId'>) => Promise<void>;
 
   biometricEnabled: boolean;
   setBiometricEnabled: (val: boolean) => Promise<void>;
@@ -69,18 +86,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [memoryEntries, setMemoryEntries] = useState<MemoryEntry[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [crmContacts, setCrmContacts] = useState<CRMContact[]>([]);
   const [biometricEnabled, setBiometricEnabledState] = useState(false);
   const [hasOnboarded, setHasOnboardedState] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadAll = useCallback(async () => {
     try {
-      const [conns, convos, allTasks, memory, bioEnabled, onboarded, activeId] =
+      const [conns, convos, allTasks, memory, events, contacts, bioEnabled, onboarded, activeId] =
         await Promise.all([
           connectionStorage.getAll(),
           conversationStorage.getAll(),
           taskStorage.getAll(),
           memoryStorage.getAll(),
+          calendarStorage.getAll(),
+          crmStorage.getAll(),
           settingsStorage.getBiometricEnabled(),
           settingsStorage.getHasOnboarded(),
           connectionStorage.getActive(),
@@ -89,6 +110,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setConversations(convos);
       setTasks(allTasks);
       setMemoryEntries(memory);
+      setCalendarEvents(events);
+      setCrmContacts(contacts);
       setBiometricEnabledState(bioEnabled);
       setHasOnboardedState(onboarded);
       setActiveConnectionId(activeId);
@@ -263,6 +286,58 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return memoryStorage.search(query);
   }, []);
 
+  const updateMemoryEntry = useCallback(async (id: string, updates: Partial<MemoryEntry>) => {
+    await memoryStorage.update(id, updates);
+    setMemoryEntries((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, ...updates } : m)),
+    );
+  }, []);
+
+  const createCalendarEvent = useCallback(async (event: Omit<CalendarEvent, 'id'>) => {
+    const created = await calendarStorage.create(event);
+    setCalendarEvents((prev) => [...prev, created].sort((a, b) => a.startTime - b.startTime));
+  }, []);
+
+  const updateCalendarEvent = useCallback(async (id: string, updates: Partial<CalendarEvent>) => {
+    await calendarStorage.update(id, updates);
+    setCalendarEvents((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, ...updates } : e)).sort((a, b) => a.startTime - b.startTime),
+    );
+  }, []);
+
+  const deleteCalendarEvent = useCallback(async (id: string) => {
+    await calendarStorage.remove(id);
+    setCalendarEvents((prev) => prev.filter((e) => e.id !== id));
+  }, []);
+
+  const createCRMContact = useCallback(async (contact: Omit<CRMContact, 'id' | 'createdAt' | 'interactions'>) => {
+    const created = await crmStorage.create(contact);
+    setCrmContacts((prev) => [created, ...prev]);
+  }, []);
+
+  const updateCRMContact = useCallback(async (id: string, updates: Partial<CRMContact>) => {
+    await crmStorage.update(id, updates);
+    setCrmContacts((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ...updates } : c)),
+    );
+  }, []);
+
+  const deleteCRMContact = useCallback(async (id: string) => {
+    await crmStorage.remove(id);
+    setCrmContacts((prev) => prev.filter((c) => c.id !== id));
+  }, []);
+
+  const addCRMInteraction = useCallback(async (contactId: string, interaction: Omit<CRMInteraction, 'id' | 'contactId'>) => {
+    const entry = await crmStorage.addInteraction(contactId, interaction);
+    setCrmContacts((prev) =>
+      prev.map((c) =>
+        c.id === contactId
+          ? { ...c, interactions: [...c.interactions, entry], lastInteraction: entry.timestamp }
+          : c,
+      ),
+    );
+  }, []);
+
   const setBiometricEnabledFn = useCallback(async (val: boolean) => {
     await settingsStorage.setBiometricEnabled(val);
     setBiometricEnabledState(val);
@@ -291,6 +366,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteTask,
       memoryEntries,
       searchMemory,
+      updateMemoryEntry,
+      calendarEvents,
+      createCalendarEvent,
+      updateCalendarEvent,
+      deleteCalendarEvent,
+      crmContacts,
+      createCRMContact,
+      updateCRMContact,
+      deleteCRMContact,
+      addCRMInteraction,
       biometricEnabled,
       setBiometricEnabled: setBiometricEnabledFn,
       hasOnboarded,
@@ -302,7 +387,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       connections, activeConnection, addConnection, removeConnection,
       setActiveConnectionFn, conversations, createConversation,
       deleteConversation, getMessages, sendMessage, tasks, createTask,
-      updateTask, deleteTask, memoryEntries, searchMemory,
+      updateTask, deleteTask, memoryEntries, searchMemory, updateMemoryEntry,
+      calendarEvents, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent,
+      crmContacts, createCRMContact, updateCRMContact, deleteCRMContact, addCRMInteraction,
       biometricEnabled, setBiometricEnabledFn, hasOnboarded,
       setHasOnboardedFn, isLoading, loadAll,
     ],
