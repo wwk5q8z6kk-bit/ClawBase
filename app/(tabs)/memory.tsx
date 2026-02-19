@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,23 +7,25 @@ import {
   TextInput,
   Pressable,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { MemoryEntry } from '@/lib/types';
 
 const C = Colors.dark;
 
-const TYPE_CONFIG: Record<
-  string,
-  { icon: string; color: string; label: string }
-> = {
+const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
   conversation: { icon: 'chatbubble-outline', color: C.coral, label: 'Chat' },
   note: { icon: 'document-text-outline', color: C.secondary, label: 'Note' },
   task: { icon: 'checkbox-outline', color: C.amber, label: 'Task' },
   event: { icon: 'calendar-outline', color: C.accent, label: 'Event' },
+  summary: { icon: 'sparkles-outline', color: '#FF9F5A', label: 'Summary' },
+  document: { icon: 'folder-open-outline', color: '#8B7FFF', label: 'Document' },
 };
 
 const SOURCE_CONFIG: Record<string, { icon: string; color: string }> = {
@@ -32,7 +34,17 @@ const SOURCE_CONFIG: Record<string, { icon: string; color: string }> = {
   email: { icon: 'mail', color: C.amber },
   calendar: { icon: 'calendar', color: C.accent },
   system: { icon: 'settings', color: C.textSecondary },
+  notion: { icon: 'document', color: '#8B7FFF' },
+  agent: { icon: 'flash', color: C.coral },
 };
+
+const REVIEW_FILTERS = [
+  { key: 'all', label: 'All', icon: 'layers-outline' },
+  { key: 'unread', label: 'Unread', icon: 'eye-off-outline' },
+  { key: 'pinned', label: 'Pinned', icon: 'pin-outline' },
+  { key: 'deferred', label: 'Deferred', icon: 'time-outline' },
+  { key: 'reviewed', label: 'Reviewed', icon: 'checkmark-outline' },
+] as const;
 
 function getDateLabel(ts: number): string {
   const now = new Date();
@@ -43,6 +55,8 @@ function getDateLabel(ts: number): string {
 
   if (dateStart.getTime() === today.getTime()) return 'Today';
   if (dateStart.getTime() === yesterday.getTime()) return 'Yesterday';
+  const daysAgo = Math.floor((today.getTime() - dateStart.getTime()) / 86400000);
+  if (daysAgo < 7) return `${daysAgo} days ago`;
   return date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
 }
 
@@ -56,7 +70,17 @@ function DateHeader({ label }: { label: string }) {
   );
 }
 
-function MemoryItem({ item }: { item: MemoryEntry }) {
+function MemoryItem({
+  item,
+  onPin,
+  onReview,
+  onDefer,
+}: {
+  item: MemoryEntry;
+  onPin: () => void;
+  onReview: () => void;
+  onDefer: () => void;
+}) {
   const config = TYPE_CONFIG[item.type] || TYPE_CONFIG.note;
   const source = item.source ? SOURCE_CONFIG[item.source] : null;
   const timeStr = new Date(item.timestamp).toLocaleTimeString(undefined, {
@@ -70,14 +94,28 @@ function MemoryItem({ item }: { item: MemoryEntry }) {
         <View style={[styles.timelineDot, { backgroundColor: config.color }]} />
         <View style={styles.timelineLine} />
       </View>
-      <View style={styles.memoryCard}>
+      <View style={[styles.memoryCard, item.pinned && styles.memoryCardPinned]}>
         <View style={styles.memoryHeader}>
           <View style={[styles.typeIcon, { backgroundColor: config.color + '15' }]}>
             <Ionicons name={config.icon as any} size={16} color={config.color} />
           </View>
           <Text style={styles.memoryTitle} numberOfLines={1}>{item.title}</Text>
+          {item.pinned && <Ionicons name="pin" size={12} color={C.coral} />}
+          {item.reviewStatus === 'deferred' && <Ionicons name="time" size={12} color="#8B7FFF" />}
         </View>
         <Text style={styles.memoryText} numberOfLines={3}>{item.content}</Text>
+
+        {item.tags && item.tags.length > 0 && (
+          <View style={styles.tagsRow}>
+            {item.tags.map((tag, i) => (
+              <View key={i} style={styles.tagChip}>
+                <Ionicons name="pricetag-outline" size={9} color={C.accent} />
+                <Text style={styles.tagChipText}>{tag}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         <View style={styles.memoryFooter}>
           <View style={[styles.typeBadge, { backgroundColor: config.color + '18' }]}>
             <Text style={[styles.typeBadgeText, { color: config.color }]}>{config.label}</Text>
@@ -85,46 +123,99 @@ function MemoryItem({ item }: { item: MemoryEntry }) {
           {source && (
             <View style={styles.sourceBadge}>
               <Ionicons name={source.icon as any} size={10} color={source.color} />
-              <Text style={styles.sourceText}>{item.source}</Text>
+              <Text style={styles.sourceTextBadge}>{item.source}</Text>
             </View>
           )}
-          {item.tags && item.tags.length > 0 && (
-            <View style={styles.tagBadge}>
-              <Ionicons name="pricetag-outline" size={10} color={C.textTertiary} />
-              <Text style={styles.tagText}>{item.tags[0]}</Text>
+          {item.reviewStatus && (
+            <View style={[
+              styles.reviewBadge,
+              item.reviewStatus === 'unread' && { backgroundColor: C.coral + '15' },
+              item.reviewStatus === 'deferred' && { backgroundColor: '#8B7FFF15' },
+              item.reviewStatus === 'reviewed' && { backgroundColor: C.success + '15' },
+            ]}>
+              <Text style={[
+                styles.reviewBadgeText,
+                item.reviewStatus === 'unread' && { color: C.coral },
+                item.reviewStatus === 'deferred' && { color: '#8B7FFF' },
+                item.reviewStatus === 'reviewed' && { color: C.success },
+              ]}>{item.reviewStatus}</Text>
             </View>
           )}
           <Text style={styles.memoryTime}>{timeStr}</Text>
+        </View>
+
+        <View style={styles.actionRow}>
+          <Pressable style={styles.actionBtn} onPress={() => { Haptics.selectionAsync(); onPin(); }}>
+            <Ionicons name={item.pinned ? 'pin' : 'pin-outline'} size={14} color={item.pinned ? C.coral : C.textTertiary} />
+          </Pressable>
+          <Pressable style={styles.actionBtn} onPress={() => { Haptics.selectionAsync(); onReview(); }}>
+            <Ionicons name={item.reviewStatus === 'reviewed' ? 'checkmark-circle' : 'checkmark-circle-outline'} size={14} color={item.reviewStatus === 'reviewed' ? C.success : C.textTertiary} />
+          </Pressable>
+          <Pressable style={styles.actionBtn} onPress={() => { Haptics.selectionAsync(); onDefer(); }}>
+            <Ionicons name="time-outline" size={14} color={item.reviewStatus === 'deferred' ? '#8B7FFF' : C.textTertiary} />
+          </Pressable>
         </View>
       </View>
     </View>
   );
 }
 
-type FilterType = 'all' | 'conversation' | 'note' | 'task' | 'event';
+type FilterType = 'all' | 'conversation' | 'note' | 'task' | 'event' | 'summary' | 'document';
+type ReviewFilter = typeof REVIEW_FILTERS[number]['key'];
 
 export default function MemoryScreen() {
   const insets = useSafeAreaInsets();
-  const { memoryEntries } = useApp();
+  const { memoryEntries, updateMemoryEntry } = useApp();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>('all');
+  const [showTagBrowser, setShowTagBrowser] = useState(false);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+
+  const allTags = useMemo(() => {
+    const tags = new Set<string>();
+    memoryEntries.forEach((e) => e.tags?.forEach((t) => tags.add(t)));
+    return Array.from(tags).sort();
+  }, [memoryEntries]);
+
+  const deferredCount = useMemo(
+    () => memoryEntries.filter((e) => e.reviewStatus === 'deferred').length,
+    [memoryEntries],
+  );
 
   const filteredEntries = useMemo(() => {
     let entries = [...memoryEntries];
     if (filter !== 'all') {
       entries = entries.filter((e) => e.type === filter);
     }
+    if (reviewFilter === 'unread') {
+      entries = entries.filter((e) => !e.reviewStatus || e.reviewStatus === 'unread');
+    } else if (reviewFilter === 'pinned') {
+      entries = entries.filter((e) => e.pinned);
+    } else if (reviewFilter === 'deferred') {
+      entries = entries.filter((e) => e.reviewStatus === 'deferred');
+    } else if (reviewFilter === 'reviewed') {
+      entries = entries.filter((e) => e.reviewStatus === 'reviewed');
+    }
+    if (selectedTag) {
+      entries = entries.filter((e) => e.tags?.includes(selectedTag));
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       entries = entries.filter(
         (e) =>
           e.title.toLowerCase().includes(q) ||
-          e.content.toLowerCase().includes(q),
+          e.content.toLowerCase().includes(q) ||
+          e.tags?.some((t) => t.toLowerCase().includes(q)),
       );
     }
-    entries.sort((a, b) => b.timestamp - a.timestamp);
+    entries.sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return b.timestamp - a.timestamp;
+    });
     return entries;
-  }, [memoryEntries, filter, search]);
+  }, [memoryEntries, filter, reviewFilter, selectedTag, search]);
 
   const groupedEntries = useMemo(() => {
     const groups: { label: string; data: MemoryEntry[] }[] = [];
@@ -152,22 +243,68 @@ export default function MemoryScreen() {
     return items;
   }, [groupedEntries]);
 
+  const handlePin = useCallback((id: string, currentPinned?: boolean) => {
+    updateMemoryEntry(id, { pinned: !currentPinned });
+  }, [updateMemoryEntry]);
+
+  const handleReview = useCallback((id: string) => {
+    updateMemoryEntry(id, { reviewStatus: 'reviewed' });
+  }, [updateMemoryEntry]);
+
+  const handleDefer = useCallback((id: string, currentStatus?: string) => {
+    updateMemoryEntry(id, { reviewStatus: currentStatus === 'deferred' ? 'unread' : 'deferred' });
+  }, [updateMemoryEntry]);
+
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Memory</Text>
-        <View style={styles.countBadge}>
-          <Text style={styles.countText}>{memoryEntries.length}</Text>
+        <View style={styles.headerRight}>
+          <View style={styles.countBadge}>
+            <Text style={styles.countText}>{memoryEntries.length}</Text>
+          </View>
+          <Pressable
+            style={styles.tagBrowserBtn}
+            onPress={() => {
+              setShowTagBrowser(!showTagBrowser);
+              Haptics.selectionAsync();
+            }}
+          >
+            <Ionicons name="pricetags-outline" size={18} color={showTagBrowser ? C.coral : C.textSecondary} />
+          </Pressable>
         </View>
       </View>
+
+      {deferredCount > 0 && reviewFilter !== 'deferred' && (
+        <Pressable
+          style={styles.deferredBanner}
+          onPress={() => {
+            setReviewFilter('deferred');
+            Haptics.selectionAsync();
+          }}
+        >
+          <LinearGradient
+            colors={['#1A1530', '#151028']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.deferredBannerGrad}
+          >
+            <Ionicons name="time" size={18} color="#8B7FFF" />
+            <Text style={styles.deferredBannerText}>
+              {deferredCount} deferred note{deferredCount !== 1 ? 's' : ''} to review
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color="#8B7FFF" />
+          </LinearGradient>
+        </Pressable>
+      )}
 
       <View style={styles.searchWrap}>
         <Ionicons name="search" size={18} color={C.textTertiary} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search memories..."
+          placeholder="Search memories, tags, content..."
           placeholderTextColor={C.textTertiary}
           value={search}
           onChangeText={setSearch}
@@ -179,35 +316,73 @@ export default function MemoryScreen() {
         )}
       </View>
 
-      <View style={styles.filterRow}>
-        {(
-          [
-            { key: 'all', label: 'All' },
-            { key: 'conversation', label: 'Chats' },
-            { key: 'note', label: 'Notes' },
-            { key: 'task', label: 'Tasks' },
-            { key: 'event', label: 'Events' },
-          ] as const
-        ).map((f) => (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reviewFilterRow}>
+        {REVIEW_FILTERS.map((f) => (
           <Pressable
             key={f.key}
-            style={[
-              styles.filterChip,
-              filter === f.key && styles.filterChipActive,
-            ]}
-            onPress={() => setFilter(f.key)}
+            style={[styles.reviewChip, reviewFilter === f.key && styles.reviewChipActive]}
+            onPress={() => {
+              setReviewFilter(f.key);
+              Haptics.selectionAsync();
+            }}
           >
-            <Text
-              style={[
-                styles.filterChipText,
-                filter === f.key && styles.filterChipTextActive,
-              ]}
-            >
-              {f.label}
-            </Text>
+            <Ionicons name={f.icon as any} size={14} color={reviewFilter === f.key ? C.coral : C.textSecondary} />
+            <Text style={[styles.reviewChipText, reviewFilter === f.key && styles.reviewChipTextActive]}>{f.label}</Text>
           </Pressable>
         ))}
-      </View>
+      </ScrollView>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+        {([
+          { key: 'all', label: 'All' },
+          { key: 'conversation', label: 'Chats' },
+          { key: 'note', label: 'Notes' },
+          { key: 'task', label: 'Tasks' },
+          { key: 'event', label: 'Events' },
+          { key: 'summary', label: 'Summaries' },
+          { key: 'document', label: 'Docs' },
+        ] as const).map((f) => (
+          <Pressable
+            key={f.key}
+            style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
+            onPress={() => setFilter(f.key)}
+          >
+            <Text style={[styles.filterChipText, filter === f.key && styles.filterChipTextActive]}>{f.label}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      {showTagBrowser && allTags.length > 0 && (
+        <View style={styles.tagBrowser}>
+          <Text style={styles.tagBrowserTitle}>Tags</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagBrowserScroll}>
+            <Pressable
+              style={[styles.tagBrowserItem, !selectedTag && styles.tagBrowserItemActive]}
+              onPress={() => { setSelectedTag(null); Haptics.selectionAsync(); }}
+            >
+              <Text style={[styles.tagBrowserItemText, !selectedTag && { color: C.coral }]}>All</Text>
+            </Pressable>
+            {allTags.map((tag) => (
+              <Pressable
+                key={tag}
+                style={[styles.tagBrowserItem, selectedTag === tag && styles.tagBrowserItemActive]}
+                onPress={() => { setSelectedTag(selectedTag === tag ? null : tag); Haptics.selectionAsync(); }}
+              >
+                <Ionicons name="pricetag" size={11} color={selectedTag === tag ? C.accent : C.textTertiary} />
+                <Text style={[styles.tagBrowserItemText, selectedTag === tag && { color: C.accent }]}>{tag}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {selectedTag && (
+        <Pressable style={styles.activeTagBanner} onPress={() => setSelectedTag(null)}>
+          <Ionicons name="pricetag" size={12} color={C.accent} />
+          <Text style={styles.activeTagText}>Filtered by: {selectedTag}</Text>
+          <Ionicons name="close" size={14} color={C.textSecondary} />
+        </Pressable>
+      )}
 
       <FlatList
         data={flatData}
@@ -216,7 +391,14 @@ export default function MemoryScreen() {
           if (item.type === 'header') {
             return <DateHeader label={item.label} />;
           }
-          return <MemoryItem item={item.entry} />;
+          return (
+            <MemoryItem
+              item={item.entry}
+              onPin={() => handlePin(item.entry.id, item.entry.pinned)}
+              onReview={() => handleReview(item.entry.id)}
+              onDefer={() => handleDefer(item.entry.id, item.entry.reviewStatus)}
+            />
+          );
         }}
         contentContainerStyle={[
           styles.listContent,
@@ -225,13 +407,15 @@ export default function MemoryScreen() {
         ]}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="file-tray-outline" size={44} color={C.textTertiary} />
+            <MaterialCommunityIcons name="brain" size={44} color={C.textTertiary} />
             <Text style={styles.emptyTitle}>
-              {search ? 'No results found' : 'No memories yet'}
+              {search || selectedTag ? 'No results found' : 'No memories yet'}
             </Text>
             <Text style={styles.emptySubtitle}>
               {search
                 ? 'Try a different search term'
+                : selectedTag
+                ? `No memories tagged "${selectedTag}"`
                 : 'Your conversations and tasks will appear here'}
             </Text>
           </View>
@@ -242,219 +426,65 @@ export default function MemoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: C.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 10,
-  },
-  headerTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 26,
-    color: C.text,
-  },
-  countBadge: {
-    backgroundColor: C.primaryMuted,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  countText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    color: C.primary,
-  },
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.card,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    marginHorizontal: 20,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: C.borderLight,
-    height: 44,
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 15,
-    color: C.text,
-    height: 44,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: C.card,
-    borderWidth: 1,
-    borderColor: C.borderLight,
-  },
-  filterChipActive: {
-    backgroundColor: C.primaryMuted,
-    borderColor: C.primary,
-  },
-  filterChipText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    color: C.textSecondary,
-  },
-  filterChipTextActive: {
-    color: C.primary,
-  },
-  listContent: {
-    paddingHorizontal: 20,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  dateHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-  },
-  dateLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: C.borderLight,
-  },
-  dateLabel: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    color: C.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  memoryItem: {
-    flexDirection: 'row',
-    gap: 0,
-    marginBottom: 2,
-  },
-  timelineCol: {
-    alignItems: 'center',
-    width: 20,
-    paddingTop: 6,
-  },
-  timelineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  timelineLine: {
-    flex: 1,
-    width: 1,
-    backgroundColor: C.borderLight,
-    marginTop: 4,
-  },
-  memoryCard: {
-    flex: 1,
-    backgroundColor: C.card,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: C.borderLight,
-    gap: 6,
-    marginBottom: 6,
-  },
-  memoryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  typeIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  memoryTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    color: C.text,
-    flex: 1,
-  },
-  memoryText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: C.textSecondary,
-    lineHeight: 18,
-  },
-  memoryFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  typeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  typeBadgeText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-  },
-  sourceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  sourceText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 10,
-    color: C.textTertiary,
-    textTransform: 'capitalize',
-  },
-  tagBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  tagText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 10,
-    color: C.textTertiary,
-  },
-  memoryTime: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 10,
-    color: C.textTertiary,
-    marginLeft: 'auto',
-  },
-  emptyState: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 20,
-  },
-  emptyTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 16,
-    color: C.textSecondary,
-    marginTop: 8,
-  },
-  emptySubtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: C.textTertiary,
-    textAlign: 'center',
-  },
+  container: { flex: 1, backgroundColor: C.background },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
+  headerTitle: { fontFamily: 'Inter_700Bold', fontSize: 26, color: C.text },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  countBadge: { backgroundColor: C.primaryMuted, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  countText: { fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.primary },
+  tagBrowserBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' },
+  deferredBanner: { marginHorizontal: 20, marginBottom: 8 },
+  deferredBannerGrad: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#8B7FFF30' },
+  deferredBannerText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: '#8B7FFF', flex: 1 },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderRadius: 12, paddingHorizontal: 14, marginHorizontal: 20, gap: 10, borderWidth: 1, borderColor: C.borderLight, height: 44 },
+  searchInput: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 15, color: C.text, height: 44 },
+  reviewFilterRow: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 4, gap: 6 },
+  reviewChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: C.card },
+  reviewChipActive: { backgroundColor: C.coral + '15' },
+  reviewChipText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary },
+  reviewChipTextActive: { color: C.coral },
+  filterRow: { paddingHorizontal: 20, paddingVertical: 8, gap: 8 },
+  filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: C.card, borderWidth: 1, borderColor: C.borderLight },
+  filterChipActive: { backgroundColor: C.primaryMuted, borderColor: C.primary },
+  filterChipText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.textSecondary },
+  filterChipTextActive: { color: C.primary },
+  tagBrowser: { marginHorizontal: 20, marginBottom: 4, backgroundColor: C.card, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: C.borderLight },
+  tagBrowserTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.textTertiary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  tagBrowserScroll: { gap: 6 },
+  tagBrowserItem: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, backgroundColor: C.surface },
+  tagBrowserItemActive: { backgroundColor: C.coral + '15' },
+  tagBrowserItemText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary },
+  activeTagBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 20, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: C.accent + '12', borderRadius: 8, marginBottom: 4 },
+  activeTagText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.accent, flex: 1 },
+  listContent: { paddingHorizontal: 20 },
+  emptyContainer: { flex: 1, justifyContent: 'center' },
+  dateHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  dateLine: { flex: 1, height: 1, backgroundColor: C.borderLight },
+  dateLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  memoryItem: { flexDirection: 'row', gap: 0, marginBottom: 2 },
+  timelineCol: { alignItems: 'center', width: 20, paddingTop: 6 },
+  timelineDot: { width: 8, height: 8, borderRadius: 4 },
+  timelineLine: { flex: 1, width: 1, backgroundColor: C.borderLight, marginTop: 4 },
+  memoryCard: { flex: 1, backgroundColor: C.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: C.borderLight, gap: 6, marginBottom: 6 },
+  memoryCardPinned: { borderColor: C.coral + '30' },
+  memoryHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  typeIcon: { width: 28, height: 28, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  memoryTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.text, flex: 1 },
+  memoryText: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textSecondary, lineHeight: 18 },
+  tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  tagChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: C.accent + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  tagChipText: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.accent },
+  memoryFooter: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  typeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  typeBadgeText: { fontFamily: 'Inter_500Medium', fontSize: 11 },
+  sourceBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  sourceTextBadge: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary, textTransform: 'capitalize' },
+  reviewBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  reviewBadgeText: { fontFamily: 'Inter_500Medium', fontSize: 10, textTransform: 'capitalize' },
+  memoryTime: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary, marginLeft: 'auto' },
+  actionRow: { flexDirection: 'row', gap: 4, marginTop: 4, borderTopWidth: 1, borderTopColor: C.borderLight, paddingTop: 6 },
+  actionBtn: { width: 32, height: 28, borderRadius: 6, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
+  emptyState: { alignItems: 'center', gap: 8, paddingVertical: 20 },
+  emptyTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 16, color: C.textSecondary, marginTop: 8 },
+  emptySubtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary, textAlign: 'center' },
 });
