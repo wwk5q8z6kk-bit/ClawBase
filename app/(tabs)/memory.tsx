@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -20,42 +20,82 @@ const TYPE_CONFIG: Record<
   string,
   { icon: string; color: string; label: string }
 > = {
-  conversation: { icon: 'chatbubble-outline', color: C.accent, label: 'Chat' },
+  conversation: { icon: 'chatbubble-outline', color: C.coral, label: 'Chat' },
   note: { icon: 'document-text-outline', color: C.secondary, label: 'Note' },
-  task: { icon: 'checkbox-outline', color: C.warning, label: 'Task' },
-  event: { icon: 'calendar-outline', color: C.primary, label: 'Event' },
+  task: { icon: 'checkbox-outline', color: C.amber, label: 'Task' },
+  event: { icon: 'calendar-outline', color: C.accent, label: 'Event' },
 };
+
+const SOURCE_CONFIG: Record<string, { icon: string; color: string }> = {
+  chat: { icon: 'chatbubble', color: C.coral },
+  github: { icon: 'logo-github', color: '#fff' },
+  email: { icon: 'mail', color: C.amber },
+  calendar: { icon: 'calendar', color: C.accent },
+  system: { icon: 'settings', color: C.textSecondary },
+};
+
+function getDateLabel(ts: number): string {
+  const now = new Date();
+  const date = new Date(ts);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 86400000);
+  const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  if (dateStart.getTime() === today.getTime()) return 'Today';
+  if (dateStart.getTime() === yesterday.getTime()) return 'Yesterday';
+  return date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+}
+
+function DateHeader({ label }: { label: string }) {
+  return (
+    <View style={styles.dateHeader}>
+      <View style={styles.dateLine} />
+      <Text style={styles.dateLabel}>{label}</Text>
+      <View style={styles.dateLine} />
+    </View>
+  );
+}
 
 function MemoryItem({ item }: { item: MemoryEntry }) {
   const config = TYPE_CONFIG[item.type] || TYPE_CONFIG.note;
-  const date = new Date(item.timestamp);
-  const timeStr = date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
+  const source = item.source ? SOURCE_CONFIG[item.source] : null;
+  const timeStr = new Date(item.timestamp).toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
   });
 
   return (
     <View style={styles.memoryItem}>
-      <View style={[styles.typeIcon, { backgroundColor: config.color + '15' }]}>
-        <Ionicons name={config.icon as any} size={18} color={config.color} />
+      <View style={styles.timelineCol}>
+        <View style={[styles.timelineDot, { backgroundColor: config.color }]} />
+        <View style={styles.timelineLine} />
       </View>
-      <View style={styles.memoryContent}>
+      <View style={styles.memoryCard}>
         <View style={styles.memoryHeader}>
-          <Text style={styles.memoryTitle} numberOfLines={1}>
-            {item.title}
-          </Text>
-          <View style={[styles.typeBadge, { backgroundColor: config.color + '20' }]}>
-            <Text style={[styles.typeBadgeText, { color: config.color }]}>
-              {config.label}
-            </Text>
+          <View style={[styles.typeIcon, { backgroundColor: config.color + '15' }]}>
+            <Ionicons name={config.icon as any} size={16} color={config.color} />
           </View>
+          <Text style={styles.memoryTitle} numberOfLines={1}>{item.title}</Text>
         </View>
-        <Text style={styles.memoryText} numberOfLines={2}>
-          {item.content}
-        </Text>
-        <Text style={styles.memoryTime}>{timeStr}</Text>
+        <Text style={styles.memoryText} numberOfLines={3}>{item.content}</Text>
+        <View style={styles.memoryFooter}>
+          <View style={[styles.typeBadge, { backgroundColor: config.color + '18' }]}>
+            <Text style={[styles.typeBadgeText, { color: config.color }]}>{config.label}</Text>
+          </View>
+          {source && (
+            <View style={styles.sourceBadge}>
+              <Ionicons name={source.icon as any} size={10} color={source.color} />
+              <Text style={styles.sourceText}>{item.source}</Text>
+            </View>
+          )}
+          {item.tags && item.tags.length > 0 && (
+            <View style={styles.tagBadge}>
+              <Ionicons name="pricetag-outline" size={10} color={C.textTertiary} />
+              <Text style={styles.tagText}>{item.tags[0]}</Text>
+            </View>
+          )}
+          <Text style={styles.memoryTime}>{timeStr}</Text>
+        </View>
       </View>
     </View>
   );
@@ -70,7 +110,7 @@ export default function MemoryScreen() {
   const [filter, setFilter] = useState<FilterType>('all');
 
   const filteredEntries = useMemo(() => {
-    let entries = memoryEntries;
+    let entries = [...memoryEntries];
     if (filter !== 'all') {
       entries = entries.filter((e) => e.type === filter);
     }
@@ -82,8 +122,35 @@ export default function MemoryScreen() {
           e.content.toLowerCase().includes(q),
       );
     }
+    entries.sort((a, b) => b.timestamp - a.timestamp);
     return entries;
   }, [memoryEntries, filter, search]);
+
+  const groupedEntries = useMemo(() => {
+    const groups: { label: string; data: MemoryEntry[] }[] = [];
+    let currentLabel = '';
+    for (const entry of filteredEntries) {
+      const label = getDateLabel(entry.timestamp);
+      if (label !== currentLabel) {
+        currentLabel = label;
+        groups.push({ label, data: [entry] });
+      } else {
+        groups[groups.length - 1].data.push(entry);
+      }
+    }
+    return groups;
+  }, [filteredEntries]);
+
+  const flatData = useMemo(() => {
+    const items: ({ type: 'header'; label: string } | { type: 'item'; entry: MemoryEntry })[] = [];
+    for (const group of groupedEntries) {
+      items.push({ type: 'header', label: group.label });
+      for (const entry of group.data) {
+        items.push({ type: 'item', entry });
+      }
+    }
+    return items;
+  }, [groupedEntries]);
 
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
@@ -91,6 +158,9 @@ export default function MemoryScreen() {
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Memory</Text>
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>{memoryEntries.length}</Text>
+        </View>
       </View>
 
       <View style={styles.searchWrap}>
@@ -140,18 +210,22 @@ export default function MemoryScreen() {
       </View>
 
       <FlatList
-        data={filteredEntries}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <MemoryItem item={item} />}
+        data={flatData}
+        keyExtractor={(item, i) => item.type === 'header' ? `header-${item.label}` : `item-${item.entry.id}`}
+        renderItem={({ item }) => {
+          if (item.type === 'header') {
+            return <DateHeader label={item.label} />;
+          }
+          return <MemoryItem item={item.entry} />;
+        }}
         contentContainerStyle={[
           styles.listContent,
           { paddingBottom: insets.bottom + 100 },
-          filteredEntries.length === 0 && styles.emptyContainer,
+          flatData.length === 0 && styles.emptyContainer,
         ]}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="file-tray-outline" size={48} color={C.textTertiary} />
+            <Ionicons name="file-tray-outline" size={44} color={C.textTertiary} />
             <Text style={styles.emptyTitle}>
               {search ? 'No results found' : 'No memories yet'}
             </Text>
@@ -173,13 +247,27 @@ const styles = StyleSheet.create({
     backgroundColor: C.background,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
+    gap: 10,
   },
   headerTitle: {
     fontFamily: 'Inter_700Bold',
     fontSize: 26,
     color: C.text,
+  },
+  countBadge: {
+    backgroundColor: C.primaryMuted,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  countText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: C.primary,
   },
   searchWrap: {
     flexDirection: 'row',
@@ -233,33 +321,84 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
+  dateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  dateLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: C.borderLight,
+  },
+  dateLabel: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: C.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   memoryItem: {
     flexDirection: 'row',
-    paddingVertical: 14,
-    gap: 12,
+    gap: 0,
+    marginBottom: 2,
   },
-  typeIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+  timelineCol: {
     alignItems: 'center',
-    justifyContent: 'center',
+    width: 20,
+    paddingTop: 6,
   },
-  memoryContent: {
+  timelineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  timelineLine: {
     flex: 1,
-    gap: 4,
+    width: 1,
+    backgroundColor: C.borderLight,
+    marginTop: 4,
+  },
+  memoryCard: {
+    flex: 1,
+    backgroundColor: C.card,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    gap: 6,
+    marginBottom: 6,
   },
   memoryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
+  },
+  typeIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   memoryTitle: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
     color: C.text,
     flex: 1,
-    marginRight: 8,
+  },
+  memoryText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: C.textSecondary,
+    lineHeight: 18,
+  },
+  memoryFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
   },
   typeBadge: {
     paddingHorizontal: 8,
@@ -270,22 +409,36 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 11,
   },
-  memoryText: {
+  sourceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  sourceText: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: C.textSecondary,
-    lineHeight: 18,
+    fontSize: 10,
+    color: C.textTertiary,
+    textTransform: 'capitalize',
+  },
+  tagBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  tagText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    color: C.textTertiary,
   },
   memoryTime: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 11,
+    fontSize: 10,
     color: C.textTertiary,
-    marginTop: 2,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: C.borderLight,
-    marginLeft: 52,
+    marginLeft: 'auto',
   },
   emptyState: {
     alignItems: 'center',

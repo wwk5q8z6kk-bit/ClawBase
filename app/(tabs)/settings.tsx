@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,9 +10,11 @@ import {
   TextInput,
   Modal,
   Alert,
+  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons, Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as LocalAuthentication from 'expo-local-authentication';
 import Colors from '@/constants/colors';
@@ -71,6 +73,54 @@ function SettingsRow({
           <Ionicons name="chevron-forward" size={18} color={C.textTertiary} />
         ))}
     </Pressable>
+  );
+}
+
+function AgentHealthMonitor() {
+  const { activeConnection } = useApp();
+  const connected = !!activeConnection;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!connected) return;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 0.4, duration: 1200, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: Platform.OS !== 'web' }),
+      ]),
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [connected, pulseAnim]);
+
+  return (
+    <LinearGradient
+      colors={connected ? ['#0F2020', '#0E1A1A'] : ['#201510', '#1A1210']}
+      style={styles.healthCard}
+    >
+      <View style={styles.healthHeader}>
+        <Animated.View style={[styles.healthDot, { backgroundColor: connected ? C.success : C.error, opacity: connected ? pulseAnim : 1 }]} />
+        <Text style={[styles.healthStatus, { color: connected ? C.success : C.error }]}>
+          {connected ? 'Agent Healthy' : 'No Connection'}
+        </Text>
+      </View>
+      <View style={styles.healthMetrics}>
+        <View style={styles.healthMetric}>
+          <Text style={styles.healthMetricValue}>{connected ? '24ms' : '--'}</Text>
+          <Text style={styles.healthMetricLabel}>Latency</Text>
+        </View>
+        <View style={styles.healthMetricDivider} />
+        <View style={styles.healthMetric}>
+          <Text style={styles.healthMetricValue}>{connected ? '99.9%' : '--'}</Text>
+          <Text style={styles.healthMetricLabel}>Uptime</Text>
+        </View>
+        <View style={styles.healthMetricDivider} />
+        <View style={styles.healthMetric}>
+          <Text style={styles.healthMetricValue}>{connected ? '4' : '0'}</Text>
+          <Text style={styles.healthMetricLabel}>Skills</Text>
+        </View>
+      </View>
+    </LinearGradient>
   );
 }
 
@@ -163,6 +213,8 @@ export default function SettingsScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        <AgentHealthMonitor />
+
         <SettingsSection title="Gateway Connections">
           {connections.map((conn) => (
             <Pressable
@@ -241,7 +293,7 @@ export default function SettingsScreen() {
             icon="information-circle-outline"
             iconColor={C.accent}
             label="Version"
-            value="1.0.0"
+            value="2.0.0"
           />
           <SettingsRow
             icon="shield-checkmark-outline"
@@ -255,9 +307,18 @@ export default function SettingsScreen() {
             label="Protocol"
             value="WebSocket :18789"
           />
+          <SettingsRow
+            icon="color-palette-outline"
+            iconColor={C.coral}
+            label="Theme"
+            value="Lobster Dark"
+          />
         </SettingsSection>
 
         <View style={styles.branding}>
+          <LinearGradient colors={C.gradient.lobster} style={styles.brandLogo}>
+            <Ionicons name="sparkles" size={20} color="#fff" />
+          </LinearGradient>
           <Text style={styles.brandText}>ClawCockpit</Text>
           <Text style={styles.brandSub}>
             Mission control for your self-hosted agent
@@ -342,6 +403,51 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 24,
     paddingTop: 8,
+  },
+  healthCard: {
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    gap: 14,
+  },
+  healthHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  healthDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  healthStatus: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+  },
+  healthMetrics: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  healthMetric: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  healthMetricValue: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 18,
+    color: C.text,
+  },
+  healthMetricLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: C.textSecondary,
+    marginTop: 2,
+  },
+  healthMetricDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: C.border,
   },
   section: {
     gap: 10,
@@ -437,7 +543,15 @@ const styles = StyleSheet.create({
   branding: {
     alignItems: 'center',
     paddingVertical: 24,
-    gap: 4,
+    gap: 6,
+  },
+  brandLogo: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
   brandText: {
     fontFamily: 'Inter_700Bold',
