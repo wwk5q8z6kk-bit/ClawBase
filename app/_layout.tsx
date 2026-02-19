@@ -22,6 +22,8 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerBackTitle: 'Back', headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="calendar" options={{ headerShown: false }} />
+      <Stack.Screen name="crm" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
     </Stack>
   );
