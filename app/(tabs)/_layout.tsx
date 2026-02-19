@@ -11,19 +11,19 @@ function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: 'square.grid.2x2', selected: 'square.grid.2x2.fill' }} />
-        <Label>Dashboard</Label>
+        <Icon sf={{ default: 'gauge.open.with.lines.needle.33percent', selected: 'gauge.open.with.lines.needle.33percent' }} />
+        <Label>Cockpit</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="chat">
         <Icon sf={{ default: 'bubble.left.and.bubble.right', selected: 'bubble.left.and.bubble.right.fill' }} />
         <Label>Chat</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="tasks">
-        <Icon sf={{ default: 'checklist', selected: 'checklist' }} />
+        <Icon sf={{ default: 'rectangle.stack', selected: 'rectangle.stack.fill' }} />
         <Label>Tasks</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="memory">
-        <Icon sf={{ default: 'brain', selected: 'brain.fill' }} />
+        <Icon sf={{ default: 'brain.head.profile', selected: 'brain.head.profile.fill' }} />
         <Label>Memory</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
@@ -63,9 +63,9 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
+          title: 'Cockpit',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="grid" size={size} color={color} />
+            <Ionicons name="speedometer-outline" size={size} color={color} />
           ),
         }}
       />
@@ -74,7 +74,7 @@ function ClassicTabLayout() {
         options={{
           title: 'Chat',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubbles" size={size} color={color} />
+            <Ionicons name="chatbubbles-outline" size={size} color={color} />
           ),
         }}
       />
@@ -83,7 +83,7 @@ function ClassicTabLayout() {
         options={{
           title: 'Tasks',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="checkbox" size={size} color={color} />
+            <Ionicons name="albums-outline" size={size} color={color} />
           ),
         }}
       />
@@ -92,7 +92,7 @@ function ClassicTabLayout() {
         options={{
           title: 'Memory',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="search" size={size} color={color} />
+            <Ionicons name="globe-outline" size={size} color={color} />
           ),
         }}
       />
@@ -101,7 +101,7 @@ function ClassicTabLayout() {
         options={{
           title: 'Settings',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings-sharp" size={size} color={color} />
+            <Ionicons name="settings-outline" size={size} color={color} />
           ),
         }}
       />

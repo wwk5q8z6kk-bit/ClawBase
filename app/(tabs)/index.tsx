@@ -20,16 +20,6 @@ import { useApp } from '@/lib/AppContext';
 
 const C = Colors.dark;
 
-const QUICK_ACTIONS = [
-  { id: '1', icon: 'calendar-outline', label: 'Calendar', color: C.amber, route: '/calendar' },
-  { id: '2', icon: 'people-outline', label: 'Contacts', color: C.secondary, route: '/crm' },
-  { id: '3', icon: 'mail-outline', label: 'Summarize\nInbox', color: C.coral, route: '/(tabs)/chat' },
-  { id: '4', icon: 'git-branch-outline', label: 'Check\nGitHub', color: '#8B7FFF', route: '/(tabs)/chat' },
-  { id: '5', icon: 'analytics-outline', label: 'System\nStatus', color: C.accent, route: '/(tabs)/chat' },
-  { id: '6', icon: 'bulb-outline', label: 'Daily\nBrief', color: '#FF9F5A', route: '/(tabs)/chat' },
-  { id: '7', icon: 'terminal-outline', label: 'Run\nCommand', color: C.textSecondary, route: '/(tabs)/chat' },
-] as const;
-
 function PulsingDot({ color, size = 8 }: { color: string; size?: number }) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -57,11 +47,11 @@ function PulsingDot({ color, size = 8 }: { color: string; size?: number }) {
   );
 }
 
-function ProactiveAlert({ type, message, onPress }: { type: 'info' | 'warn' | 'success'; message: string; onPress: () => void }) {
+function ProactiveAlert({ type, message, icon, onPress }: { type: 'info' | 'warn' | 'success'; message: string; icon?: string; onPress: () => void }) {
   const configs = {
-    info: { icon: 'information-circle', colors: C.gradient.alertInfo, iconColor: C.accent, borderColor: C.accent + '30' },
-    warn: { icon: 'warning', colors: C.gradient.alertWarn, iconColor: C.amber, borderColor: C.amber + '30' },
-    success: { icon: 'checkmark-circle', colors: ['#0A2020', '#0E1A1A'] as [string, string], iconColor: C.success, borderColor: C.success + '30' },
+    info: { icon: icon || 'information-circle', colors: C.gradient.alertInfo, iconColor: C.accent, borderColor: C.accent + '30' },
+    warn: { icon: icon || 'warning', colors: C.gradient.alertWarn, iconColor: C.amber, borderColor: C.amber + '30' },
+    success: { icon: icon || 'checkmark-circle', colors: C.gradient.alertSuccess, iconColor: C.success, borderColor: C.success + '30' },
   };
   const config = configs[type];
 
@@ -81,67 +71,378 @@ function ProactiveAlert({ type, message, onPress }: { type: 'info' | 'warn' | 's
   );
 }
 
-function AgentStatusCard() {
-  const { activeConnection, tasks, memoryEntries, calendarEvents, crmContacts } = useApp();
+function HeroHeader() {
+  const { activeConnection, tasks, memoryEntries } = useApp();
   const connected = !!activeConnection;
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+
   const activeTasks = tasks.filter((t) => t.status === 'in_progress').length;
-  const pendingTasks = tasks.filter((t) => t.status === 'todo').length;
-  const doneTasks = tasks.filter((t) => t.status === 'done').length;
+  const unreadMemories = memoryEntries.filter((m) => m.reviewStatus === 'unread').length;
 
   return (
-    <LinearGradient
-      colors={['#1A2040', '#141829']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.statusCard}
-    >
-      <View style={styles.statusHeader}>
-        <View style={styles.statusDot}>
-          {connected ? (
-            <PulsingDot color={C.success} />
-          ) : (
-            <View style={[styles.dot, { backgroundColor: C.textTertiary }]} />
-          )}
-          <Text style={[styles.statusText, connected && { color: C.success }]}>
-            {connected ? activeConnection.name : 'Not Connected'}
-          </Text>
+    <View style={styles.heroHeader}>
+      <View style={styles.heroTopRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.greeting}>{greeting}</Text>
+          <Text style={styles.heroTitle}>ClawCockpit</Text>
         </View>
-        {connected && (
-          <View style={styles.latencyBadge}>
-            <Text style={styles.latencyText}>24ms</Text>
+        <View style={styles.heroRight}>
+          <View style={[styles.heartbeatDot, connected ? styles.heartbeatActive : styles.heartbeatInactive]}>
+            {connected ? (
+              <PulsingDot color={C.success} size={10} />
+            ) : (
+              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: C.textTertiary }} />
+            )}
           </View>
-        )}
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/(tabs)/chat');
+            }}
+            style={({ pressed }) => [styles.heroActionBtn, pressed && { opacity: 0.7 }]}
+          >
+            <LinearGradient colors={C.gradient.lobster} style={styles.heroActionGrad}>
+              <Ionicons name="add" size={22} color="#fff" />
+            </LinearGradient>
+          </Pressable>
+        </View>
       </View>
 
-      <View style={styles.statsRow}>
-        <StatItem value={activeTasks} label="Active" color={C.coral} />
-        <View style={styles.statDivider} />
-        <StatItem value={pendingTasks} label="Pending" color={C.amber} />
-        <View style={styles.statDivider} />
-        <StatItem value={doneTasks} label="Done" color={C.success} />
-        <View style={styles.statDivider} />
-        <StatItem value={memoryEntries.length} label="Memories" color={C.accent} />
-      </View>
-
-      {connected && (
-        <View style={styles.skillsRow}>
-          {['Email', 'GitHub', 'Calendar', 'Shell'].map((skill) => (
-            <View key={skill} style={styles.skillPill}>
-              <View style={[styles.skillDot, { backgroundColor: C.success }]} />
-              <Text style={styles.skillText}>{skill}</Text>
-            </View>
-          ))}
+      {(activeTasks > 0 || unreadMemories > 0) && (
+        <View style={styles.heroBadgeRow}>
+          {activeTasks > 0 && (
+            <Pressable style={styles.heroBadge} onPress={() => router.push('/(tabs)/tasks')}>
+              <View style={[styles.heroBadgeDot, { backgroundColor: C.amber }]} />
+              <Text style={styles.heroBadgeText}>{activeTasks} active</Text>
+            </Pressable>
+          )}
+          {unreadMemories > 0 && (
+            <Pressable style={styles.heroBadge} onPress={() => router.push('/(tabs)/memory')}>
+              <View style={[styles.heroBadgeDot, { backgroundColor: C.coral }]} />
+              <Text style={styles.heroBadgeText}>{unreadMemories} unread</Text>
+            </Pressable>
+          )}
         </View>
       )}
-    </LinearGradient>
+    </View>
   );
 }
 
-function StatItem({ value, label, color }: { value: number; label: string; color: string }) {
+function KanbanProgressWidget() {
+  const { tasks } = useApp();
+  const todo = tasks.filter((t) => t.status === 'todo').length;
+  const inProg = tasks.filter((t) => t.status === 'in_progress').length;
+  const done = tasks.filter((t) => t.status === 'done').length;
+  const deferred = tasks.filter((t) => t.status === 'deferred').length;
+  const total = tasks.length || 1;
+  const pctDone = Math.round((done / total) * 100);
+
+  const urgentTasks = tasks.filter((t) => t.priority === 'urgent' && t.status !== 'done' && t.status !== 'archived');
+
   return (
-    <View style={styles.statItem}>
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+    <Pressable onPress={() => router.push('/(tabs)/tasks')}>
+      <LinearGradient
+        colors={C.gradient.cardElevated}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.kanbanWidget}
+      >
+        <View style={styles.kanbanHeader}>
+          <View style={styles.kanbanTitleRow}>
+            <Ionicons name="albums" size={18} color={C.coral} />
+            <Text style={styles.widgetTitle}>Task Pipeline</Text>
+          </View>
+          <View style={styles.kanbanPct}>
+            <Text style={styles.kanbanPctText}>{pctDone}%</Text>
+          </View>
+        </View>
+
+        <View style={styles.kanbanStats}>
+          <View style={styles.kanbanStat}>
+            <Text style={[styles.kanbanStatNum, { color: C.textSecondary }]}>{todo}</Text>
+            <Text style={styles.kanbanStatLabel}>To Do</Text>
+          </View>
+          <View style={styles.kanbanStatDiv} />
+          <View style={styles.kanbanStat}>
+            <Text style={[styles.kanbanStatNum, { color: C.amber }]}>{inProg}</Text>
+            <Text style={styles.kanbanStatLabel}>Active</Text>
+          </View>
+          <View style={styles.kanbanStatDiv} />
+          <View style={styles.kanbanStat}>
+            <Text style={[styles.kanbanStatNum, { color: C.success }]}>{done}</Text>
+            <Text style={styles.kanbanStatLabel}>Done</Text>
+          </View>
+          <View style={styles.kanbanStatDiv} />
+          <View style={styles.kanbanStat}>
+            <Text style={[styles.kanbanStatNum, { color: C.purple }]}>{deferred}</Text>
+            <Text style={styles.kanbanStatLabel}>Deferred</Text>
+          </View>
+        </View>
+
+        <View style={styles.progressTrack}>
+          {done > 0 && <View style={[styles.progressSeg, { flex: done, backgroundColor: C.success }]} />}
+          {inProg > 0 && <View style={[styles.progressSeg, { flex: inProg, backgroundColor: C.amber }]} />}
+          {deferred > 0 && <View style={[styles.progressSeg, { flex: deferred, backgroundColor: C.purple }]} />}
+          {todo > 0 && <View style={[styles.progressSeg, { flex: todo, backgroundColor: C.textTertiary + '60' }]} />}
+        </View>
+
+        {urgentTasks.length > 0 && (
+          <View style={styles.urgentRow}>
+            <Ionicons name="flame" size={14} color={C.primary} />
+            <Text style={styles.urgentText} numberOfLines={1}>
+              {urgentTasks[0].title}
+            </Text>
+            {urgentTasks.length > 1 && (
+              <Text style={styles.urgentMore}>+{urgentTasks.length - 1}</Text>
+            )}
+          </View>
+        )}
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
+function formatEventTime(ts: number) {
+  const d = new Date(ts);
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${ampm}`;
+}
+
+function CalendarAgendaWidget() {
+  const { calendarEvents } = useApp();
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const todayEnd = todayStart + 86400000;
+  const now = Date.now();
+
+  const todayEvents = useMemo(
+    () =>
+      calendarEvents
+        .filter((e) => e.startTime >= todayStart && e.startTime < todayEnd)
+        .sort((a, b) => a.startTime - b.startTime),
+    [calendarEvents, todayStart, todayEnd],
+  );
+
+  const nextEvent = todayEvents.find((e) => e.endTime > now);
+  const pastCount = todayEvents.filter((e) => e.endTime <= now).length;
+
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  return (
+    <Pressable onPress={() => router.push('/calendar' as any)}>
+      <View style={styles.calendarWidget}>
+        <View style={styles.calendarWidgetLeft}>
+          <View style={styles.calDateBox}>
+            <Text style={styles.calDateDay}>{dayNames[today.getDay()]}</Text>
+            <Text style={styles.calDateNum}>{today.getDate()}</Text>
+            <Text style={styles.calDateMonth}>{monthNames[today.getMonth()]}</Text>
+          </View>
+        </View>
+        <View style={styles.calendarWidgetRight}>
+          <View style={styles.calWidgetHeader}>
+            <Text style={styles.widgetTitle}>Today</Text>
+            <Text style={styles.calEventCount}>{todayEvents.length} event{todayEvents.length !== 1 ? 's' : ''}</Text>
+          </View>
+
+          {todayEvents.length === 0 ? (
+            <View style={styles.calEmpty}>
+              <Ionicons name="sunny-outline" size={18} color={C.textTertiary} />
+              <Text style={styles.calEmptyText}>Clear schedule</Text>
+            </View>
+          ) : (
+            <View style={styles.calEventsList}>
+              {todayEvents.slice(0, 4).map((event, i) => {
+                const isPast = event.endTime <= now;
+                const isCurrent = event.startTime <= now && event.endTime > now;
+                return (
+                  <View key={event.id} style={[styles.calEventRow, isPast && styles.calEventPast]}>
+                    <View style={[styles.calEventDot, { backgroundColor: event.color || C.coral }, isCurrent && styles.calEventDotCurrent]} />
+                    <Text style={[styles.calEventTitle, isPast && styles.calEventTitlePast]} numberOfLines={1}>{event.title}</Text>
+                    <Text style={[styles.calEventTime, isPast && styles.calEventTimePast]}>
+                      {event.allDay ? 'All Day' : formatEventTime(event.startTime)}
+                    </Text>
+                  </View>
+                );
+              })}
+              {todayEvents.length > 4 && (
+                <Text style={styles.calMoreText}>+{todayEvents.length - 4} more</Text>
+              )}
+            </View>
+          )}
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function CRMHighlightsWidget() {
+  const { crmContacts } = useApp();
+  if (crmContacts.length === 0) return null;
+
+  const recent = crmContacts
+    .sort((a, b) => (b.lastInteraction || b.createdAt) - (a.lastInteraction || a.createdAt))
+    .slice(0, 4);
+
+  const stageColors: Record<string, string> = {
+    lead: C.amber, prospect: C.accent, active: C.secondary, customer: C.coral, archived: C.textTertiary,
+  };
+
+  return (
+    <View>
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionTitleRow}>
+          <Ionicons name="people" size={16} color={C.secondary} />
+          <Text style={styles.sectionTitle}>Contacts</Text>
+        </View>
+        <Pressable onPress={() => router.push('/crm' as any)}>
+          <Text style={styles.seeAll}>See All</Text>
+        </Pressable>
+      </View>
+      <View style={styles.crmGrid}>
+        {recent.map((contact) => {
+          const color = stageColors[contact.stage] || C.coral;
+          const initials = contact.name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
+          return (
+            <Pressable
+              key={contact.id}
+              style={styles.crmChip}
+              onPress={() => router.push('/crm' as any)}
+            >
+              <View style={[styles.crmAvatar, { backgroundColor: color + '20' }]}>
+                <Text style={[styles.crmAvatarText, { color }]}>{initials}</Text>
+              </View>
+              <Text style={styles.crmChipName} numberOfLines={1}>{contact.name.split(' ')[0]}</Text>
+              <View style={[styles.crmStageLine, { backgroundColor: color }]} />
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function DeferredPKMWidget() {
+  const { memoryEntries } = useApp();
+  const deferred = useMemo(
+    () => memoryEntries.filter((m) => m.reviewStatus === 'deferred').slice(0, 3),
+    [memoryEntries],
+  );
+  const unread = memoryEntries.filter((m) => m.reviewStatus === 'unread').length;
+
+  if (deferred.length === 0 && unread === 0) return null;
+
+  return (
+    <View>
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionTitleRow}>
+          <MaterialCommunityIcons name="brain" size={16} color={C.purple} />
+          <Text style={styles.sectionTitle}>Knowledge</Text>
+        </View>
+        <Pressable onPress={() => router.push('/(tabs)/memory')}>
+          <Text style={styles.seeAll}>Review</Text>
+        </Pressable>
+      </View>
+
+      {unread > 0 && (
+        <Pressable
+          style={styles.pkmUnreadBanner}
+          onPress={() => router.push('/(tabs)/memory')}
+        >
+          <Ionicons name="sparkles" size={16} color={C.coral} />
+          <Text style={styles.pkmUnreadText}>{unread} new item{unread !== 1 ? 's' : ''} to review</Text>
+          <Ionicons name="chevron-forward" size={14} color={C.textTertiary} />
+        </Pressable>
+      )}
+
+      {deferred.length > 0 && (
+        <View style={styles.pkmDeferredList}>
+          {deferred.map((mem) => (
+            <Pressable key={mem.id} style={styles.pkmDeferredItem} onPress={() => router.push('/(tabs)/memory')}>
+              <View style={[styles.pkmDeferredDot, { backgroundColor: C.purple }]} />
+              <Text style={styles.pkmDeferredTitle} numberOfLines={1}>{mem.title}</Text>
+              <Ionicons name="time" size={12} color={C.purple} />
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function AgentSkillsBar() {
+  const { activeConnection } = useApp();
+  if (!activeConnection) return null;
+
+  const skills = [
+    { name: 'Email', icon: 'mail', color: C.amber },
+    { name: 'GitHub', icon: 'logo-github', color: '#fff' },
+    { name: 'Calendar', icon: 'calendar', color: C.accent },
+    { name: 'Shell', icon: 'terminal', color: C.secondary },
+    { name: 'Web', icon: 'globe', color: C.purple },
+  ];
+
+  return (
+    <View style={styles.skillsBar}>
+      {skills.map((skill) => (
+        <View key={skill.name} style={styles.skillItem}>
+          <View style={[styles.skillIcon, { backgroundColor: skill.color + '12' }]}>
+            <Ionicons name={skill.icon as any} size={14} color={skill.color} />
+          </View>
+          <Text style={styles.skillName}>{skill.name}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const QUICK_ACTIONS = [
+  { id: '1', icon: 'calendar-outline', label: 'Calendar', color: C.amber, route: '/calendar' },
+  { id: '2', icon: 'people-outline', label: 'Contacts', color: C.secondary, route: '/crm' },
+  { id: '3', icon: 'mail-outline', label: 'Summarize\nInbox', color: C.coral, route: '/(tabs)/chat' },
+  { id: '4', icon: 'git-branch-outline', label: 'Check\nGitHub', color: '#8B7FFF', route: '/(tabs)/chat' },
+  { id: '5', icon: 'analytics-outline', label: 'System\nStatus', color: C.accent, route: '/(tabs)/chat' },
+  { id: '6', icon: 'bulb-outline', label: 'Daily\nBrief', color: '#FF9F5A', route: '/(tabs)/chat' },
+] as const;
+
+function QuickActionsRow() {
+  return (
+    <View>
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionTitleRow}>
+          <Ionicons name="flash" size={16} color={C.coral} />
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+        </View>
+      </View>
+      <FlatList
+        data={QUICK_ACTIONS}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <Pressable
+            style={({ pressed }) => [
+              styles.quickTile,
+              pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+            ]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push(item.route as any);
+            }}
+          >
+            <View style={[styles.quickTileIcon, { backgroundColor: item.color + '15' }]}>
+              <Ionicons name={item.icon as any} size={22} color={item.color} />
+            </View>
+            <Text style={styles.quickTileLabel} numberOfLines={2}>{item.label}</Text>
+          </Pressable>
+        )}
+        contentContainerStyle={styles.quickActionsScroll}
+        scrollEnabled={true}
+      />
     </View>
   );
 }
@@ -156,192 +457,56 @@ function formatTimeAgo(ts: number) {
   return `${Math.floor(hrs / 24)}d`;
 }
 
-function formatEventTime(ts: number) {
-  const d = new Date(ts);
-  const h = d.getHours();
-  const m = d.getMinutes();
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${ampm}`;
-}
+function RecentActivityWidget() {
+  const { conversations, tasks, memoryEntries } = useApp();
 
-function CalendarPreviewCard() {
-  const { calendarEvents } = useApp();
-  const today = new Date();
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  const todayEnd = todayStart + 86400000;
+  const recentItems = useMemo(() => {
+    const items: { icon: string; title: string; time: number; color: string; route: string }[] = [];
 
-  const todayEvents = useMemo(
-    () =>
-      calendarEvents
-        .filter((e) => e.startTime >= todayStart && e.startTime < todayEnd)
-        .sort((a, b) => a.startTime - b.startTime)
-        .slice(0, 3),
-    [calendarEvents, todayStart, todayEnd],
-  );
+    for (const c of conversations.slice(0, 2)) {
+      items.push({ icon: 'chatbubble-outline', title: c.title, time: c.lastMessageTime, color: C.coral, route: '/(tabs)/chat' });
+    }
+    for (const t of tasks.filter((t) => t.status !== 'archived').slice(0, 2)) {
+      items.push({
+        icon: 'checkbox-outline',
+        title: t.title,
+        time: t.updatedAt,
+        color: t.priority === 'urgent' ? C.primary : t.priority === 'high' ? C.amber : C.secondary,
+        route: '/(tabs)/tasks',
+      });
+    }
+    for (const m of memoryEntries.slice(0, 2)) {
+      items.push({ icon: 'document-text-outline', title: m.title, time: m.timestamp, color: C.accent, route: '/(tabs)/memory' });
+    }
 
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    items.sort((a, b) => b.time - a.time);
+    return items.slice(0, 5);
+  }, [conversations, tasks, memoryEntries]);
+
+  if (recentItems.length === 0) return null;
 
   return (
     <View>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Today's Schedule</Text>
-        <Pressable onPress={() => router.push('/calendar' as any)}>
-          <Text style={styles.seeAll}>Full Calendar</Text>
-        </Pressable>
-      </View>
-      <Pressable
-        style={styles.calendarCard}
-        onPress={() => router.push('/calendar' as any)}
-      >
-        <View style={styles.calendarDateCol}>
-          <Text style={styles.calendarDay}>{dayNames[today.getDay()]}</Text>
-          <Text style={styles.calendarDate}>{today.getDate()}</Text>
-          <Text style={styles.calendarMonth}>{monthNames[today.getMonth()]}</Text>
+        <View style={styles.sectionTitleRow}>
+          <Ionicons name="time-outline" size={16} color={C.textSecondary} />
+          <Text style={styles.sectionTitle}>Recent</Text>
         </View>
-        <View style={styles.calendarEvents}>
-          {todayEvents.length === 0 ? (
-            <View style={styles.calendarEmpty}>
-              <Ionicons name="sunny-outline" size={20} color={C.textTertiary} />
-              <Text style={styles.calendarEmptyText}>No events today</Text>
+      </View>
+      <View style={styles.recentList}>
+        {recentItems.map((item, i) => (
+          <Pressable
+            key={i}
+            style={styles.recentItem}
+            onPress={() => router.push(item.route as any)}
+          >
+            <View style={[styles.recentIcon, { backgroundColor: item.color + '12' }]}>
+              <Ionicons name={item.icon as any} size={14} color={item.color} />
             </View>
-          ) : (
-            todayEvents.map((event) => (
-              <View key={event.id} style={styles.calendarEventRow}>
-                <View style={[styles.calendarEventBar, { backgroundColor: event.color || C.coral }]} />
-                <View style={styles.calendarEventInfo}>
-                  <Text style={styles.calendarEventTitle} numberOfLines={1}>{event.title}</Text>
-                  <Text style={styles.calendarEventTime}>
-                    {event.allDay ? 'All Day' : formatEventTime(event.startTime)}
-                  </Text>
-                </View>
-              </View>
-            ))
-          )}
-          {calendarEvents.filter((e) => e.startTime >= todayStart && e.startTime < todayEnd).length > 3 && (
-            <Text style={styles.calendarMore}>
-              +{calendarEvents.filter((e) => e.startTime >= todayStart && e.startTime < todayEnd).length - 3} more
-            </Text>
-          )}
-        </View>
-      </Pressable>
-    </View>
-  );
-}
-
-function CRMTeaser() {
-  const { crmContacts } = useApp();
-  if (crmContacts.length === 0) return null;
-
-  const recent = crmContacts
-    .sort((a, b) => (b.lastInteraction || b.createdAt) - (a.lastInteraction || a.createdAt))
-    .slice(0, 3);
-
-  const stageColors: Record<string, string> = {
-    lead: C.amber, prospect: C.accent, active: C.secondary, customer: C.coral, archived: C.textTertiary,
-  };
-
-  return (
-    <View>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Recent Contacts</Text>
-        <Pressable onPress={() => router.push('/crm' as any)}>
-          <Text style={styles.seeAll}>View All</Text>
-        </Pressable>
-      </View>
-      <View style={styles.crmTeaserCard}>
-        {recent.map((contact, i) => {
-          const color = stageColors[contact.stage] || C.coral;
-          const initials = contact.name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
-          return (
-            <View key={contact.id}>
-              <Pressable
-                style={styles.crmTeaserItem}
-                onPress={() => router.push('/crm' as any)}
-              >
-                <View style={[styles.crmAvatar, { backgroundColor: color + '25' }]}>
-                  <Text style={[styles.crmAvatarText, { color }]}>{initials}</Text>
-                </View>
-                <View style={styles.crmTeaserContent}>
-                  <Text style={styles.crmTeaserName} numberOfLines={1}>{contact.name}</Text>
-                  <Text style={styles.crmTeaserDetail} numberOfLines={1}>
-                    {contact.company || contact.email || contact.stage}
-                  </Text>
-                </View>
-                <View style={[styles.crmStageDot, { backgroundColor: color }]} />
-              </Pressable>
-              {i < recent.length - 1 && <View style={styles.crmDivider} />}
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-function MemoryTeaser() {
-  const { memoryEntries } = useApp();
-  const latest = memoryEntries.slice(0, 3);
-  if (latest.length === 0) return null;
-
-  return (
-    <View>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Recent Memories</Text>
-        <Pressable onPress={() => router.push('/(tabs)/memory')}>
-          <Text style={styles.seeAll}>See All</Text>
-        </Pressable>
-      </View>
-      <View style={styles.memoryTeaserCard}>
-        {latest.map((mem, i) => (
-          <View key={mem.id}>
-            <Pressable
-              style={styles.memoryTeaserItem}
-              onPress={() => router.push('/(tabs)/memory')}
-            >
-              <View style={[styles.memoryDot, { backgroundColor: C.accent }]} />
-              <View style={styles.memoryTeaserContent}>
-                <Text style={styles.memoryTeaserTitle} numberOfLines={1}>{mem.title}</Text>
-                <Text style={styles.memoryTeaserText} numberOfLines={1}>{mem.content}</Text>
-              </View>
-              <Text style={styles.memoryTeaserTime}>
-                {formatTimeAgo(mem.timestamp)}
-              </Text>
-            </Pressable>
-            {i < latest.length - 1 && <View style={styles.memoryDivider} />}
-          </View>
+            <Text style={styles.recentTitle} numberOfLines={1}>{item.title}</Text>
+            <Text style={styles.recentTime}>{formatTimeAgo(item.time)}</Text>
+          </Pressable>
         ))}
-      </View>
-    </View>
-  );
-}
-
-function QuickActionTile({ icon, label, color, onPress }: { icon: string; label: string; color: string; onPress: () => void }) {
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.quickTile,
-        pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
-      ]}
-      onPress={onPress}
-    >
-      <View style={[styles.quickTileIcon, { backgroundColor: color + '18' }]}>
-        <Ionicons name={icon as any} size={22} color={color} />
-      </View>
-      <Text style={styles.quickTileLabel} numberOfLines={2}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function RecentActivityItem({ icon, title, time, color }: { icon: string; title: string; time: string; color: string }) {
-  return (
-    <View style={styles.activityItem}>
-      <View style={[styles.activityIcon, { backgroundColor: color + '15' }]}>
-        <Ionicons name={icon as any} size={16} color={color} />
-      </View>
-      <View style={styles.activityContent}>
-        <Text style={styles.activityTitle} numberOfLines={1}>{title}</Text>
-        <Text style={styles.activityTime}>{time}</Text>
       </View>
     </View>
   );
@@ -349,7 +514,7 @@ function RecentActivityItem({ icon, title, time, color }: { icon: string; title:
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
-  const { conversations, tasks, memoryEntries, refreshAll, activeConnection } = useApp();
+  const { refreshAll, activeConnection, tasks, memoryEntries } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
 
   const onRefresh = useCallback(async () => {
@@ -358,74 +523,18 @@ export default function DashboardScreen() {
     setRefreshing(false);
   }, [refreshAll]);
 
-  const handleQuickAction = useCallback(async (route: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push(route as any);
-  }, []);
-
-  const recentItems = useMemo(() => {
-    const items = [
-      ...conversations.slice(0, 3).map((c) => ({
-        icon: 'chatbubble-outline',
-        title: c.title,
-        time: formatTimeAgo(c.lastMessageTime),
-        color: C.coral,
-      })),
-      ...tasks
-        .filter((t) => t.status !== 'done' && t.status !== 'archived')
-        .slice(0, 3)
-        .map((t) => ({
-          icon: 'checkbox-outline',
-          title: t.title,
-          time: formatTimeAgo(t.updatedAt),
-          color:
-            t.priority === 'urgent' ? C.primary
-            : t.priority === 'high' ? C.amber
-            : C.secondary,
-        })),
-    ];
-
-    items.sort((a, b) => {
-      const getMs = (s: string) => {
-        if (s === 'Now') return 0;
-        const n = parseInt(s);
-        if (s.includes('m')) return n * 60000;
-        if (s.includes('h')) return n * 3600000;
-        return n * 86400000;
-      };
-      return getMs(a.time) - getMs(b.time);
-    });
-
-    return items.slice(0, 5);
-  }, [conversations, tasks]);
-
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
+
+  const dueToday = useMemo(() => {
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+    return tasks.filter(
+      (t) => t.dueDate && t.dueDate <= todayEnd.getTime() && t.status !== 'done' && t.status !== 'archived',
+    );
+  }, [tasks]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>ClawCockpit</Text>
-          <Text style={styles.subtitle}>Mission Control</Text>
-        </View>
-        <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push('/(tabs)/chat');
-          }}
-          style={({ pressed }) => [styles.newChatBtn, pressed && { opacity: 0.7 }]}
-        >
-          <LinearGradient
-            colors={C.gradient.lobster}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.newChatBtnGrad}
-          >
-            <Ionicons name="add" size={22} color="#fff" />
-          </LinearGradient>
-        </Pressable>
-      </View>
-
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
@@ -433,73 +542,39 @@ export default function DashboardScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />
         }
       >
+        <HeroHeader />
+
         {!activeConnection && (
           <ProactiveAlert
             type="warn"
-            message="No gateway connected. Tap to set up your OpenClaw connection."
+            icon="link"
+            message="Connect to your OpenClaw gateway to unlock all features"
             onPress={() => router.push('/(tabs)/settings')}
           />
         )}
 
-        {tasks.filter((t) => t.priority === 'urgent' && t.status !== 'done' && t.status !== 'archived').length > 0 && (
+        {dueToday.length > 0 && (
           <ProactiveAlert
             type="info"
-            message={`${tasks.filter((t) => t.priority === 'urgent' && t.status !== 'done' && t.status !== 'archived').length} urgent task(s) need attention`}
+            icon="flame"
+            message={`${dueToday.length} task${dueToday.length !== 1 ? 's' : ''} due today`}
             onPress={() => router.push('/(tabs)/tasks')}
           />
         )}
 
-        <AgentStatusCard />
+        <AgentSkillsBar />
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-        </View>
-        <FlatList
-          data={QUICK_ACTIONS}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <QuickActionTile
-              icon={item.icon}
-              label={item.label}
-              color={item.color}
-              onPress={() => handleQuickAction(item.route)}
-            />
-          )}
-          contentContainerStyle={styles.quickActionsScroll}
-          scrollEnabled={true}
-        />
+        <KanbanProgressWidget />
 
-        <CalendarPreviewCard />
+        <CalendarAgendaWidget />
 
-        <CRMTeaser />
+        <QuickActionsRow />
 
-        <MemoryTeaser />
+        <CRMHighlightsWidget />
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
-          {recentItems.length > 0 && (
-            <Pressable onPress={() => router.push('/(tabs)/memory')}>
-              <Text style={styles.seeAll}>View All</Text>
-            </Pressable>
-          )}
-        </View>
-        {recentItems.length > 0 ? (
-          <View style={styles.activityList}>
-            {recentItems.map((item, i) => (
-              <RecentActivityItem key={i} {...item} />
-            ))}
-          </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <MaterialCommunityIcons name="robot-outline" size={40} color={C.textTertiary} />
-            <Text style={styles.emptyTitle}>No activity yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Start a chat or create a task to get going
-            </Text>
-          </View>
-        )}
+        <DeferredPKMWidget />
+
+        <RecentActivityWidget />
       </ScrollView>
     </View>
   );
@@ -507,75 +582,96 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
-  greeting: { fontFamily: 'Inter_700Bold', fontSize: 26, color: C.text },
-  subtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textSecondary, marginTop: 2 },
-  newChatBtn: { borderRadius: 22, overflow: 'hidden' },
-  newChatBtnGrad: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   scrollContent: { paddingHorizontal: 20, gap: 16, paddingTop: 4 },
+  heroHeader: { gap: 8 },
+  heroTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  greeting: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textSecondary },
+  heroTitle: { fontFamily: 'Inter_700Bold', fontSize: 28, color: C.text },
+  heroRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  heartbeatDot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  heartbeatActive: { backgroundColor: C.successMuted },
+  heartbeatInactive: { backgroundColor: 'rgba(255,255,255,0.06)' },
+  heroActionBtn: { borderRadius: 20, overflow: 'hidden' },
+  heroActionGrad: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  heroBadgeRow: { flexDirection: 'row', gap: 8 },
+  heroBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  heroBadgeDot: { width: 6, height: 6, borderRadius: 3 },
+  heroBadgeText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary },
+
   alertCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, padding: 14, gap: 10, borderWidth: 1 },
   alertText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.text, flex: 1, lineHeight: 18 },
-  statusCard: { borderRadius: 16, padding: 18, borderWidth: 1, borderColor: C.border, gap: 16 },
-  statusHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  statusDot: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontFamily: 'Inter_500Medium', fontSize: 14, color: C.textSecondary },
-  latencyBadge: { backgroundColor: C.successMuted, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  latencyText: { fontFamily: 'Inter_600SemiBold', fontSize: 11, color: C.success },
-  statsRow: { flexDirection: 'row', alignItems: 'center' },
-  statItem: { flex: 1, alignItems: 'center' },
-  statValue: { fontFamily: 'Inter_700Bold', fontSize: 24 },
-  statLabel: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textSecondary, marginTop: 3 },
-  statDivider: { width: 1, height: 28, backgroundColor: C.border },
-  skillsRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  skillPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  skillDot: { width: 5, height: 5, borderRadius: 3 },
-  skillText: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textSecondary },
+
+  skillsBar: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: C.card, borderRadius: 12, paddingVertical: 10, borderWidth: 1, borderColor: C.borderLight },
+  skillItem: { alignItems: 'center', gap: 4 },
+  skillIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  skillName: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary },
+
+  kanbanWidget: { borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.border, gap: 12 },
+  kanbanHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  kanbanTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  widgetTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: C.text },
+  kanbanPct: { backgroundColor: C.successMuted, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  kanbanPctText: { fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.success },
+  kanbanStats: { flexDirection: 'row', alignItems: 'center' },
+  kanbanStat: { flex: 1, alignItems: 'center' },
+  kanbanStatNum: { fontFamily: 'Inter_700Bold', fontSize: 22 },
+  kanbanStatLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textSecondary, marginTop: 2 },
+  kanbanStatDiv: { width: 1, height: 24, backgroundColor: C.border },
+  progressTrack: { flexDirection: 'row', height: 4, borderRadius: 2, overflow: 'hidden', backgroundColor: C.border },
+  progressSeg: { height: 4 },
+  urgentRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.primaryMuted, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  urgentText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.primary, flex: 1 },
+  urgentMore: { fontFamily: 'Inter_600SemiBold', fontSize: 11, color: C.primary },
+
+  calendarWidget: { flexDirection: 'row', backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.borderLight, overflow: 'hidden' },
+  calendarWidgetLeft: { width: 68, backgroundColor: C.coral + '10', alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
+  calDateBox: { alignItems: 'center', gap: 1 },
+  calDateDay: { fontFamily: 'Inter_500Medium', fontSize: 11, color: C.coral },
+  calDateNum: { fontFamily: 'Inter_700Bold', fontSize: 28, color: C.text },
+  calDateMonth: { fontFamily: 'Inter_500Medium', fontSize: 11, color: C.textSecondary },
+  calendarWidgetRight: { flex: 1, padding: 12, gap: 8 },
+  calWidgetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  calEventCount: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary },
+  calEmpty: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
+  calEmptyText: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary },
+  calEventsList: { gap: 4 },
+  calEventRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 },
+  calEventPast: { opacity: 0.5 },
+  calEventDot: { width: 6, height: 6, borderRadius: 3 },
+  calEventDotCurrent: { width: 8, height: 8, borderRadius: 4, borderWidth: 2, borderColor: C.text },
+  calEventTitle: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.text, flex: 1 },
+  calEventTitlePast: { textDecorationLine: 'line-through' },
+  calEventTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary },
+  calEventTimePast: {},
+  calMoreText: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary, marginTop: 2 },
+
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
-  sectionTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 16, color: C.text },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  sectionTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: C.text },
   seeAll: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.primary },
+
   quickActionsScroll: { gap: 10 },
-  quickTile: { width: 80, alignItems: 'center', gap: 8 },
-  quickTileIcon: { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  quickTile: { width: 78, alignItems: 'center', gap: 6 },
+  quickTileIcon: { width: 50, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   quickTileLabel: { fontFamily: 'Inter_500Medium', fontSize: 11, color: C.textSecondary, textAlign: 'center', lineHeight: 14 },
-  calendarCard: { flexDirection: 'row', backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.borderLight, overflow: 'hidden' },
-  calendarDateCol: { width: 64, backgroundColor: C.coral + '12', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, gap: 2 },
-  calendarDay: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.coral },
-  calendarDate: { fontFamily: 'Inter_700Bold', fontSize: 28, color: C.text },
-  calendarMonth: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary },
-  calendarEvents: { flex: 1, padding: 10, gap: 6, justifyContent: 'center' },
-  calendarEmpty: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
-  calendarEmptyText: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary },
-  calendarEventRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  calendarEventBar: { width: 3, height: 28, borderRadius: 2 },
-  calendarEventInfo: { flex: 1 },
-  calendarEventTitle: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.text },
-  calendarEventTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary },
-  calendarMore: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary, marginTop: 2 },
-  crmTeaserCard: { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.borderLight, overflow: 'hidden' },
-  crmTeaserItem: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
-  crmAvatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  crmAvatarText: { fontFamily: 'Inter_700Bold', fontSize: 13 },
-  crmTeaserContent: { flex: 1 },
-  crmTeaserName: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.text },
-  crmTeaserDetail: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary, marginTop: 1 },
-  crmStageDot: { width: 8, height: 8, borderRadius: 4 },
-  crmDivider: { height: 1, backgroundColor: C.borderLight, marginLeft: 58 },
-  memoryTeaserCard: { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.borderLight, overflow: 'hidden' },
-  memoryTeaserItem: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
-  memoryDot: { width: 6, height: 6, borderRadius: 3 },
-  memoryTeaserContent: { flex: 1 },
-  memoryTeaserTitle: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.text },
-  memoryTeaserText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary, marginTop: 1 },
-  memoryTeaserTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary },
-  memoryDivider: { height: 1, backgroundColor: C.borderLight, marginLeft: 28 },
-  activityList: { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.borderLight, overflow: 'hidden' },
-  activityItem: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10, borderBottomWidth: 1, borderBottomColor: C.borderLight },
-  activityIcon: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  activityContent: { flex: 1 },
-  activityTitle: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.text },
-  activityTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary, marginTop: 2 },
-  emptyState: { alignItems: 'center', paddingVertical: 32, gap: 6 },
-  emptyTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: C.textSecondary, marginTop: 6 },
-  emptySubtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary, textAlign: 'center' },
+
+  crmGrid: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  crmChip: { alignItems: 'center', gap: 6, width: 70 },
+  crmAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  crmAvatarText: { fontFamily: 'Inter_700Bold', fontSize: 14 },
+  crmChipName: { fontFamily: 'Inter_500Medium', fontSize: 11, color: C.textSecondary },
+  crmStageLine: { width: 20, height: 2, borderRadius: 1 },
+
+  pkmUnreadBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.coralMuted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  pkmUnreadText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.coral, flex: 1 },
+  pkmDeferredList: { backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.borderLight, overflow: 'hidden' },
+  pkmDeferredItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.borderLight },
+  pkmDeferredDot: { width: 6, height: 6, borderRadius: 3 },
+  pkmDeferredTitle: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.text, flex: 1 },
+
+  recentList: { backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.borderLight, overflow: 'hidden' },
+  recentItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.borderLight },
+  recentIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  recentTitle: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.text, flex: 1 },
+  recentTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary },
 });
