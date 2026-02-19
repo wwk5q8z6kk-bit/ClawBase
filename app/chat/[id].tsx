@@ -8,6 +8,8 @@ import {
   Pressable,
   Platform,
   Animated,
+  Modal,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
@@ -21,51 +23,113 @@ import type { ChatMessage } from '@/lib/types';
 
 const C = Colors.dark;
 
-function MessageBubble({ message, showAvatar }: { message: ChatMessage; showAvatar: boolean }) {
+function getDateLabel(timestamp: number): string {
+  const d = new Date(timestamp);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diff = today.getTime() - msgDay.getTime();
+  const dayMs = 86400000;
+  if (diff < dayMs && diff >= 0) return 'Today';
+  if (diff < dayMs * 2 && diff >= dayMs) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function isSameDay(a: number, b: number): boolean {
+  const da = new Date(a);
+  const db = new Date(b);
+  return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
+}
+
+function DateSeparator({ label }: { label: string }) {
+  return (
+    <View style={styles.dateSeparator}>
+      <View style={styles.dateLine} />
+      <Text style={styles.dateLabel}>{label}</Text>
+      <View style={styles.dateLine} />
+    </View>
+  );
+}
+
+function MessageBubble({
+  message,
+  showAvatar,
+  tightTop,
+  onLongPress,
+  copiedId,
+}: {
+  message: ChatMessage;
+  showAvatar: boolean;
+  tightTop: boolean;
+  onLongPress: (id: string) => void;
+  copiedId: string | null;
+}) {
   const isUser = message.role === 'user';
 
   return (
-    <View
-      style={[
-        styles.bubbleWrap,
-        isUser ? styles.bubbleWrapUser : styles.bubbleWrapAssistant,
-      ]}
-    >
-      {!isUser && showAvatar && (
-        <LinearGradient
-          colors={C.gradient.lobster}
-          style={styles.assistantAvatar}
-        >
-          <Ionicons name="sparkles" size={12} color="#fff" />
-        </LinearGradient>
-      )}
-      {!isUser && !showAvatar && <View style={{ width: 28 }} />}
-      <View
-        style={[
-          styles.bubble,
-          isUser ? styles.bubbleUser : styles.bubbleAssistant,
-        ]}
+    <View style={tightTop ? { marginTop: -2 } : undefined}>
+      <Pressable
+        onLongPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          onLongPress(message.id);
+        }}
+        delayLongPress={400}
+        style={({ pressed }) => [pressed && { opacity: 0.85 }]}
       >
-        <Text
+        <View
           style={[
-            styles.bubbleText,
-            isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant,
+            styles.bubbleWrap,
+            isUser ? styles.bubbleWrapUser : styles.bubbleWrapAssistant,
           ]}
         >
-          {message.content}
-        </Text>
-        <Text
-          style={[
-            styles.bubbleTime,
-            isUser ? styles.bubbleTimeUser : styles.bubbleTimeAssistant,
-          ]}
-        >
-          {new Date(message.timestamp).toLocaleTimeString(undefined, {
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </Text>
-      </View>
+          {!isUser && showAvatar && (
+            <LinearGradient
+              colors={C.gradient.lobster}
+              style={styles.assistantAvatar}
+            >
+              <Ionicons name="sparkles" size={12} color="#fff" />
+            </LinearGradient>
+          )}
+          {!isUser && !showAvatar && <View style={{ width: 28 }} />}
+          <View
+            style={[
+              styles.bubble,
+              isUser ? styles.bubbleUser : styles.bubbleAssistant,
+            ]}
+          >
+            <Text
+              style={[
+                styles.bubbleText,
+                isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant,
+              ]}
+            >
+              {message.content}
+            </Text>
+            <View style={styles.bubbleFooter}>
+              <Text
+                style={[
+                  styles.bubbleTime,
+                  isUser ? styles.bubbleTimeUser : styles.bubbleTimeAssistant,
+                ]}
+              >
+                {new Date(message.timestamp).toLocaleTimeString(undefined, {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </Text>
+              {isUser && message.status === 'sent' && (
+                <Ionicons name="checkmark-done" size={14} color="rgba(255,255,255,0.5)" style={{ marginLeft: 4 }} />
+              )}
+            </View>
+          </View>
+        </View>
+      </Pressable>
+      {copiedId === message.id && (
+        <View style={[styles.copiedBadge, isUser ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start', marginLeft: 36 }]}>
+          <Ionicons name="checkmark-circle" size={12} color={C.success} />
+          <Text style={styles.copiedText}>Copied!</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -128,7 +192,11 @@ export default function ChatDetailScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [infoVisible, setInfoVisible] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
+  const flatListRef = useRef<FlatList>(null);
 
   const conversation = conversations.find((c) => c.id === id);
   const connected = !!activeConnection;
@@ -172,6 +240,35 @@ export default function ChatDetailScreen() {
     }
   }, [inputText, isSending, id, sendMessage, getMessages]);
 
+  const handleClearConversation = useCallback(() => {
+    const doClear = () => {
+      setMessages([]);
+      setMenuVisible(false);
+    };
+    if (Platform.OS === 'web') {
+      doClear();
+    } else {
+      Alert.alert(
+        'Clear Conversation',
+        'Are you sure you want to clear all messages?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Clear', style: 'destructive', onPress: doClear },
+        ],
+      );
+    }
+  }, []);
+
+  const handleCopyMessage = useCallback((messageId: string) => {
+    const msg = messages.find((m) => m.id === messageId);
+    if (!msg) return;
+    if (Platform.OS === 'web') {
+      try { navigator.clipboard.writeText(msg.content); } catch {}
+    }
+    setCopiedId(messageId);
+    setTimeout(() => setCopiedId(null), 1500);
+  }, [messages]);
+
   const suggestions = messages.length === 0
     ? ['Summarize my inbox', 'What tasks are pending?', 'System health check']
     : [];
@@ -182,11 +279,23 @@ export default function ChatDetailScreen() {
     return messages[index - 1].role !== 'assistant';
   };
 
+  const isTightTop = (index: number) => {
+    if (index === 0) return false;
+    const prev = messages[index - 1];
+    const curr = messages[index];
+    return prev.role === curr.role && isSameDay(prev.timestamp, curr.timestamp);
+  };
+
+  const shouldShowDateSeparator = (index: number) => {
+    if (index === 0) return true;
+    return !isSameDay(messages[index - 1].timestamp, messages[index].timestamp);
+  };
+
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
-      <View style={styles.header}>
+      <LinearGradient colors={C.gradient.ocean} style={styles.header}>
         <Pressable
           onPress={() => router.back()}
           style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
@@ -205,42 +314,70 @@ export default function ChatDetailScreen() {
           </View>
         </View>
         <Pressable
-          onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setMenuVisible(true);
+          }}
           style={styles.moreBtn}
         >
           <Ionicons name="ellipsis-horizontal" size={22} color={C.textSecondary} />
         </Pressable>
-      </View>
+      </LinearGradient>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
-        <FlatList
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => (
-            <MessageBubble message={item} showAvatar={shouldShowAvatar(index)} />
-          )}
-          contentContainerStyle={[
-            styles.messageList,
-            messages.length === 0 && styles.emptyMessages,
-          ]}
-          keyboardDismissMode="interactive"
-          keyboardShouldPersistTaps="handled"
-          ListFooterComponent={isSending ? <TypingIndicator /> : null}
-          ListEmptyComponent={
-            <View style={styles.welcomeState}>
-              <LinearGradient
-                colors={C.gradient.lobster}
-                style={styles.welcomeIcon}
-              >
-                <Ionicons name="sparkles" size={28} color="#fff" />
-              </LinearGradient>
-              <Text style={styles.welcomeTitle}>Start a conversation</Text>
-              <Text style={styles.welcomeSubtitle}>
-                Ask your agent anything{'\n'}it's ready to help
-              </Text>
-            </View>
-          }
-        />
+        <LinearGradient
+          colors={[C.background, 'rgba(14,21,48,0.3)', C.background]}
+          style={{ flex: 1 }}
+        >
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item, index }) => (
+              <View>
+                {shouldShowDateSeparator(index) && (
+                  <DateSeparator label={getDateLabel(item.timestamp)} />
+                )}
+                <MessageBubble
+                  message={item}
+                  showAvatar={shouldShowAvatar(index)}
+                  tightTop={isTightTop(index)}
+                  onLongPress={handleCopyMessage}
+                  copiedId={copiedId}
+                />
+              </View>
+            )}
+            contentContainerStyle={[
+              styles.messageList,
+              messages.length === 0 && styles.emptyMessages,
+            ]}
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
+            ListFooterComponent={isSending ? <TypingIndicator /> : null}
+            ListEmptyComponent={
+              <View style={styles.welcomeState}>
+                <LinearGradient
+                  colors={C.gradient.lobster}
+                  style={styles.welcomeIcon}
+                >
+                  <Ionicons name="sparkles" size={28} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.welcomeTitle}>Start a conversation</Text>
+                <Text style={styles.welcomeSubtitle}>
+                  Ask your agent anything{'\n'}it's ready to help
+                </Text>
+                {activeConnection && (
+                  <View style={styles.welcomeGateway}>
+                    <View style={styles.welcomeGatewayDot} />
+                    <Text style={styles.welcomeGatewayText}>
+                      Connected to {activeConnection.name}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            }
+          />
+        </LinearGradient>
 
         {suggestions.length > 0 && (
           <View style={styles.suggestionsRow}>
@@ -298,6 +435,85 @@ export default function ChatDetailScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={menuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setMenuVisible(false)}>
+          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHandle} />
+            <Pressable
+              style={({ pressed }) => [styles.modalOption, pressed && { backgroundColor: C.cardElevated }]}
+              onPress={handleClearConversation}
+            >
+              <Ionicons name="trash-outline" size={20} color={C.error} />
+              <Text style={[styles.modalOptionText, { color: C.error }]}>Clear Conversation</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.modalOption, pressed && { backgroundColor: C.cardElevated }]}
+              onPress={() => {
+                setMenuVisible(false);
+                setInfoVisible(true);
+              }}
+            >
+              <Ionicons name="information-circle-outline" size={20} color={C.text} />
+              <Text style={styles.modalOptionText}>Conversation Info</Text>
+            </Pressable>
+            <View style={styles.modalDivider} />
+            <Pressable
+              style={({ pressed }) => [styles.modalOption, pressed && { backgroundColor: C.cardElevated }]}
+              onPress={() => setMenuVisible(false)}
+            >
+              <Ionicons name="close-outline" size={20} color={C.textSecondary} />
+              <Text style={[styles.modalOptionText, { color: C.textSecondary }]}>Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={infoVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setInfoVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setInfoVisible(false)}>
+          <Pressable style={styles.infoSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.infoTitle}>Conversation Info</Text>
+            <View style={styles.infoRow}>
+              <Ionicons name="chatbubble-outline" size={16} color={C.textSecondary} />
+              <Text style={styles.infoLabel}>Title</Text>
+              <Text style={styles.infoValue} numberOfLines={1}>{conversation?.title || 'Chat'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Ionicons name="layers-outline" size={16} color={C.textSecondary} />
+              <Text style={styles.infoLabel}>Messages</Text>
+              <Text style={styles.infoValue}>{messages.length}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Ionicons name="time-outline" size={16} color={C.textSecondary} />
+              <Text style={styles.infoLabel}>Created</Text>
+              <Text style={styles.infoValue}>
+                {conversation?.lastMessageTime
+                  ? new Date(conversation.lastMessageTime).toLocaleDateString(undefined, {
+                      month: 'short', day: 'numeric', year: 'numeric',
+                    })
+                  : 'Unknown'}
+              </Text>
+            </View>
+            <Pressable
+              style={({ pressed }) => [styles.infoDoneBtn, pressed && { opacity: 0.7 }]}
+              onPress={() => setInfoVisible(false)}
+            >
+              <Text style={styles.infoDoneText}>Done</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -361,6 +577,23 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
+  dateSeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 12,
+    gap: 10,
+  },
+  dateLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: C.borderLight,
+  },
+  dateLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: C.textTertiary,
+    letterSpacing: 0.5,
+  },
   bubbleWrap: {
     flexDirection: 'row',
     marginBottom: 2,
@@ -409,17 +642,38 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     color: C.text,
   },
+  bubbleFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    justifyContent: 'flex-end',
+  },
   bubbleTime: {
     fontFamily: 'Inter_400Regular',
     fontSize: 10,
-    marginTop: 4,
   },
   bubbleTimeUser: {
     color: 'rgba(255,255,255,0.55)',
-    textAlign: 'right',
+    textAlign: 'right' as const,
   },
   bubbleTimeAssistant: {
     color: C.textTertiary,
+  },
+  copiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: C.successMuted,
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  copiedText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+    color: C.success,
   },
   typingBubble: {
     paddingVertical: 14,
@@ -459,6 +713,27 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
+  welcomeGateway: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    backgroundColor: C.successMuted,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  welcomeGatewayDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: C.success,
+  },
+  welcomeGatewayText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: C.success,
+  },
   suggestionsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -485,6 +760,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: C.borderLight,
     backgroundColor: C.background,
+    ...(C.shadow.card),
   },
   inputWrap: {
     flexDirection: 'row',
@@ -528,5 +804,90 @@ const styles = StyleSheet.create({
   },
   sendBtnActive: {
     backgroundColor: C.primary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: C.overlay,
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: C.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34,
+    paddingTop: 8,
+  },
+  modalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: C.textTertiary,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+  },
+  modalOptionText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    color: C.text,
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: C.borderLight,
+    marginHorizontal: 24,
+    marginVertical: 4,
+  },
+  infoSheet: {
+    backgroundColor: C.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34,
+    paddingTop: 8,
+    paddingHorizontal: 24,
+  },
+  infoTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 18,
+    color: C.text,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.borderLight,
+  },
+  infoLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    color: C.textSecondary,
+    flex: 1,
+  },
+  infoValue: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: C.text,
+    maxWidth: '50%',
+  },
+  infoDoneBtn: {
+    marginTop: 20,
+    backgroundColor: C.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  infoDoneText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    color: '#fff',
   },
 });

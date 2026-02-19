@@ -9,6 +9,7 @@ import {
   Modal,
   TextInput,
   Platform,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -66,7 +67,7 @@ function ContactAvatar({ name, color, size = 42 }: { name: string; color: string
 
 export default function CRMScreen() {
   const insets = useSafeAreaInsets();
-  const { crmContacts, createCRMContact, deleteCRMContact, addCRMInteraction } = useApp();
+  const { crmContacts, createCRMContact, updateCRMContact, deleteCRMContact, addCRMInteraction } = useApp();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
   const [selectedContact, setSelectedContact] = useState<CRMContact | null>(null);
@@ -80,13 +81,40 @@ export default function CRMScreen() {
   const [newInteractionType, setNewInteractionType] = useState<CRMInteraction['type']>('note');
   const [newInteractionTitle, setNewInteractionTitle] = useState('');
   const [newInteractionContent, setNewInteractionContent] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [editMode, setEditMode] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editCompany, setEditCompany] = useState('');
+  const [editRole, setEditRole] = useState('');
+  const [editStage, setEditStage] = useState<CRMContact['stage']>('lead');
 
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   const filteredContacts = useMemo(() => {
-    if (stageFilter === 'all') return crmContacts;
-    return crmContacts.filter((c) => c.stage === stageFilter);
-  }, [crmContacts, stageFilter]);
+    let contacts = crmContacts;
+    if (stageFilter !== 'all') {
+      contacts = contacts.filter((c) => c.stage === stageFilter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      contacts = contacts.filter((c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.email && c.email.toLowerCase().includes(q)) ||
+        (c.company && c.company.toLowerCase().includes(q)) ||
+        (c.role && c.role.toLowerCase().includes(q))
+      );
+    }
+    return contacts;
+  }, [crmContacts, stageFilter, searchQuery]);
+
+  const stageCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const s of STAGES) {
+      counts[s.key] = crmContacts.filter((c) => c.stage === s.key).length;
+    }
+    return counts;
+  }, [crmContacts]);
 
   const handleCreateContact = useCallback(async () => {
     if (!newName.trim()) return;
@@ -122,12 +150,61 @@ export default function CRMScreen() {
     if (updated) setSelectedContact(updated);
   }, [selectedContact, newInteractionType, newInteractionTitle, newInteractionContent, addCRMInteraction, crmContacts]);
 
+  const handleEditToggle = useCallback(() => {
+    if (!selectedContact) return;
+    if (!editMode) {
+      setEditName(selectedContact.name);
+      setEditEmail(selectedContact.email || '');
+      setEditCompany(selectedContact.company || '');
+      setEditRole(selectedContact.role || '');
+      setEditStage(selectedContact.stage);
+    }
+    setEditMode(!editMode);
+  }, [selectedContact, editMode]);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!selectedContact || !editName.trim()) return;
+    const updates: Partial<CRMContact> = {
+      name: editName.trim(),
+      email: editEmail.trim() || undefined,
+      company: editCompany.trim() || undefined,
+      role: editRole.trim() || undefined,
+      stage: editStage,
+    };
+    await updateCRMContact(selectedContact.id, updates);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setSelectedContact({ ...selectedContact, ...updates });
+    setEditMode(false);
+  }, [selectedContact, editName, editEmail, editCompany, editRole, editStage, updateCRMContact]);
+
+  const handleDeleteContact = useCallback(() => {
+    if (!selectedContact) return;
+    const doDelete = async () => {
+      await deleteCRMContact(selectedContact.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSelectedContact(null);
+      setEditMode(false);
+    };
+    if (Platform.OS === 'web') {
+      doDelete();
+    } else {
+      Alert.alert(
+        'Delete Contact',
+        `Are you sure you want to delete ${selectedContact.name}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: doDelete },
+        ]
+      );
+    }
+  }, [selectedContact, deleteCRMContact]);
+
   const renderContactCard = (contact: CRMContact) => {
     const stage = STAGES.find((s) => s.key === contact.stage);
     return (
       <Pressable
         key={contact.id}
-        style={styles.contactCard}
+        style={[styles.contactCard, C.shadow.card]}
         onPress={() => setSelectedContact(contact)}
       >
         <ContactAvatar name={contact.name} color={stage?.color || C.coral} />
@@ -153,18 +230,21 @@ export default function CRMScreen() {
         const stageContacts = crmContacts.filter((c) => c.stage === stage.key);
         return (
           <View key={stage.key} style={styles.pipelineColumn}>
-            <View style={styles.pipelineHeader}>
+            <LinearGradient
+              colors={[stage.color + '20', stage.color + '08']}
+              style={styles.pipelineHeaderGradient}
+            >
               <View style={[styles.pipelineDot, { backgroundColor: stage.color }]} />
               <Text style={styles.pipelineTitle}>{stage.label}</Text>
-              <View style={styles.pipelineCount}>
-                <Text style={styles.pipelineCountText}>{stageContacts.length}</Text>
+              <View style={[styles.pipelineCount, { backgroundColor: stage.color + '20' }]}>
+                <Text style={[styles.pipelineCountText, { color: stage.color }]}>{stageContacts.length}</Text>
               </View>
-            </View>
+            </LinearGradient>
             <ScrollView showsVerticalScrollIndicator={false}>
               {stageContacts.map((contact) => (
                 <Pressable
                   key={contact.id}
-                  style={styles.pipelineCard}
+                  style={[styles.pipelineCard, { borderLeftColor: stage.color }]}
                   onPress={() => setSelectedContact(contact)}
                 >
                   <ContactAvatar name={contact.name} color={stage.color} size={32} />
@@ -199,95 +279,174 @@ export default function CRMScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.detailSheet, { paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.detailHeader}>
-              <Pressable onPress={() => setSelectedContact(null)} style={styles.detailClose}>
+              <Pressable onPress={() => { setSelectedContact(null); setEditMode(false); }} style={styles.detailClose}>
                 <Ionicons name="chevron-down" size={24} color={C.textSecondary} />
               </Pressable>
-              <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  setShowInteractionModal(true);
-                }}
-              >
-                <LinearGradient colors={C.gradient.lobster} style={styles.detailAddBtn}>
-                  <Ionicons name="add" size={18} color="#fff" />
-                  <Text style={styles.detailAddText}>Log</Text>
-                </LinearGradient>
-              </Pressable>
-            </View>
-
-            <View style={styles.detailProfile}>
-              <ContactAvatar name={selectedContact.name} color={stage?.color || C.coral} size={56} />
-              <View style={styles.detailProfileInfo}>
-                <Text style={styles.detailName}>{selectedContact.name}</Text>
-                <Text style={styles.detailRole}>
-                  {[selectedContact.role, selectedContact.company].filter(Boolean).join(' at ')}
-                </Text>
-                {selectedContact.email && (
-                  <Text style={styles.detailEmail}>{selectedContact.email}</Text>
-                )}
-              </View>
-              <View style={[styles.stageBadge, { backgroundColor: (stage?.color || C.coral) + '20' }]}>
-                <Text style={[styles.stageText, { color: stage?.color || C.coral }]}>{stage?.label}</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable onPress={handleEditToggle} style={styles.detailClose}>
+                  <Ionicons name={editMode ? 'close' : 'pencil'} size={18} color={editMode ? C.coral : C.textSecondary} />
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    setShowInteractionModal(true);
+                  }}
+                >
+                  <LinearGradient colors={C.gradient.lobster} style={styles.detailAddBtn}>
+                    <Ionicons name="add" size={18} color="#fff" />
+                    <Text style={styles.detailAddText}>Log</Text>
+                  </LinearGradient>
+                </Pressable>
               </View>
             </View>
 
-            <View style={styles.detailStats}>
-              <View style={styles.detailStat}>
-                <Text style={[styles.detailStatVal, { color: C.coral }]}>{sortedInteractions.length}</Text>
-                <Text style={styles.detailStatLabel}>Interactions</Text>
-              </View>
-              <View style={styles.detailStatDivider} />
-              <View style={styles.detailStat}>
-                <Text style={[styles.detailStatVal, { color: C.accent }]}>
-                  {sortedInteractions.filter((i) => i.type === 'email').length}
-                </Text>
-                <Text style={styles.detailStatLabel}>Emails</Text>
-              </View>
-              <View style={styles.detailStatDivider} />
-              <View style={styles.detailStat}>
-                <Text style={[styles.detailStatVal, { color: C.secondary }]}>
-                  {sortedInteractions.filter((i) => i.type === 'meeting').length}
-                </Text>
-                <Text style={styles.detailStatLabel}>Meetings</Text>
-              </View>
-            </View>
-
-            <Text style={styles.timelineTitle}>Interaction Timeline</Text>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.timelineScroll}>
-              {sortedInteractions.length === 0 ? (
-                <View style={styles.emptyTimeline}>
-                  <MaterialCommunityIcons name="timeline-outline" size={32} color={C.textTertiary} />
-                  <Text style={styles.emptyTimelineText}>No interactions yet</Text>
+            {editMode ? (
+              <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Full name"
+                  placeholderTextColor={C.textTertiary}
+                  value={editName}
+                  onChangeText={setEditName}
+                />
+                <Text style={styles.fieldLabel}>Email</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email"
+                  placeholderTextColor={C.textTertiary}
+                  value={editEmail}
+                  onChangeText={setEditEmail}
+                  keyboardType="email-address"
+                />
+                <View style={styles.rowInputs}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.fieldLabel}>Company</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Company"
+                      placeholderTextColor={C.textTertiary}
+                      value={editCompany}
+                      onChangeText={setEditCompany}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.fieldLabel}>Role</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Role"
+                      placeholderTextColor={C.textTertiary}
+                      value={editRole}
+                      onChangeText={setEditRole}
+                    />
+                  </View>
                 </View>
-              ) : (
-                sortedInteractions.map((interaction, i) => {
-                  const config = INTERACTION_ICONS[interaction.type];
-                  return (
-                    <View key={interaction.id} style={styles.timelineItem}>
-                      <View style={styles.timelineLine}>
-                        <View style={[styles.timelineIcon, { backgroundColor: config.color + '20' }]}>
-                          <Ionicons name={config.icon as any} size={14} color={config.color} />
-                        </View>
-                        {i < sortedInteractions.length - 1 && <View style={styles.timelineConnector} />}
-                      </View>
-                      <View style={styles.timelineContent}>
-                        <View style={styles.timelineContentHeader}>
-                          <Text style={styles.timelineContentTitle}>{interaction.title}</Text>
-                          <Text style={styles.timelineContentTime}>{formatTimeAgo(interaction.timestamp)}</Text>
-                        </View>
-                        {interaction.content && (
-                          <Text style={styles.timelineContentText} numberOfLines={3}>{interaction.content}</Text>
-                        )}
-                        <View style={[styles.interactionTypeBadge, { backgroundColor: config.color + '15' }]}>
-                          <Text style={[styles.interactionTypeText, { color: config.color }]}>{interaction.type}</Text>
-                        </View>
-                      </View>
+                <Text style={styles.fieldLabel}>Stage</Text>
+                <View style={styles.stageSelector}>
+                  {STAGES.filter((s) => s.key !== 'archived').map((s) => (
+                    <Pressable
+                      key={s.key}
+                      style={[styles.stageOption, editStage === s.key && { backgroundColor: s.color + '25', borderColor: s.color }]}
+                      onPress={() => setEditStage(s.key)}
+                    >
+                      <View style={[styles.stageOptionDot, { backgroundColor: s.color }]} />
+                      <Text style={[styles.stageOptionText, editStage === s.key && { color: s.color }]}>{s.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Pressable onPress={handleSaveEdit}>
+                  <LinearGradient colors={C.gradient.lobster} style={styles.createBtn}>
+                    <Text style={styles.createBtnText}>Save Changes</Text>
+                  </LinearGradient>
+                </Pressable>
+                <Pressable onPress={handleDeleteContact} style={styles.deleteBtn}>
+                  <Ionicons name="trash-outline" size={16} color={C.error} />
+                  <Text style={styles.deleteBtnText}>Delete Contact</Text>
+                </Pressable>
+              </ScrollView>
+            ) : (
+              <>
+                <View style={styles.detailProfile}>
+                  <ContactAvatar name={selectedContact.name} color={stage?.color || C.coral} size={56} />
+                  <View style={styles.detailProfileInfo}>
+                    <Text style={styles.detailName}>{selectedContact.name}</Text>
+                    <Text style={styles.detailRole}>
+                      {[selectedContact.role, selectedContact.company].filter(Boolean).join(' at ')}
+                    </Text>
+                    {selectedContact.email && (
+                      <Text style={styles.detailEmail}>{selectedContact.email}</Text>
+                    )}
+                  </View>
+                  <View style={[styles.stageBadge, { backgroundColor: (stage?.color || C.coral) + '20' }]}>
+                    <Text style={[styles.stageText, { color: stage?.color || C.coral }]}>{stage?.label}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.detailStats}>
+                  <View style={styles.detailStat}>
+                    <Text style={[styles.detailStatVal, { color: C.coral }]}>{sortedInteractions.length}</Text>
+                    <Text style={styles.detailStatLabel}>Interactions</Text>
+                  </View>
+                  <View style={styles.detailStatDivider} />
+                  <View style={styles.detailStat}>
+                    <Text style={[styles.detailStatVal, { color: C.accent }]}>
+                      {sortedInteractions.filter((i) => i.type === 'email').length}
+                    </Text>
+                    <Text style={styles.detailStatLabel}>Emails</Text>
+                  </View>
+                  <View style={styles.detailStatDivider} />
+                  <View style={styles.detailStat}>
+                    <Text style={[styles.detailStatVal, { color: C.secondary }]}>
+                      {sortedInteractions.filter((i) => i.type === 'meeting').length}
+                    </Text>
+                    <Text style={styles.detailStatLabel}>Meetings</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.timelineTitle}>Interaction Timeline</Text>
+
+                <ScrollView showsVerticalScrollIndicator={false} style={styles.timelineScroll}>
+                  {sortedInteractions.length === 0 ? (
+                    <View style={styles.emptyTimeline}>
+                      <MaterialCommunityIcons name="timeline-outline" size={32} color={C.textTertiary} />
+                      <Text style={styles.emptyTimelineText}>No interactions yet</Text>
                     </View>
-                  );
-                })
-              )}
-            </ScrollView>
+                  ) : (
+                    sortedInteractions.map((interaction, i) => {
+                      const config = INTERACTION_ICONS[interaction.type];
+                      return (
+                        <View key={interaction.id} style={styles.timelineItem}>
+                          <View style={styles.timelineLine}>
+                            <View style={[styles.timelineIcon, { backgroundColor: config.color + '20' }]}>
+                              <Ionicons name={config.icon as any} size={14} color={config.color} />
+                            </View>
+                            {i < sortedInteractions.length - 1 && <View style={styles.timelineConnector} />}
+                          </View>
+                          <View style={styles.timelineContent}>
+                            <View style={styles.timelineContentHeader}>
+                              <Text style={styles.timelineContentTitle}>{interaction.title}</Text>
+                              <Text style={styles.timelineContentTime}>{formatTimeAgo(interaction.timestamp)}</Text>
+                            </View>
+                            {interaction.content && (
+                              <Text style={styles.timelineContentText} numberOfLines={3}>{interaction.content}</Text>
+                            )}
+                            <View style={[styles.interactionTypeBadge, { backgroundColor: config.color + '15' }]}>
+                              <Ionicons name={config.icon as any} size={10} color={config.color} style={{ marginRight: 4 }} />
+                              <Text style={[styles.interactionTypeText, { color: config.color }]}>{interaction.type}</Text>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
+                </ScrollView>
+
+                <Pressable onPress={handleDeleteContact} style={styles.deleteBtn}>
+                  <Ionicons name="trash-outline" size={16} color={C.error} />
+                  <Text style={styles.deleteBtnText}>Delete Contact</Text>
+                </Pressable>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -296,23 +455,25 @@ export default function CRMScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} testID="crm-back">
-          <Ionicons name="chevron-back" size={24} color={C.text} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Contacts</Text>
-        <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            setShowAddModal(true);
-          }}
-          testID="crm-add"
-        >
-          <LinearGradient colors={C.gradient.lobster} style={styles.addBtnGrad}>
-            <Ionicons name="person-add" size={18} color="#fff" />
-          </LinearGradient>
-        </Pressable>
-      </View>
+      <LinearGradient colors={C.gradient.ocean} style={styles.headerGradient}>
+        <View style={styles.header}>
+          <Pressable onPress={() => router.back()} style={styles.backBtn} testID="crm-back">
+            <Ionicons name="chevron-back" size={24} color={C.text} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Contacts</Text>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setShowAddModal(true);
+            }}
+            testID="crm-add"
+          >
+            <LinearGradient colors={C.gradient.lobster} style={styles.addBtnGrad}>
+              <Ionicons name="person-add" size={18} color="#fff" />
+            </LinearGradient>
+          </Pressable>
+        </View>
+      </LinearGradient>
 
       <View style={styles.viewToggle}>
         <Pressable
@@ -329,6 +490,35 @@ export default function CRMScreen() {
           <Ionicons name="git-branch" size={16} color={viewMode === 'pipeline' ? C.coral : C.textSecondary} />
           <Text style={[styles.viewToggleText, viewMode === 'pipeline' && styles.viewToggleTextActive]}>Pipeline</Text>
         </Pressable>
+      </View>
+
+      <View style={styles.statsCard}>
+        <View style={styles.statItem}>
+          <Text style={[styles.statNumber, { color: C.text }]}>{crmContacts.length}</Text>
+          <Text style={styles.statLabel}>Total</Text>
+        </View>
+        {STAGES.filter((s) => s.key !== 'archived').map((s) => (
+          <View key={s.key} style={styles.statItem}>
+            <Text style={[styles.statNumber, { color: s.color }]}>{stageCounts[s.key] || 0}</Text>
+            <Text style={styles.statLabel}>{s.label}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.searchBar}>
+        <Ionicons name="search" size={18} color={C.textTertiary} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search contacts..."
+          placeholderTextColor={C.textTertiary}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        {searchQuery.length > 0 && (
+          <Pressable onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={18} color={C.textTertiary} />
+          </Pressable>
+        )}
       </View>
 
       {viewMode === 'list' && (
@@ -356,6 +546,7 @@ export default function CRMScreen() {
         <ScrollView
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
           showsVerticalScrollIndicator={false}
+          scrollEnabled={!!filteredContacts.length}
         >
           {filteredContacts.length === 0 ? (
             <View style={styles.emptyState}>
@@ -499,6 +690,7 @@ export default function CRMScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background },
+  headerGradient: { paddingBottom: 4 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
   backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontFamily: 'Inter_700Bold', fontSize: 20, color: C.text },
@@ -508,6 +700,12 @@ const styles = StyleSheet.create({
   viewToggleBtnActive: { backgroundColor: C.coral + '20' },
   viewToggleText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.textSecondary },
   viewToggleTextActive: { color: C.coral },
+  statsCard: { flexDirection: 'row', marginHorizontal: 16, backgroundColor: C.card, borderRadius: 12, padding: 12, marginBottom: 8, justifyContent: 'space-around' },
+  statItem: { alignItems: 'center', gap: 2 },
+  statNumber: { fontFamily: 'Inter_700Bold', fontSize: 18 },
+  statLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary },
+  searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 8, backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.borderLight, height: 44, paddingHorizontal: 12, gap: 8 },
+  searchInput: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 14, color: C.text, height: 44 },
   filterScroll: { paddingHorizontal: 16, gap: 6, marginBottom: 8 },
   filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: C.card },
   filterChipText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.textSecondary },
@@ -520,15 +718,15 @@ const styles = StyleSheet.create({
   contactDetail: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textSecondary },
   contactTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary },
   stageBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  stageText: { fontFamily: 'Inter_500Medium', fontSize: 11, textTransform: 'capitalize' },
+  stageText: { fontFamily: 'Inter_500Medium', fontSize: 11, textTransform: 'capitalize' as const },
   pipelineScroll: { paddingHorizontal: 12, gap: 8, paddingBottom: 100 },
   pipelineColumn: { width: 220, backgroundColor: C.card, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: C.borderLight },
-  pipelineHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: C.borderLight },
+  pipelineHeaderGradient: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingBottom: 8, paddingHorizontal: 4, paddingTop: 4, borderRadius: 8 },
   pipelineDot: { width: 8, height: 8, borderRadius: 4 },
   pipelineTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.text, flex: 1 },
-  pipelineCount: { backgroundColor: C.surface, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  pipelineCountText: { fontFamily: 'Inter_600SemiBold', fontSize: 11, color: C.textSecondary },
-  pipelineCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 10, padding: 10, marginBottom: 6, gap: 8 },
+  pipelineCount: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  pipelineCountText: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
+  pipelineCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 10, padding: 10, marginBottom: 6, gap: 8, borderLeftWidth: 3 },
   pipelineCardName: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.text },
   pipelineCardDetail: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary },
   pipelineCardInteractions: { fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.textTertiary },
@@ -536,7 +734,7 @@ const styles = StyleSheet.create({
   pipelineEmptyText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary },
   emptyState: { alignItems: 'center', paddingVertical: 40, gap: 8 },
   emptyTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: C.textSecondary, marginTop: 6 },
-  emptySubtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary, textAlign: 'center' },
+  emptySubtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary, textAlign: 'center' as const },
   emptyAddBtn: { marginTop: 8, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: C.coral + '20', borderRadius: 8 },
   emptyAddText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.coral },
   modalOverlay: { flex: 1, backgroundColor: C.overlay, justifyContent: 'flex-end' },
@@ -555,7 +753,7 @@ const styles = StyleSheet.create({
   detailStat: { flex: 1, alignItems: 'center' },
   detailStatVal: { fontFamily: 'Inter_700Bold', fontSize: 20 },
   detailStatLabel: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary, marginTop: 2 },
-  detailStatDivider: { width: 1, height: 28, backgroundColor: C.borderLight, alignSelf: 'center' },
+  detailStatDivider: { width: 1, height: 28, backgroundColor: C.borderLight, alignSelf: 'center' as const },
   timelineTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: C.text, marginBottom: 12 },
   timelineScroll: { flex: 1 },
   emptyTimeline: { alignItems: 'center', paddingVertical: 30, gap: 8 },
@@ -569,8 +767,8 @@ const styles = StyleSheet.create({
   timelineContentTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.text, flex: 1 },
   timelineContentTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary },
   timelineContentText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textSecondary, marginTop: 4 },
-  interactionTypeBadge: { alignSelf: 'flex-start', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 6 },
-  interactionTypeText: { fontFamily: 'Inter_500Medium', fontSize: 10, textTransform: 'capitalize' },
+  interactionTypeBadge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 6 },
+  interactionTypeText: { fontFamily: 'Inter_500Medium', fontSize: 10, textTransform: 'capitalize' as const },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   modalTitle: { fontFamily: 'Inter_700Bold', fontSize: 18, color: C.text },
   input: { backgroundColor: C.card, borderRadius: 10, padding: 14, fontFamily: 'Inter_400Regular', fontSize: 14, color: C.text, marginBottom: 12, borderWidth: 1, borderColor: C.borderLight },
@@ -582,7 +780,9 @@ const styles = StyleSheet.create({
   stageOptionText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.textSecondary },
   interactionTypes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
   interactionTypeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: C.card, borderWidth: 1, borderColor: C.borderLight },
-  interactionTypeBtnText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary, textTransform: 'capitalize' },
+  interactionTypeBtnText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary, textTransform: 'capitalize' as const },
   createBtn: { borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 4 },
   createBtnText: { fontFamily: 'Inter_700Bold', fontSize: 15, color: '#fff' },
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, marginTop: 8 },
+  deleteBtnText: { fontFamily: 'Inter_500Medium', fontSize: 14, color: C.error },
 });
