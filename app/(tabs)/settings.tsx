@@ -180,6 +180,42 @@ export default function SettingsScreen() {
     setShowConnModal(false);
   }, [connName, connUrl, addConnection]);
 
+  const openWithTemplate = useCallback((name: string, url: string) => {
+    setConnName(name);
+    setConnUrl(url);
+    setShowConnModal(true);
+  }, []);
+
+  const connectionMethods = [
+    {
+      title: 'Local Network',
+      icon: 'wifi-outline' as const,
+      color: C.amber,
+      description: 'Connect via your home network. Use your gateway\'s local IP (e.g. 192.168.1.100:18789)',
+      hint: 'Make sure your phone is on the same Wi-Fi network.',
+      templateName: 'Home Gateway',
+      templateUrl: '192.168.1.x:18789',
+    },
+    {
+      title: 'Tailscale',
+      icon: 'shield-checkmark-outline' as const,
+      color: C.secondary,
+      description: 'Secure mesh VPN for remote access. Use your Tailscale hostname (e.g. my-server.ts.net:18789)',
+      hint: 'Install Tailscale on both your phone and gateway server.',
+      templateName: 'Tailscale Gateway',
+      templateUrl: 'your-host.ts.net:18789',
+    },
+    {
+      title: 'Cloudflare Tunnel',
+      icon: 'cloud-outline' as const,
+      color: C.accent,
+      description: 'Access your gateway from anywhere via Cloudflare Tunnel (e.g. gateway.yourdomain.com)',
+      hint: 'Set up cloudflared on your gateway server.',
+      templateName: 'Cloud Gateway',
+      templateUrl: 'gateway.yourdomain.com',
+    },
+  ];
+
   const handleRemoveConn = useCallback(
     (id: string, name: string) => {
       if (Platform.OS === 'web') {
@@ -271,6 +307,40 @@ export default function SettingsScreen() {
             <Text style={styles.addConnText}>Add Gateway</Text>
           </Pressable>
         </SettingsSection>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Connection Methods</Text>
+          <View style={{ gap: 10 }}>
+            {connectionMethods.map((method) => (
+              <Pressable
+                key={method.title}
+                onPress={() => openWithTemplate(method.templateName, method.templateUrl)}
+                style={({ pressed }) => [pressed && { opacity: 0.8 }]}
+              >
+                <LinearGradient
+                  colors={C.gradient.cardElevated}
+                  style={[styles.methodCard, { borderColor: C.borderLight }]}
+                >
+                  <View style={[styles.methodAccent, { backgroundColor: method.color }]} />
+                  <View style={styles.methodBody}>
+                    <View style={styles.methodHeader}>
+                      <View style={[styles.methodIconWrap, { backgroundColor: method.color + '18' }]}>
+                        <Ionicons name={method.icon} size={20} color={method.color} />
+                      </View>
+                      <Text style={styles.methodTitle}>{method.title}</Text>
+                      <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
+                    </View>
+                    <Text style={styles.methodDesc}>{method.description}</Text>
+                    <View style={styles.methodHintRow}>
+                      <Ionicons name="bulb-outline" size={13} color={method.color} />
+                      <Text style={[styles.methodHint, { color: method.color + 'CC' }]}>{method.hint}</Text>
+                    </View>
+                  </View>
+                </LinearGradient>
+              </Pressable>
+            ))}
+          </View>
+        </View>
 
         <SettingsSection title="Security">
           <SettingsRow
@@ -539,6 +609,55 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 15,
     color: C.primary,
+  },
+  methodCard: {
+    flexDirection: 'row' as const,
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: 'hidden' as const,
+  },
+  methodAccent: {
+    width: 4,
+  },
+  methodBody: {
+    flex: 1,
+    padding: 14,
+    gap: 8,
+  },
+  methodHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 10,
+  },
+  methodIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  methodTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    color: C.text,
+    flex: 1,
+  },
+  methodDesc: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: C.textSecondary,
+    lineHeight: 19,
+  },
+  methodHintRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    marginTop: 2,
+  },
+  methodHint: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    flex: 1,
   },
   branding: {
     alignItems: 'center',

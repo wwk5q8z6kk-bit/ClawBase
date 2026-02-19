@@ -89,6 +89,25 @@ export default function CalendarScreen() {
 
   const selectedDayEvents = useMemo(() => eventsForDate(selectedDate), [selectedDate, eventsForDate]);
 
+  const todayEvents = useMemo(() => eventsForDate(new Date()), [eventsForDate]);
+  const nextUpcomingEvent = useMemo(() => {
+    const now = Date.now();
+    const upcoming = calendarEvents
+      .filter((e) => e.startTime > now)
+      .sort((a, b) => a.startTime - b.startTime);
+    return upcoming[0] || null;
+  }, [calendarEvents]);
+
+  const formatDuration = useCallback((startTime: number, endTime: number) => {
+    const diffMs = endTime - startTime;
+    const totalMin = Math.round(diffMs / 60000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
+  }, []);
+
   const weekDays = useMemo(() => {
     const d = new Date(selectedDate);
     const day = d.getDay();
@@ -147,15 +166,23 @@ export default function CalendarScreen() {
       cells.push(
         <Pressable
           key={day}
-          style={[styles.dayCell, isSelected && styles.dayCellSelected, isToday && !isSelected && styles.dayCellToday]}
+          style={styles.dayCell}
           onPress={() => {
             setSelectedDate(date);
             Haptics.selectionAsync();
           }}
         >
-          <Text style={[styles.dayText, isSelected && styles.dayTextSelected, isToday && !isSelected && styles.dayTextToday]}>
-            {day}
-          </Text>
+          {isToday ? (
+            <LinearGradient colors={C.gradient.lobster} style={styles.dayCellTodayGradient}>
+              <Text style={[styles.dayText, { color: '#fff', fontFamily: 'Inter_700Bold' }]}>{day}</Text>
+            </LinearGradient>
+          ) : isSelected ? (
+            <View style={styles.dayCellSelectedPill}>
+              <Text style={[styles.dayText, { color: '#fff', fontFamily: 'Inter_700Bold' }]}>{day}</Text>
+            </View>
+          ) : (
+            <Text style={styles.dayText}>{day}</Text>
+          )}
           {hasEvents && (
             <View style={styles.eventDots}>
               {dayEvents.slice(0, 3).map((e, i) => (
@@ -189,12 +216,15 @@ export default function CalendarScreen() {
           return (
             <Pressable
               key={i}
-              style={[styles.weekDay, isSelected && styles.weekDaySelected]}
+              style={[styles.weekDay, isSelected && { overflow: 'hidden' as const }]}
               onPress={() => {
                 setSelectedDate(date);
                 Haptics.selectionAsync();
               }}
             >
+              {isSelected && (
+                <LinearGradient colors={C.gradient.lobster} style={StyleSheet.absoluteFill} />
+              )}
               <Text style={[styles.weekDayName, isSelected && { color: '#fff' }]}>{DAYS_SHORT[date.getDay()]}</Text>
               <Text style={[styles.weekDayNum, isSelected && { color: '#fff' }, isToday && !isSelected && { color: C.coral }]}>
                 {date.getDate()}
@@ -211,6 +241,10 @@ export default function CalendarScreen() {
 
   const renderDayTimeline = () => {
     const hours = Array.from({ length: 16 }, (_, i) => i + 6);
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const isToday = isSameDay(selectedDate, now);
     return (
       <ScrollView style={styles.dayTimeline} showsVerticalScrollIndicator={false}>
         {hours.map((hour) => {
@@ -220,23 +254,34 @@ export default function CalendarScreen() {
           });
           const ampm = hour >= 12 ? 'PM' : 'AM';
           const displayHour = hour % 12 || 12;
+          const showNowLine = isToday && currentHour === hour;
+          const nowOffset = (currentMinute / 60) * 56;
 
           return (
             <View key={hour} style={styles.hourRow}>
               <Text style={styles.hourLabel}>{`${displayHour} ${ampm}`}</Text>
               <View style={styles.hourLine} />
               <View style={styles.hourEvents}>
+                {showNowLine && (
+                  <View style={[styles.nowIndicator, { top: nowOffset }]}>
+                    <View style={styles.nowDot} />
+                    <View style={styles.nowLine} />
+                  </View>
+                )}
                 {hourEvents.map((e) => (
                   <Pressable
                     key={e.id}
-                    style={[styles.timelineEvent, { backgroundColor: (e.color || C.coral) + '25', borderLeftColor: e.color || C.coral }]}
+                    style={[styles.timelineEvent, { backgroundColor: (e.color || C.coral) + '25', borderLeftColor: e.color || C.coral }, C.shadow.card]}
                     onLongPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
                       deleteCalendarEvent(e.id);
                     }}
                   >
                     <Text style={[styles.timelineEventTitle, { color: e.color || C.coral }]}>{e.title}</Text>
-                    <Text style={styles.timelineEventTime}>{formatTime(e.startTime)} - {formatTime(e.endTime)}</Text>
+                    <View style={styles.timelineEventMeta}>
+                      <Text style={styles.timelineEventTime}>{formatTime(e.startTime)} - {formatTime(e.endTime)}</Text>
+                      <Text style={styles.timelineEventDuration}>{formatDuration(e.startTime, e.endTime)}</Text>
+                    </View>
                   </Pressable>
                 ))}
               </View>
@@ -282,6 +327,20 @@ export default function CalendarScreen() {
             </Text>
           </Pressable>
         ))}
+      </View>
+
+      <View style={styles.summaryBar}>
+        <View style={styles.summaryItem}>
+          <Ionicons name="calendar-outline" size={14} color={C.coral} />
+          <Text style={styles.summaryText}>{todayEvents.length} today</Text>
+        </View>
+        {nextUpcomingEvent && (
+          <View style={[styles.summaryItem, { flex: 1, marginLeft: 12 }]}>
+            <Ionicons name="time-outline" size={14} color={C.coral} />
+            <Text style={styles.summaryNextTitle} numberOfLines={1}>{nextUpcomingEvent.title}</Text>
+            <Text style={styles.summaryNextTime}>{formatTime(nextUpcomingEvent.startTime)}</Text>
+          </View>
+        )}
       </View>
 
       {viewMode === 'month' && (
@@ -451,16 +510,16 @@ const styles = StyleSheet.create({
   daysGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   dayCell: { width: '14.28%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 2 },
   dayCellSelected: { backgroundColor: C.coral + '20', borderRadius: 12 },
-  dayCellToday: { borderWidth: 1, borderColor: C.coral + '40', borderRadius: 12 },
+  dayCellTodayGradient: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  dayCellSelectedPill: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.coral, alignItems: 'center', justifyContent: 'center' },
   dayText: { fontFamily: 'Inter_500Medium', fontSize: 14, color: C.text },
-  dayTextSelected: { color: C.coral, fontFamily: 'Inter_700Bold' },
-  dayTextToday: { color: C.coral },
+  dayTextSelected: { color: '#fff', fontFamily: 'Inter_700Bold' },
   eventDots: { flexDirection: 'row', gap: 2, marginTop: 2 },
   eventDot: { width: 4, height: 4, borderRadius: 2 },
   weekView: { paddingHorizontal: 12, marginBottom: 8 },
   weekStrip: { flexDirection: 'row', gap: 4 },
   weekDay: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12, backgroundColor: C.card },
-  weekDaySelected: { backgroundColor: C.coral },
+  weekDaySelected: { },
   weekDayName: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary, marginBottom: 4 },
   weekDayNum: { fontFamily: 'Inter_700Bold', fontSize: 16, color: C.text },
   weekDayDot: { width: 4, height: 4, borderRadius: 2, marginTop: 4 },
@@ -486,9 +545,19 @@ const styles = StyleSheet.create({
   hourLabel: { width: 60, fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary, paddingTop: 4 },
   hourLine: { width: 1, backgroundColor: C.borderLight },
   hourEvents: { flex: 1, paddingLeft: 8, paddingVertical: 2 },
-  timelineEvent: { borderLeftWidth: 3, borderRadius: 6, padding: 8, marginBottom: 4 },
+  timelineEvent: { borderLeftWidth: 3, borderRadius: 8, padding: 12, marginBottom: 6 },
   timelineEventTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
-  timelineEventTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary, marginTop: 2 },
+  timelineEventMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+  timelineEventTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary },
+  timelineEventDuration: { fontFamily: 'Inter_500Medium', fontSize: 10, color: C.textSecondary, backgroundColor: C.card, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
+  nowIndicator: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
+  nowDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF6B6B' },
+  nowLine: { flex: 1, height: 2, backgroundColor: '#FF6B6B' },
+  summaryBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 10, backgroundColor: C.card, borderRadius: 10, borderWidth: 1, borderColor: C.borderLight, paddingHorizontal: 12, paddingVertical: 10 },
+  summaryItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  summaryText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary },
+  summaryNextTitle: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.text, flex: 1 },
+  summaryNextTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.coral },
   modalOverlay: { flex: 1, backgroundColor: C.overlay, justifyContent: 'flex-end' },
   modalContent: { backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
