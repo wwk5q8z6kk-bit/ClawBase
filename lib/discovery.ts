@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { validateGatewayHandshake } from './gatewayHandshake';
 
 export interface DiscoveredGateway {
   host: string;
@@ -23,23 +24,21 @@ const SCAN_TARGETS = [
 ];
 
 async function probeHost(host: string, port: number): Promise<DiscoveredGateway | null> {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 2000);
-    const resp = await fetch(`http://${host}:${port}/healthz`, { signal: controller.signal });
-    clearTimeout(timer);
-    if (!resp.ok) return null;
-    const info = await resp.json().catch(() => ({}));
-    return {
-      host,
-      port,
-      name: info.agentName || info.name || `Gateway (${host})`,
-      version: info.version,
-      url: `ws://${host}:${port}`,
-    };
-  } catch {
+  const handshake = await validateGatewayHandshake(`ws://${host}:${port}`, {
+    timeoutMs: 2500,
+  });
+
+  if (!handshake.valid) {
     return null;
   }
+
+  return {
+    host,
+    port,
+    name: handshake.info?.agentName || handshake.info?.name || `Gateway (${host})`,
+    version: handshake.info?.version,
+    url: `ws://${host}:${port}`,
+  };
 }
 
 export async function discoverGateways(

@@ -20,6 +20,16 @@ import {
 
 SplashScreen.preventAutoHideAsync();
 
+function getFirstParam(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    return value.find((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+  }
+  if (typeof value === 'string' && value.length > 0) {
+    return value;
+  }
+  return undefined;
+}
+
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: 'Back', headerShown: false }}>
@@ -52,10 +62,18 @@ export default function RootLayout() {
       const { url } = event;
       if (url && (url.startsWith('clawbase://connect') || url.startsWith('openclaw://connect'))) {
         const parsed = Linking.parse(url);
-        if (parsed.queryParams?.url) {
+        const gwUrl = getFirstParam(parsed.queryParams?.url) || getFirstParam(parsed.queryParams?.gateway);
+        if (gwUrl) {
+          const token = getFirstParam(parsed.queryParams?.token);
+          const name = getFirstParam(parsed.queryParams?.name);
           router.push({
             pathname: '/pair',
-            params: { from: 'deeplink' },
+            params: {
+              from: 'deeplink',
+              url: gwUrl,
+              ...(token ? { token } : {}),
+              ...(name ? { name } : {}),
+            },
           });
         }
       }

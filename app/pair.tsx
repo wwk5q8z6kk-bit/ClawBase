@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   Dimensions,
   ScrollView,
-  FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,12 +20,18 @@ import { router, useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import { discoverGateways, type DiscoveredGateway } from '@/lib/discovery';
+import { validateGatewayHandshake } from '@/lib/gatewayHandshake';
 
 const C = Colors.dark;
 const { width: SCREEN_W } = Dimensions.get('window');
 
 type PairMethod = 'qr' | 'code' | 'manual' | 'tailscale';
 type ConnectPhase = 'idle' | 'testing' | 'success' | 'unreachable' | 'pairing';
+
+function firstParam(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
 
 function isLocalAddress(host: string): boolean {
   const h = host.replace(/:\d+$/, '');
@@ -55,34 +60,35 @@ function buildWsUrl(rawUrl: string): string {
   return url.replace(/\/$/, '');
 }
 
-async function testReachability(rawUrl: string): Promise<{ reachable: boolean; info?: any; error?: string }> {
-  try {
-    const httpUrl = buildHttpUrl(rawUrl);
-    const hasPort = /:\d+(\/|$)/.test(httpUrl.replace(/^https?:\/\//, ''));
-    const healthUrl = hasPort ? `${httpUrl}/healthz` : `${httpUrl}:18789/healthz`;
+async function testReachability(rawUrl: string, token?: string): Promise<{ reachable: boolean; info?: any; error?: string }> {
+  const handshake = await validateGatewayHandshake(rawUrl, {
+    token,
+    timeoutMs: 6000,
+  });
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
-    const resp = await fetch(healthUrl, { signal: controller.signal });
-    clearTimeout(timer);
-
-    if (resp.ok) {
-      const info = await resp.json().catch(() => null);
-      return { reachable: true, info };
-    }
-    return { reachable: false, error: `Gateway returned status ${resp.status}` };
-  } catch (e: any) {
-    if (e?.name === 'AbortError') {
-      return { reachable: false, error: 'Connection timed out — gateway may not be reachable from this network' };
-    }
-    return { reachable: false, error: "Cannot reach gateway — check the address and make sure it's accessible" };
+  if (handshake.valid) {
+    return { reachable: true, info: handshake.info };
   }
+
+  return {
+    reachable: false,
+    error: handshake.error || "Cannot reach gateway — check the address and make sure it's accessible",
+  };
 }
 
 export default function PairScreen() {
   const insets = useSafeAreaInsets();
   const { addConnection, setHasOnboarded } = useApp();
-  const params = useLocalSearchParams<{ from?: string }>();
+  const params = useLocalSearchParams<{
+    from?: string | string[];
+    url?: string | string[];
+    token?: string | string[];
+    name?: string | string[];
+  }>();
+  const fromParam = firstParam(params.from);
+  const deeplinkUrl = firstParam(params.url);
+  const deeplinkToken = firstParam(params.token);
+  const deeplinkName = firstParam(params.name);
   const [method, setMethod] = useState<PairMethod | null>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
@@ -99,6 +105,7 @@ export default function PairScreen() {
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState({ checked: 0, total: 0 });
   const pulseAnim = useRef(new Animated.Value(0.5)).current;
+  const autoConnectTriggered = useRef(false);
 
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
@@ -153,7 +160,7 @@ export default function PairScreen() {
     setPendingConnection({ name, url, token });
 
     try {
-      const result = await testReachability(url);
+      const result = await testReachability(url, token);
       const gwName = result.reachable
         ? (result.info?.name || result.info?.agentName || name)
         : name;
@@ -162,6 +169,17 @@ export default function PairScreen() {
       await saveAndFinish(name, url, token);
     }
   }, [saveAndFinish]);
+
+  useEffect(() => {
+    if (autoConnectTriggered.current) return;
+    if (fromParam !== 'deeplink') return;
+    if (!deeplinkUrl?.trim()) return;
+
+    autoConnectTriggered.current = true;
+    const name = deeplinkName?.trim() || 'OpenClaw Gateway';
+    const token = deeplinkToken?.trim() || undefined;
+    void finishPairing(name, deeplinkUrl.trim(), token);
+  }, [fromParam, deeplinkUrl, deeplinkToken, deeplinkName, finishPairing]);
 
   const handleQRScanned = useCallback(({ data }: { data: string }) => {
     if (scanned) return;
@@ -257,12 +275,12 @@ export default function PairScreen() {
       setScanned(false);
       setConnectPhase('idle');
       setPendingConnection(null);
-    } else if (params.from === 'settings') {
+    } else if (fromParam === 'settings') {
       router.back();
     } else {
       router.replace('/onboarding');
     }
-  }, [method, params.from, connectPhase]);
+  }, [method, fromParam, connectPhase]);
 
   if (connectPhase === 'testing') {
     return (
@@ -340,7 +358,7 @@ export default function PairScreen() {
           <View style={styles.unreachableIcon}>
             <Ionicons name="cloud-offline" size={48} color={C.error} />
           </View>
-          <Text style={styles.phaseTitle}>Can't reach your gateway</Text>
+          <Text style={styles.phaseTitle}>Can&apos;t reach your gateway</Text>
           <Text style={[styles.phaseSub, { paddingHorizontal: 24 }]}>{error}</Text>
           <Text style={[styles.phaseUrl, { marginTop: 4 }]}>{pendingConnection?.url}</Text>
 
@@ -449,7 +467,7 @@ export default function PairScreen() {
               <Ionicons name="camera" size={40} color={C.accent} />
             </View>
             <Text style={styles.permissionTitle}>Camera Access Required</Text>
-            <Text style={styles.permissionSub}>We need camera access to scan your gateway's QR code.</Text>
+            <Text style={styles.permissionSub}>We need camera access to scan your gateway&apos;s QR code.</Text>
             <Pressable
               onPress={requestCameraPermission}
               style={({ pressed }) => [styles.permissionBtn, pressed && { opacity: 0.8 }]}
@@ -648,7 +666,7 @@ export default function PairScreen() {
             </View>
             <View style={styles.setupGuideStep}>
               <View style={styles.setupGuideStepNum}><Text style={styles.setupGuideStepNumText}>2</Text></View>
-              <Text style={styles.setupGuideStepText}>Your gateway's Tailscale address will look like: my-machine.tail1234.ts.net</Text>
+              <Text style={styles.setupGuideStepText}>Your gateway&apos;s Tailscale address will look like: my-machine.tail1234.ts.net</Text>
             </View>
             <View style={styles.setupGuideStep}>
               <View style={styles.setupGuideStepNum}><Text style={styles.setupGuideStepNumText}>3</Text></View>

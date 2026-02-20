@@ -1,14 +1,25 @@
 import WebSocket from 'ws';
-import { randomUUID } from 'crypto';
+import { randomUUID, timingSafeEqual } from 'crypto';
 import jwt from 'jsonwebtoken';
-import type { Server } from 'node:http';
-import type { IncomingMessage } from 'node:http';
+import type { IncomingMessage, Server } from 'node:http';
 
-const JWT_SECRET = () => process.env.SESSION_SECRET || 'openclaw-relay-fallback-secret';
 const JWT_EXPIRY = '1h';
 const MAX_AUDIT_ENTRIES = 1000;
 const PING_INTERVAL = 30000;
 const RPC_TIMEOUT = 15000;
+const MIN_SESSION_SECRET_LENGTH = 32;
+const SESSION_SECRET = process.env.SESSION_SECRET;
+const RELAY_SETUP_TOKEN = process.env.RELAY_SETUP_TOKEN?.trim() || '';
+
+if (!SESSION_SECRET || SESSION_SECRET.length < MIN_SESSION_SECRET_LENGTH) {
+  throw new Error(
+    `SESSION_SECRET must be configured and at least ${MIN_SESSION_SECRET_LENGTH} characters for relay security.`,
+  );
+}
+
+if (process.env.NODE_ENV === 'production' && !RELAY_SETUP_TOKEN) {
+  throw new Error('RELAY_SETUP_TOKEN must be configured in production to protect /api/relay/setup.');
+}
 
 interface GatewayConfig {
   url: string;
@@ -44,6 +55,37 @@ const auditLog: AuditEntry[] = [];
 const mobileClients = new Set<WebSocket>();
 const streamBuffers = new Map<string, string>();
 const authorizedDevices = new Map<string, { pairingCode: string; authorizedAt: number }>();
+
+function secureEquals(a: string, b: string): boolean {
+  const lhs = Buffer.from(a);
+  const rhs = Buffer.from(b);
+  if (lhs.length !== rhs.length) return false;
+  return timingSafeEqual(lhs, rhs);
+}
+
+function signDeviceToken(deviceId: string): string {
+  return jwt.sign(
+    { deviceId, iat: Math.floor(Date.now() / 1000) },
+    SESSION_SECRET,
+    { expiresIn: JWT_EXPIRY },
+  );
+}
+
+function isKnownPairingCode(pairingCode: string): boolean {
+  if (!gatewayConfig || !pairingCode) return false;
+
+  if (secureEquals(pairingCode, gatewayConfig.token)) {
+    return true;
+  }
+
+  for (const device of authorizedDevices.values()) {
+    if (secureEquals(pairingCode, device.pairingCode)) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 function addAudit(deviceId: string, action: string, result: 'success' | 'error', details?: string) {
   auditLog.push({ timestamp: Date.now(), deviceId, action, result, details });
@@ -308,11 +350,36 @@ function connectToGateway() {
 
 function verifyJwt(token: string): { deviceId: string } | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET()) as any;
+    const payload = jwt.verify(token, SESSION_SECRET) as any;
     return { deviceId: payload.deviceId };
   } catch {
     return null;
   }
+}
+
+function authenticateSetupRequest(req: any, res: any): boolean {
+  // In production, setup auth token is mandatory (enforced at startup too).
+  if (!RELAY_SETUP_TOKEN) {
+    if (process.env.NODE_ENV === 'production') {
+      res.status(503).json({ error: 'Relay setup is disabled because RELAY_SETUP_TOKEN is not configured.' });
+      return false;
+    }
+    return true;
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Missing setup authorization token' });
+    return false;
+  }
+
+  const token = authHeader.substring(7);
+  if (!secureEquals(token, RELAY_SETUP_TOKEN)) {
+    res.status(403).json({ error: 'Invalid setup authorization token' });
+    return false;
+  }
+
+  return true;
 }
 
 function authenticateRequest(req: any, res: any): { deviceId: string } | null {
@@ -396,6 +463,8 @@ export function setupRelay(app: any, httpServer: Server) {
   });
 
   app.post('/api/relay/setup', (req: any, res: any) => {
+    if (!authenticateSetupRequest(req, res)) return;
+
     const { url, token } = req.body;
     if (!url || !token) {
       return res.status(400).json({ error: 'url and token are required' });
@@ -409,9 +478,34 @@ export function setupRelay(app: any, httpServer: Server) {
     res.json({ ok: true, status: 'connecting' });
   });
 
+  app.get('/api/pair/:code', (req: any, res: any) => {
+    const code = typeof req.params.code === 'string' ? req.params.code.trim() : '';
+    if (!code) {
+      return res.status(400).json({ error: 'Pairing code is required' });
+    }
+
+    if (!gatewayConfig) {
+      return res.status(503).json({ error: 'Gateway not configured. Call /api/relay/setup first.' });
+    }
+
+    // Never allow insecure fallback codes; only configured or previously approved codes pass.
+    if (!isKnownPairingCode(code)) {
+      addAudit('pair', 'pair.lookup', 'error', 'Invalid pairing code');
+      return res.status(401).json({ error: 'Invalid or expired pairing code' });
+    }
+
+    addAudit('pair', 'pair.lookup', 'success');
+    res.json({
+      url: gatewayConfig.url,
+      token: gatewayConfig.token,
+      name: gatewayInfo?.agentName || gatewayInfo?.name || 'OpenClaw Gateway',
+    });
+  });
+
   app.post('/api/relay/auth', (req: any, res: any) => {
     const { deviceId, pairingCode } = req.body;
-    if (!deviceId || !pairingCode) {
+    const normalizedPairingCode = typeof pairingCode === 'string' ? pairingCode.trim() : '';
+    if (!deviceId || !normalizedPairingCode) {
       return res.status(400).json({ error: 'deviceId and pairingCode are required' });
     }
 
@@ -419,16 +513,16 @@ export function setupRelay(app: any, httpServer: Server) {
       return res.status(503).json({ error: 'Gateway not configured. Call /api/relay/setup first.' });
     }
 
-    if (pairingCode === gatewayConfig.token || pairingCode === 'pair') {
-      authorizedDevices.set(deviceId, { pairingCode, authorizedAt: Date.now() });
-      const token = jwt.sign({ deviceId, iat: Math.floor(Date.now() / 1000) }, JWT_SECRET(), { expiresIn: JWT_EXPIRY });
+    if (secureEquals(normalizedPairingCode, gatewayConfig.token)) {
+      authorizedDevices.set(deviceId, { pairingCode: normalizedPairingCode, authorizedAt: Date.now() });
+      const token = signDeviceToken(deviceId);
       addAudit(deviceId, 'auth.success', 'success');
       return res.json({ ok: true, token, expiresIn: 3600 });
     }
 
     const device = authorizedDevices.get(deviceId);
-    if (device && device.pairingCode === pairingCode) {
-      const token = jwt.sign({ deviceId, iat: Math.floor(Date.now() / 1000) }, JWT_SECRET(), { expiresIn: JWT_EXPIRY });
+    if (device && secureEquals(device.pairingCode, normalizedPairingCode)) {
+      const token = signDeviceToken(deviceId);
       addAudit(deviceId, 'auth.success', 'success');
       return res.json({ ok: true, token, expiresIn: 3600 });
     }

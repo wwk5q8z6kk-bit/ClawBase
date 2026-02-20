@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import type {
   GatewayConnection,
   ChatMessage,
@@ -14,6 +16,7 @@ import type {
 
 const KEYS = {
   CONNECTIONS: '@clawbase:connections',
+  CONNECTION_TOKENS: '@clawbase:connectionTokens',
   ACTIVE_CONNECTION: '@clawbase:activeConnection',
   CONVERSATIONS: '@clawbase:conversations',
   MESSAGES: '@clawbase:messages',
@@ -38,23 +41,103 @@ async function setJSON(key: string, value: unknown): Promise<void> {
   await AsyncStorage.setItem(key, JSON.stringify(value));
 }
 
+type ConnectionTokenMap = Record<string, string>;
+
+async function getStoredConnectionTokens(): Promise<ConnectionTokenMap> {
+  try {
+    if (Platform.OS !== 'web') {
+      const raw = await SecureStore.getItemAsync(KEYS.CONNECTION_TOKENS);
+      return raw ? (JSON.parse(raw) as ConnectionTokenMap) : {};
+    }
+  } catch {
+    // Fall through to AsyncStorage fallback.
+  }
+  return getJSON<ConnectionTokenMap>(KEYS.CONNECTION_TOKENS, {});
+}
+
+async function setStoredConnectionTokens(tokens: ConnectionTokenMap): Promise<void> {
+  const raw = JSON.stringify(tokens);
+  try {
+    if (Platform.OS !== 'web') {
+      await SecureStore.setItemAsync(KEYS.CONNECTION_TOKENS, raw);
+      // Best-effort cleanup of legacy fallback copy once secure write succeeds.
+      await AsyncStorage.removeItem(KEYS.CONNECTION_TOKENS).catch(() => {});
+      return;
+    }
+  } catch {
+    // Fall through to AsyncStorage fallback.
+  }
+  await AsyncStorage.setItem(KEYS.CONNECTION_TOKENS, raw);
+}
+
+function stripConnectionToken(conn: GatewayConnection): GatewayConnection {
+  return {
+    id: conn.id,
+    name: conn.name,
+    url: conn.url,
+    isActive: conn.isActive,
+    status: conn.status,
+    ...(conn.lastConnected !== undefined ? { lastConnected: conn.lastConnected } : {}),
+  };
+}
+
 export const connectionStorage = {
   async getAll(): Promise<GatewayConnection[]> {
-    return getJSON(KEYS.CONNECTIONS, []);
+    const rawConnections = await getJSON<GatewayConnection[]>(KEYS.CONNECTIONS, []);
+    const tokenMap = await getStoredConnectionTokens();
+
+    let migrated = false;
+    for (const conn of rawConnections) {
+      if (conn.token) {
+        tokenMap[conn.id] = conn.token;
+        delete conn.token;
+        migrated = true;
+      }
+    }
+
+    if (migrated) {
+      await setJSON(KEYS.CONNECTIONS, rawConnections);
+      await setStoredConnectionTokens(tokenMap);
+    }
+
+    return rawConnections.map((conn) => ({
+      ...conn,
+      token: tokenMap[conn.id],
+    }));
   },
   async save(conn: GatewayConnection): Promise<void> {
     const all = await this.getAll();
     const idx = all.findIndex((c) => c.id === conn.id);
-    if (idx >= 0) all[idx] = conn;
-    else all.push(conn);
-    await setJSON(KEYS.CONNECTIONS, all);
+
+    const normalized: GatewayConnection = {
+      ...conn,
+      token: conn.token?.trim() ? conn.token.trim() : undefined,
+    };
+
+    if (idx >= 0) all[idx] = normalized;
+    else all.push(normalized);
+
+    const tokenMap = await getStoredConnectionTokens();
+    if (normalized.token) {
+      tokenMap[normalized.id] = normalized.token;
+    } else {
+      delete tokenMap[normalized.id];
+    }
+
+    const strippedConnections = all.map(stripConnectionToken);
+    await setJSON(KEYS.CONNECTIONS, strippedConnections);
+    await setStoredConnectionTokens(tokenMap);
   },
   async remove(id: string): Promise<void> {
     const all = await this.getAll();
-    await setJSON(
-      KEYS.CONNECTIONS,
-      all.filter((c) => c.id !== id),
-    );
+    const filtered = all.filter((c) => c.id !== id);
+
+    const tokenMap = await getStoredConnectionTokens();
+    delete tokenMap[id];
+
+    const strippedConnections = filtered.map(stripConnectionToken);
+    await setJSON(KEYS.CONNECTIONS, strippedConnections);
+    await setStoredConnectionTokens(tokenMap);
   },
   async getActive(): Promise<string | null> {
     return AsyncStorage.getItem(KEYS.ACTIVE_CONNECTION);
