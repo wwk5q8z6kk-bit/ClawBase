@@ -49,7 +49,22 @@ function PulsingDot({ color, size = 8 }: { color: string; size?: number }) {
   );
 }
 
-function ProactiveAlert({ type, message, icon, onPress }: { type: 'info' | 'warn' | 'success'; message: string; icon?: string; onPress: () => void }) {
+function ProactiveAlert({ type, message, icon, onPress, priority = 'P2' }: { type: 'info' | 'warn' | 'success'; message: string; icon?: string; onPress: () => void; priority?: 'P1' | 'P2' | 'P3' }) {
+  const glowAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (priority === 'P1') {
+      const glow = Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowAnim, { toValue: 1, duration: 1200, useNativeDriver: Platform.OS !== 'web' }),
+          Animated.timing(glowAnim, { toValue: 0, duration: 1200, useNativeDriver: Platform.OS !== 'web' }),
+        ]),
+      );
+      glow.start();
+      return () => glow.stop();
+    }
+  }, [priority, glowAnim]);
+
   const configs = {
     info: { icon: icon || 'information-circle', colors: C.gradient.alertInfo, iconColor: C.accent, borderColor: C.accent + '30' },
     warn: { icon: icon || 'warning', colors: C.gradient.alertWarn, iconColor: C.amber, borderColor: C.amber + '30' },
@@ -57,18 +72,29 @@ function ProactiveAlert({ type, message, icon, onPress }: { type: 'info' | 'warn
   };
   const config = configs[type];
 
+  const opacityStyle = priority === 'P3' ? { opacity: 0.7 } : {};
+  const glowOpacity = priority === 'P1' ? glowAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.75] }) : undefined;
+
+  const content = (
+    <LinearGradient
+      colors={config.colors}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.alertCard, { borderColor: config.borderColor }, priority === 'P1' && styles.alertP1]}
+    >
+      <Ionicons name={config.icon as any} size={20} color={config.iconColor} />
+      <Text style={styles.alertText} numberOfLines={2}>{message}</Text>
+      <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
+    </LinearGradient>
+  );
+
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.8 }]}>
-      <LinearGradient
-        colors={config.colors}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.alertCard, { borderColor: config.borderColor }]}
-      >
-        <Ionicons name={config.icon as any} size={20} color={config.iconColor} />
-        <Text style={styles.alertText} numberOfLines={2}>{message}</Text>
-        <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
-      </LinearGradient>
+    <Pressable onPress={onPress} style={({ pressed }) => [pressed && { opacity: 0.8 }, opacityStyle]}>
+      {priority === 'P1' ? (
+        <Animated.View style={{ opacity: glowOpacity }}>
+          {content}
+        </Animated.View>
+      ) : content}
     </Pressable>
   );
 }
@@ -486,6 +512,178 @@ function GatewayStatusWidget() {
   );
 }
 
+function CircularRing({ percent, size, color, trackColor }: { percent: number; size: number; color: string; trackColor: string }) {
+  const clampedPct = Math.min(100, Math.max(0, percent));
+  const rotation = `${(clampedPct / 100) * 360 - 90}deg`;
+  const halfSize = size / 2;
+  const strokeWidth = 4;
+
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: size, height: size, borderRadius: halfSize, borderWidth: strokeWidth, borderColor: trackColor, position: 'absolute' }} />
+      <View style={{ width: size, height: size, position: 'absolute', overflow: 'hidden' }}>
+        <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'flex-start' }}>
+          <View style={{
+            width: strokeWidth + 2,
+            height: halfSize,
+            backgroundColor: color,
+            borderRadius: (strokeWidth + 2) / 2,
+            position: 'absolute',
+            top: 0,
+            transform: [{ translateY: halfSize / 2 }, { rotate: rotation }, { translateY: -halfSize / 2 }],
+            transformOrigin: 'center',
+          }} />
+        </View>
+      </View>
+      {clampedPct > 0 && (
+        <View style={{
+          position: 'absolute',
+          width: strokeWidth + 2,
+          height: halfSize,
+          top: 0,
+          left: halfSize - (strokeWidth + 2) / 2,
+          overflow: 'hidden',
+        }}>
+          <View style={{
+            width: strokeWidth + 2,
+            height: strokeWidth + 2,
+            borderRadius: (strokeWidth + 2) / 2,
+            backgroundColor: color,
+          }} />
+        </View>
+      )}
+      <View style={{
+        position: 'absolute',
+        width: size - strokeWidth * 4,
+        height: size - strokeWidth * 4,
+        borderRadius: (size - strokeWidth * 4) / 2,
+        borderWidth: strokeWidth,
+        borderColor: 'transparent',
+        borderTopColor: color,
+        borderRightColor: clampedPct > 25 ? color : 'transparent',
+        borderBottomColor: clampedPct > 50 ? color : 'transparent',
+        borderLeftColor: clampedPct > 75 ? color : 'transparent',
+        transform: [{ rotate: '-45deg' }],
+      }} />
+    </View>
+  );
+}
+
+function SystemHealthWidget() {
+  const { gatewayStatus, activeConnection } = useApp();
+  const connected = gatewayStatus === 'connected';
+
+  const cpuPct = connected ? 34 : 0;
+  const memUsed = connected ? 6.2 : 0;
+  const memTotal = connected ? 16 : 1;
+  const memPct = connected ? Math.round((memUsed / memTotal) * 100) : 0;
+  const diskPct = connected ? 47 : 0;
+  const uptimeDays = connected ? 3 : 0;
+  const uptimeHours = connected ? 12 : 0;
+
+  const cpuColor = cpuPct < 50 ? C.success : cpuPct < 80 ? C.amber : C.error;
+  const memColor = memPct < 50 ? C.success : memPct < 80 ? C.amber : C.error;
+  const diskColor = diskPct < 50 ? C.success : diskPct < 80 ? C.amber : C.error;
+
+  return (
+    <View style={styles.systemHealthWidget}>
+      <View style={styles.systemHealthHeader}>
+        <View style={styles.systemHealthTitleRow}>
+          <Ionicons name="pulse" size={16} color={C.accent} />
+          <Text style={styles.widgetTitle}>System Health</Text>
+          {connected && <PulsingDot color={C.success} size={6} />}
+        </View>
+      </View>
+
+      {!connected ? (
+        <View style={styles.systemHealthPlaceholder}>
+          <Ionicons name="cloud-offline-outline" size={20} color={C.textTertiary} />
+          <Text style={styles.systemHealthPlaceholderText}>Connect to view system health</Text>
+        </View>
+      ) : (
+        <View style={styles.systemHealthMetrics}>
+          <View style={styles.systemHealthMetric}>
+            <CircularRing percent={cpuPct} size={44} color={cpuColor} trackColor={C.border} />
+            <Text style={[styles.systemHealthValue, { color: cpuColor }]}>{cpuPct}%</Text>
+            <Text style={styles.systemHealthLabel}>CPU</Text>
+          </View>
+          <View style={styles.systemHealthMetric}>
+            <CircularRing percent={memPct} size={44} color={memColor} trackColor={C.border} />
+            <Text style={[styles.systemHealthValue, { color: memColor }]}>{memUsed.toFixed(1)} GB</Text>
+            <Text style={styles.systemHealthLabel}>Memory</Text>
+          </View>
+          <View style={styles.systemHealthMetric}>
+            <CircularRing percent={diskPct} size={44} color={diskColor} trackColor={C.border} />
+            <Text style={[styles.systemHealthValue, { color: diskColor }]}>{diskPct}%</Text>
+            <Text style={styles.systemHealthLabel}>Disk</Text>
+          </View>
+          <View style={styles.systemHealthMetric}>
+            <View style={styles.systemHealthUptimeRing}>
+              <Ionicons name="time-outline" size={20} color={C.purple} />
+            </View>
+            <Text style={[styles.systemHealthValue, { color: C.purple }]}>{uptimeDays}d {uptimeHours}h</Text>
+            <Text style={styles.systemHealthLabel}>Uptime</Text>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const WORKSTREAMS = [
+  { id: 'email', icon: 'mail', label: 'Email', color: C.amber, status: '3 unread', activity: [3, 5, 2, 7, 4, 6, 3] },
+  { id: 'github', icon: 'logo-github', label: 'GitHub', color: '#fff', status: '2 PRs open', activity: [1, 3, 6, 2, 5, 1, 4] },
+  { id: 'research', icon: 'search', label: 'Research', color: C.accent, status: '5 papers', activity: [2, 4, 1, 3, 6, 2, 5] },
+  { id: 'social', icon: 'people', label: 'Social', color: C.secondary, status: '12 mentions', activity: [4, 2, 5, 3, 7, 4, 2] },
+] as const;
+
+function WorkstreamCards() {
+  return (
+    <View>
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionTitleRow}>
+          <Ionicons name="layers" size={16} color={C.purple} />
+          <Text style={styles.sectionTitle}>Workstreams</Text>
+        </View>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.workstreamScroll}>
+        {WORKSTREAMS.map((ws) => (
+          <Pressable
+            key={ws.id}
+            style={({ pressed }) => [styles.workstreamCard, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/(tabs)/chat');
+            }}
+          >
+            <View style={styles.workstreamCardTop}>
+              <View style={[styles.workstreamIcon, { backgroundColor: ws.color + '15' }]}>
+                <Ionicons name={ws.icon as any} size={16} color={ws.color} />
+              </View>
+              <Text style={styles.workstreamLabel}>{ws.label}</Text>
+            </View>
+            <Text style={styles.workstreamStatus}>{ws.status}</Text>
+            <View style={styles.workstreamSparkline}>
+              {ws.activity.map((val, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.workstreamDot,
+                    {
+                      height: 3 + (val / 7) * 10,
+                      backgroundColor: ws.color + (i === ws.activity.length - 1 ? 'FF' : '60'),
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
 function AgentSkillsBar() {
   const { activeConnection } = useApp();
   if (!activeConnection) return null;
@@ -845,6 +1043,7 @@ export default function DashboardScreen() {
             icon="link"
             message="Connect to your OpenClaw gateway to unlock all features"
             onPress={() => router.push('/(tabs)/settings')}
+            priority="P2"
           />
         )}
 
@@ -854,8 +1053,11 @@ export default function DashboardScreen() {
             icon="flame"
             message={`${dueToday.length} task${dueToday.length !== 1 ? 's' : ''} due today`}
             onPress={() => router.push('/(tabs)/tasks')}
+            priority={dueToday.length >= 3 ? 'P1' : 'P2'}
           />
         )}
+
+        <SystemHealthWidget />
 
         <AgentSkillsBar />
 
@@ -866,6 +1068,8 @@ export default function DashboardScreen() {
         <CalendarAgendaWidget />
 
         <QuickActionsRow />
+
+        <WorkstreamCards />
 
         <CRMHighlightsWidget />
 
@@ -998,4 +1202,26 @@ const styles = StyleSheet.create({
   gatewayModelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   gatewayModelText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.text },
   gatewayAgentName: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textSecondary },
+
+  alertP1: { ...C.shadow.glow },
+
+  systemHealthWidget: { backgroundColor: C.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.borderLight, gap: 12 },
+  systemHealthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  systemHealthTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  systemHealthPlaceholder: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16 },
+  systemHealthPlaceholderText: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary },
+  systemHealthMetrics: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
+  systemHealthMetric: { alignItems: 'center', gap: 4 },
+  systemHealthValue: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
+  systemHealthLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary },
+  systemHealthUptimeRing: { width: 44, height: 44, borderRadius: 22, borderWidth: 4, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
+
+  workstreamScroll: { gap: 10 },
+  workstreamCard: { width: 130, backgroundColor: C.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.borderLight, gap: 8 },
+  workstreamCardTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  workstreamIcon: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  workstreamLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.text },
+  workstreamStatus: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textSecondary },
+  workstreamSparkline: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 14 },
+  workstreamDot: { width: 4, borderRadius: 2 },
 });

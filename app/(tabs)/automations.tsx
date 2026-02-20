@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Animated,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,6 +49,18 @@ interface CronOutput {
   output: string;
   duration?: number;
 }
+
+interface ToastState {
+  visible: boolean;
+  message: string;
+  type: 'success' | 'error';
+}
+
+const RISK_TIER_CONFIG: Record<string, { color: string; label: string; glowColor: string }> = {
+  P1: { color: C.error, label: 'CRITICAL', glowColor: C.error + '40' },
+  P2: { color: C.amber, label: 'REVIEW', glowColor: C.amber + '30' },
+  P3: { color: C.textSecondary, label: 'LOW', glowColor: C.textSecondary + '15' },
+};
 
 function PulsingDot({ color, size = 8 }: { color: string; size?: number }) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -114,6 +127,168 @@ const RISK_COLORS: Record<string, string> = {
   P2: C.amber,
   P3: C.textSecondary,
 };
+
+function ToastNotification({ toast, onHide }: { toast: ToastState; onHide: () => void }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(-20)).current;
+
+  useEffect(() => {
+    if (toast.visible) {
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: 250, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(translateY, { toValue: 0, duration: 250, useNativeDriver: Platform.OS !== 'web' }),
+      ]).start();
+      const timer = setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: Platform.OS !== 'web' }),
+          Animated.timing(translateY, { toValue: -20, duration: 300, useNativeDriver: Platform.OS !== 'web' }),
+        ]).start(() => onHide());
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast.visible]);
+
+  if (!toast.visible) return null;
+
+  return (
+    <Animated.View style={[styles.toastContainer, { opacity, transform: [{ translateY }] }]}>
+      <LinearGradient
+        colors={toast.type === 'success' ? C.gradient.alertSuccess : [C.error + '25', C.error + '10']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.toastInner}
+      >
+        <Ionicons
+          name={toast.type === 'success' ? 'checkmark-circle' : 'alert-circle'}
+          size={18}
+          color={toast.type === 'success' ? C.success : C.error}
+        />
+        <Text style={[styles.toastText, { color: toast.type === 'success' ? C.success : C.error }]}>
+          {toast.message}
+        </Text>
+      </LinearGradient>
+    </Animated.View>
+  );
+}
+
+function QuickActionButton({
+  icon,
+  label,
+  onPress,
+  loading,
+}: {
+  icon: string;
+  label: string;
+  onPress: () => void;
+  loading: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={() => {
+        if (!loading) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          onPress();
+        }
+      }}
+      style={({ pressed }) => [pressed && !loading && { opacity: 0.7 }]}
+    >
+      <LinearGradient
+        colors={C.gradient.cardElevated}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.quickActionPill}
+      >
+        {loading ? (
+          <ActivityIndicator size={16} color={C.accent} />
+        ) : (
+          <Ionicons name={icon as any} size={16} color={C.accent} />
+        )}
+        <Text style={styles.quickActionText}>{label}</Text>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
+function QuickActionsBar({
+  connected,
+  automations,
+  onToast,
+}: {
+  connected: boolean;
+  automations: Automation[];
+  onToast: (msg: string, type: 'success' | 'error') => void;
+}) {
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
+
+  const executeAction = useCallback(async (actionKey: string, command: string) => {
+    if (!connected) {
+      onToast('Not connected to gateway', 'error');
+      return;
+    }
+    setLoadingAction(actionKey);
+    try {
+      await getGateway().invokeCommand(command);
+      onToast(`${actionKey} completed`, 'success');
+    } catch {
+      onToast(`${actionKey} failed`, 'error');
+    } finally {
+      setLoadingAction(null);
+    }
+  }, [connected, onToast]);
+
+  const runAll = useCallback(async () => {
+    if (!connected) {
+      onToast('Not connected to gateway', 'error');
+      return;
+    }
+    setLoadingAction('Run All');
+    try {
+      const enabled = automations.filter(a => a.enabled);
+      const gw = getGateway() as any;
+      for (const a of enabled) {
+        await gw.rpc('automations.trigger', { id: a.id }).catch(() => {});
+      }
+      onToast(`Triggered ${enabled.length} automations`, 'success');
+    } catch {
+      onToast('Run All failed', 'error');
+    } finally {
+      setLoadingAction(null);
+    }
+  }, [connected, automations, onToast]);
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.quickActionsContainer}
+    >
+      <QuickActionButton
+        icon="newspaper"
+        label="Daily Brief"
+        loading={loadingAction === 'Daily Brief'}
+        onPress={() => executeAction('Daily Brief', 'daily-brief')}
+      />
+      <QuickActionButton
+        icon="pulse"
+        label="Health Check"
+        loading={loadingAction === 'Health Check'}
+        onPress={() => executeAction('Health Check', 'health-check')}
+      />
+      <QuickActionButton
+        icon="sync-circle"
+        label="Sync Memory"
+        loading={loadingAction === 'Sync Memory'}
+        onPress={() => executeAction('Sync Memory', 'sync-memory')}
+      />
+      <QuickActionButton
+        icon="play-circle"
+        label="Run All"
+        loading={loadingAction === 'Run All'}
+        onPress={runAll}
+      />
+    </ScrollView>
+  );
+}
 
 function SystemHealthBanner() {
   const { gatewayStatus, gatewayInfo } = useApp();
@@ -186,6 +361,7 @@ function ApprovalCard({
 }) {
   const [countdown, setCountdown] = useState(formatCountdown(approval.expiresAt));
   const riskColor = RISK_COLORS[approval.riskTier] || C.textSecondary;
+  const tierConfig = RISK_TIER_CONFIG[approval.riskTier] || RISK_TIER_CONFIG.P3;
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -194,53 +370,80 @@ function ApprovalCard({
     return () => clearInterval(interval);
   }, [approval.expiresAt]);
 
+  const isExpired = approval.expiresAt - Date.now() <= 0;
+  const isUrgent = approval.expiresAt - Date.now() < 60000 && !isExpired;
+
   return (
-    <LinearGradient
-      colors={C.gradient.cardElevated}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.approvalCard}
+    <Pressable
+      onLongPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        onApprove(approval.id);
+      }}
+      delayLongPress={800}
+      style={({ pressed }) => [pressed && { opacity: 0.95 }]}
     >
-      <View style={styles.approvalTop}>
-        <View style={[styles.riskBadge, { backgroundColor: riskColor + '20' }]}>
-          <Text style={[styles.riskText, { color: riskColor }]}>{approval.riskTier}</Text>
+      <LinearGradient
+        colors={C.gradient.cardElevated}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[
+          styles.approvalCard,
+          approval.riskTier === 'P1' && { borderColor: C.error + '40', ...C.shadow.glow },
+        ]}
+      >
+        <View style={styles.approvalTop}>
+          <View style={[styles.riskBadge, { backgroundColor: tierConfig.glowColor }]}>
+            <Text style={[styles.riskText, { color: tierConfig.color }]}>
+              {approval.riskTier} · {tierConfig.label}
+            </Text>
+          </View>
+          <View style={styles.approvalExpiry}>
+            <Ionicons
+              name="timer-outline"
+              size={12}
+              color={isUrgent ? C.error : C.textTertiary}
+            />
+            <Text style={[
+              styles.expiryText,
+              isUrgent && { color: C.error },
+              isExpired && { color: C.error },
+            ]}>
+              {countdown}
+            </Text>
+          </View>
         </View>
-        <View style={styles.approvalExpiry}>
-          <Ionicons name="timer-outline" size={12} color={C.textTertiary} />
-          <Text style={styles.expiryText}>{countdown}</Text>
+        <Text style={styles.approvalAction}>{approval.action}</Text>
+        {approval.description ? (
+          <Text style={styles.approvalDesc} numberOfLines={2}>{approval.description}</Text>
+        ) : null}
+        {approval.source ? (
+          <View style={styles.approvalSource}>
+            <Ionicons name="link-outline" size={11} color={C.textTertiary} />
+            <Text style={styles.approvalSourceText}>{approval.source}</Text>
+          </View>
+        ) : null}
+        <View style={styles.approvalActions}>
+          <Pressable
+            style={({ pressed }) => [styles.approvalBtn, styles.denyBtn, pressed && { opacity: 0.7 }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              onDeny(approval.id);
+            }}
+          >
+            <Ionicons name="close" size={20} color={C.error} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.approvalBtn, styles.approveBtn, pressed && { opacity: 0.7 }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              onApprove(approval.id);
+            }}
+          >
+            <Ionicons name="checkmark" size={20} color={C.success} />
+          </Pressable>
         </View>
-      </View>
-      <Text style={styles.approvalAction}>{approval.action}</Text>
-      {approval.description ? (
-        <Text style={styles.approvalDesc} numberOfLines={2}>{approval.description}</Text>
-      ) : null}
-      {approval.source ? (
-        <View style={styles.approvalSource}>
-          <Ionicons name="link-outline" size={11} color={C.textTertiary} />
-          <Text style={styles.approvalSourceText}>{approval.source}</Text>
-        </View>
-      ) : null}
-      <View style={styles.approvalActions}>
-        <Pressable
-          style={({ pressed }) => [styles.approvalBtn, styles.denyBtn, pressed && { opacity: 0.7 }]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            onDeny(approval.id);
-          }}
-        >
-          <Ionicons name="close" size={20} color={C.error} />
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.approvalBtn, styles.approveBtn, pressed && { opacity: 0.7 }]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            onApprove(approval.id);
-          }}
-        >
-          <Ionicons name="checkmark" size={20} color={C.success} />
-        </Pressable>
-      </View>
-    </LinearGradient>
+      </LinearGradient>
+    </Pressable>
   );
 }
 
@@ -330,6 +533,82 @@ function CronOutputItem({ output }: { output: CronOutput }) {
   );
 }
 
+function AnalyticsCard({ cronOutputs }: { cronOutputs: CronOutput[] }) {
+  const analytics = useMemo(() => {
+    const now = Date.now();
+    const dayMs = 86400000;
+    const todayStart = now - (now % dayMs);
+    const todayOutputs = cronOutputs.filter(o => o.timestamp >= todayStart);
+    const totalToday = todayOutputs.length;
+    const successCount = todayOutputs.filter(o => o.success).length;
+    const successRate = totalToday > 0 ? Math.round((successCount / totalToday) * 100) : 0;
+    const durations = todayOutputs.filter(o => o.duration !== undefined).map(o => o.duration!);
+    const avgDuration = durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
+
+    const weekBars: number[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const dayStart = todayStart - (i * dayMs);
+      const dayEnd = dayStart + dayMs;
+      weekBars.push(cronOutputs.filter(o => o.timestamp >= dayStart && o.timestamp < dayEnd).length);
+    }
+    const maxBar = Math.max(...weekBars, 1);
+
+    return { totalToday, successRate, avgDuration, weekBars, maxBar };
+  }, [cronOutputs]);
+
+  return (
+    <LinearGradient
+      colors={C.gradient.card}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.analyticsCard}
+    >
+      <View style={styles.analyticsHeader}>
+        <View style={styles.sectionTitleRow}>
+          <Ionicons name="analytics" size={16} color={C.accent} />
+          <Text style={styles.sectionTitle}>Analytics</Text>
+        </View>
+      </View>
+      <View style={styles.analyticsGrid}>
+        <View style={styles.analyticsStat}>
+          <Text style={styles.analyticsValue}>{analytics.totalToday}</Text>
+          <Text style={styles.analyticsLabel}>Runs Today</Text>
+        </View>
+        <View style={styles.analyticsStat}>
+          <Text style={[styles.analyticsValue, { color: C.success }]}>{analytics.successRate}%</Text>
+          <Text style={styles.analyticsLabel}>Success Rate</Text>
+        </View>
+        <View style={styles.analyticsStat}>
+          <Text style={styles.analyticsValue}>{analytics.avgDuration}ms</Text>
+          <Text style={styles.analyticsLabel}>Avg Time</Text>
+        </View>
+      </View>
+      <View style={styles.weekBarContainer}>
+        {analytics.weekBars.map((val, idx) => (
+          <View key={idx} style={styles.weekBarCol}>
+            <View style={styles.weekBarTrack}>
+              <LinearGradient
+                colors={C.gradient.lobster}
+                start={{ x: 0, y: 1 }}
+                end={{ x: 0, y: 0 }}
+                style={[
+                  styles.weekBarFill,
+                  { height: `${Math.max((val / analytics.maxBar) * 100, 4)}%` as any },
+                ]}
+              />
+            </View>
+          </View>
+        ))}
+      </View>
+      <View style={styles.weekLabels}>
+        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+          <Text key={i} style={styles.weekLabel}>{d}</Text>
+        ))}
+      </View>
+    </LinearGradient>
+  );
+}
+
 export default function AutomationsScreen() {
   const insets = useSafeAreaInsets();
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
@@ -340,6 +619,16 @@ export default function AutomationsScreen() {
   const [approvals, setApprovals] = useState<PendingApproval[]>([]);
   const [cronOutputs, setCronOutputs] = useState<CronOutput[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [allPaused, setAllPaused] = useState(false);
+  const [toast, setToast] = useState<ToastState>({ visible: false, message: '', type: 'success' });
+
+  const showToast = useCallback((message: string, type: 'success' | 'error') => {
+    setToast({ visible: true, message, type });
+  }, []);
+
+  const hideToast = useCallback(() => {
+    setToast(prev => ({ ...prev, visible: false }));
+  }, []);
 
   const fetchData = useCallback(async () => {
     if (gatewayStatus !== 'connected') return;
@@ -433,10 +722,44 @@ export default function AutomationsScreen() {
     }
   }, [gatewayStatus]);
 
+  const handleApproveAllP3 = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const p3Approvals = approvals.filter(a => a.riskTier === 'P3');
+    setApprovals(prev => prev.filter(a => a.riskTier !== 'P3'));
+    if (gatewayStatus === 'connected') {
+      const gw = getGateway() as any;
+      for (const a of p3Approvals) {
+        try {
+          await gw.rpc('automations.approve', { id: a.id });
+        } catch {}
+      }
+    }
+    showToast(`Approved ${p3Approvals.length} low-risk items`, 'success');
+  }, [approvals, gatewayStatus, showToast]);
+
+  const handleTogglePauseAll = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    const newPaused = !allPaused;
+    setAllPaused(newPaused);
+    setAutomations(prev =>
+      prev.map(a => ({ ...a, enabled: !newPaused, status: newPaused ? 'paused' as const : 'idle' as const })),
+    );
+    if (gatewayStatus === 'connected') {
+      try {
+        const gw = getGateway() as any;
+        await gw.rpc('automations.pauseAll', { paused: newPaused });
+      } catch {}
+    }
+    showToast(newPaused ? 'All automations paused' : 'All automations resumed', newPaused ? 'error' : 'success');
+  }, [allPaused, gatewayStatus, showToast]);
+
   const connected = gatewayStatus === 'connected';
+  const hasP3 = approvals.some(a => a.riskTier === 'P3');
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
+      <ToastNotification toast={toast} onHide={hideToast} />
+
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Automations</Text>
         <View style={styles.headerRight}>
@@ -469,6 +792,24 @@ export default function AutomationsScreen() {
       >
         <SystemHealthBanner />
 
+        <QuickActionsBar
+          connected={connected}
+          automations={automations}
+          onToast={showToast}
+        />
+
+        {allPaused && (
+          <LinearGradient
+            colors={C.gradient.alertWarn}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.pausedBanner}
+          >
+            <Ionicons name="pause-circle" size={18} color={C.amber} />
+            <Text style={styles.pausedBannerText}>All automations paused</Text>
+          </LinearGradient>
+        )}
+
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
@@ -491,6 +832,22 @@ export default function AutomationsScreen() {
                   onDeny={handleDeny}
                 />
               ))}
+              {hasP3 && (
+                <Pressable
+                  onPress={handleApproveAllP3}
+                  style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+                >
+                  <LinearGradient
+                    colors={C.gradient.cardElevated}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.approveAllP3Btn}
+                  >
+                    <Ionicons name="checkmark-done" size={16} color={C.success} />
+                    <Text style={styles.approveAllP3Text}>Approve All P3</Text>
+                  </LinearGradient>
+                </Pressable>
+              )}
             </View>
           ) : (
             <View style={styles.emptyState}>
@@ -511,11 +868,28 @@ export default function AutomationsScreen() {
               <Ionicons name="flash" size={16} color={C.coral} />
               <Text style={styles.sectionTitle}>Active Automations</Text>
             </View>
-            {automations.length > 0 && (
-              <Text style={styles.automationCount}>
-                {automations.filter((a) => a.enabled).length}/{automations.length} active
-              </Text>
-            )}
+            <View style={styles.automationHeaderRight}>
+              {automations.length > 0 && (
+                <Text style={styles.automationCount}>
+                  {automations.filter((a) => a.enabled).length}/{automations.length} active
+                </Text>
+              )}
+              {automations.length > 0 && (
+                <Pressable
+                  onPress={handleTogglePauseAll}
+                  style={({ pressed }) => [styles.pauseAllBtn, pressed && { opacity: 0.7 }]}
+                >
+                  <Ionicons
+                    name={allPaused ? 'play' : 'pause'}
+                    size={14}
+                    color={allPaused ? C.success : C.amber}
+                  />
+                  <Text style={[styles.pauseAllText, { color: allPaused ? C.success : C.amber }]}>
+                    {allPaused ? 'Resume' : 'Pause'} All
+                  </Text>
+                </Pressable>
+              )}
+            </View>
           </View>
           {automations.length > 0 ? (
             <View style={styles.automationsList}>
@@ -541,6 +915,8 @@ export default function AutomationsScreen() {
             </View>
           )}
         </View>
+
+        <AnalyticsCard cronOutputs={cronOutputs} />
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -674,6 +1050,63 @@ const styles = StyleSheet.create({
     color: C.textTertiary,
     marginTop: 10,
   },
+  toastContainer: {
+    position: 'absolute',
+    top: 100,
+    left: 20,
+    right: 20,
+    zIndex: 100,
+    alignItems: 'center',
+  },
+  toastInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+  },
+  toastText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+  },
+  quickActionsContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 2,
+  },
+  quickActionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+  },
+  quickActionText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: C.text,
+  },
+  pausedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.amber + '30',
+  },
+  pausedBannerText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: C.amber,
+  },
   section: {
     gap: 12,
   },
@@ -706,6 +1139,26 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
     color: C.textSecondary,
+  },
+  automationHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pauseAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+  },
+  pauseAllText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
   },
   approvalsList: {
     gap: 10,
@@ -784,6 +1237,21 @@ const styles = StyleSheet.create({
   approveBtn: {
     backgroundColor: C.success + '12',
     borderColor: C.success + '30',
+  },
+  approveAllP3Btn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.success + '25',
+  },
+  approveAllP3Text: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: C.success,
   },
   automationsList: {
     borderRadius: 14,
@@ -876,6 +1344,72 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: C.textTertiary,
     lineHeight: 16,
+  },
+  analyticsCard: {
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    gap: 14,
+  },
+  analyticsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  analyticsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  analyticsStat: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  analyticsValue: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    color: C.text,
+  },
+  analyticsLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: C.textSecondary,
+  },
+  weekBarContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-end',
+    height: 32,
+    paddingHorizontal: 8,
+  },
+  weekBarCol: {
+    flex: 1,
+    alignItems: 'center',
+    height: '100%' as any,
+  },
+  weekBarTrack: {
+    width: 10,
+    height: '100%' as any,
+    borderRadius: 5,
+    backgroundColor: C.surface,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+  },
+  weekBarFill: {
+    width: '100%' as any,
+    borderRadius: 5,
+  },
+  weekLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 8,
+  },
+  weekLabel: {
+    flex: 1,
+    textAlign: 'center' as const,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 9,
+    color: C.textTertiary,
   },
   outputsList: {
     borderRadius: 14,

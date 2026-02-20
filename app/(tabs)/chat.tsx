@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,6 +9,8 @@ import {
   Alert,
   Modal,
   TextInput,
+  ScrollView,
+  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +23,8 @@ import type { Conversation } from '@/lib/types';
 
 const C = Colors.dark;
 
+const CODE_PATTERNS = /(\bcode\b|```|function\s|const\s|import\s|class\s|def\s|var\s|let\s|<\w+>|{|}|\[\]|=>|console\.|return\s)/i;
+
 function getSessionIcon(title: string): { name: keyof typeof Ionicons.glyphMap; color: string } {
   const t = title.toLowerCase();
   if (t.includes('email') || t.includes('mail')) return { name: 'mail', color: C.coral };
@@ -30,7 +34,47 @@ function getSessionIcon(title: string): { name: keyof typeof Ionicons.glyphMap; 
   return { name: 'chatbubble', color: C.secondary };
 }
 
+function getChannelIcon(channelType: string): keyof typeof Ionicons.glyphMap {
+  const t = channelType.toLowerCase();
+  if (t.includes('whatsapp')) return 'logo-whatsapp';
+  if (t.includes('discord')) return 'logo-discord';
+  if (t.includes('slack')) return 'logo-slack';
+  if (t.includes('telegram')) return 'paper-plane';
+  if (t.includes('imessage') || t.includes('sms')) return 'chatbubble-ellipses';
+  if (t.includes('signal')) return 'shield-checkmark';
+  if (t.includes('webchat') || t.includes('web')) return 'globe';
+  return 'radio';
+}
+
 const AGENT_PATTERNS = /^(I found|Here's|Update:|I've |Let me|Based on|According to)/i;
+
+function ActionChip({ icon, label, color }: { icon: keyof typeof Ionicons.glyphMap; label: string; color: string }) {
+  return (
+    <View style={[styles.actionChip, { backgroundColor: color + '18' }]}>
+      <Ionicons name={icon} size={10} color={color} />
+      <Text style={[styles.actionChipText, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
+function PulsingDot({ color }: { color: string }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 0.4, duration: 800, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: Platform.OS !== 'web' }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pulseAnim]);
+
+  return (
+    <Animated.View style={[styles.pulsingDot, { backgroundColor: color, opacity: pulseAnim }]} />
+  );
+}
 
 function ConversationItem({
   item,
@@ -56,6 +100,15 @@ function ConversationItem({
   const sessionIcon = getSessionIcon(item.title);
   const isRecent = Date.now() - item.lastMessageTime < 3600000;
   const isAgentMsg = item.lastMessage ? AGENT_PATTERNS.test(item.lastMessage) : false;
+  const hasCode = item.lastMessage ? CODE_PATTERNS.test(item.lastMessage) : false;
+
+  const chips = useMemo(() => {
+    const result: { icon: keyof typeof Ionicons.glyphMap; label: string; color: string }[] = [];
+    if (hasCode) result.push({ icon: 'code-slash', label: 'Code', color: C.accent });
+    if (isAgentMsg) result.push({ icon: 'flash', label: 'Agent', color: C.amber });
+    if (isRecent) result.push({ icon: 'radio', label: 'Active', color: C.secondary });
+    return result;
+  }, [hasCode, isAgentMsg, isRecent]);
 
   const cardInner = (
     <Pressable
@@ -97,6 +150,16 @@ function ConversationItem({
         ) : (
           <Text style={[styles.convoPreview, { fontStyle: 'italic' }]}>No messages yet</Text>
         )}
+        {chips.length > 0 && (
+          <View style={styles.chipRow}>
+            {chips.map((chip) => (
+              <View key={chip.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                {chip.label === 'Active' && <PulsingDot color={chip.color} />}
+                <ActionChip icon={chip.icon} label={chip.label} color={chip.color} />
+              </View>
+            ))}
+          </View>
+        )}
         <View style={styles.convoMeta}>
           <View style={styles.msgCountBadge}>
             <Ionicons name="chatbubble-outline" size={10} color={C.textTertiary} />
@@ -130,6 +193,31 @@ export default function ChatListScreen() {
   const [selectedConvo, setSelectedConvo] = useState<Conversation | null>(null);
   const [renameMode, setRenameMode] = useState(false);
   const [renameText, setRenameText] = useState('');
+  const [fabExpanded, setFabExpanded] = useState(false);
+  const [commandModalVisible, setCommandModalVisible] = useState(false);
+  const [commandText, setCommandText] = useState('');
+
+  const fabAnim = useRef(new Animated.Value(0)).current;
+  const fabRotateAnim = useRef(new Animated.Value(0)).current;
+
+  const toggleFab = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const toValue = fabExpanded ? 0 : 1;
+    setFabExpanded(!fabExpanded);
+    Animated.parallel([
+      Animated.spring(fabAnim, { toValue, useNativeDriver: Platform.OS !== 'web', friction: 6, tension: 60 }),
+      Animated.spring(fabRotateAnim, { toValue, useNativeDriver: Platform.OS !== 'web', friction: 6, tension: 60 }),
+    ]).start();
+  }, [fabExpanded, fabAnim, fabRotateAnim]);
+
+  const closeFab = useCallback(() => {
+    if (!fabExpanded) return;
+    setFabExpanded(false);
+    Animated.parallel([
+      Animated.spring(fabAnim, { toValue: 0, useNativeDriver: Platform.OS !== 'web', friction: 6, tension: 60 }),
+      Animated.spring(fabRotateAnim, { toValue: 0, useNativeDriver: Platform.OS !== 'web', friction: 6, tension: 60 }),
+    ]).start();
+  }, [fabExpanded, fabAnim, fabRotateAnim]);
 
   const filteredAndSorted = useMemo(() => {
     let filtered = conversations;
@@ -162,11 +250,29 @@ export default function ChatListScreen() {
 
   const handleNewChat = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    closeFab();
     const convo = await createConversation(
       `Session ${new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
     );
     router.push({ pathname: '/chat/[id]', params: { id: convo.id } });
-  }, [createConversation]);
+  }, [createConversation, closeFab]);
+
+  const handleQuickCommand = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    closeFab();
+    setCommandText('');
+    setCommandModalVisible(true);
+  }, [closeFab]);
+
+  const handleVoiceInput = useCallback(() => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    closeFab();
+    if (Platform.OS === 'web') {
+      alert('Voice input coming soon!');
+    } else {
+      Alert.alert('Coming Soon', 'Voice input will be available in a future update.');
+    }
+  }, [closeFab]);
 
   const openActionSheet = useCallback((item: Conversation) => {
     setSelectedConvo(item);
@@ -215,6 +321,19 @@ export default function ChatListScreen() {
 
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
+  const fabRotation = fabRotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '45deg'],
+  });
+
+  const fabMenuItem1Y = fabAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -70] });
+  const fabMenuItem2Y = fabAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -130] });
+  const fabMenuItem3Y = fabAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -190] });
+  const fabMenuOpacity = fabAnim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 0, 1] });
+  const fabMenuScale = fabAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
+
+  const isGatewayConnected = gatewayStatus === 'connected';
+
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
       <LinearGradient colors={C.gradient.ocean} style={styles.headerGradient}>
@@ -222,6 +341,37 @@ export default function ChatListScreen() {
           <Text style={styles.headerTitle}>Chat</Text>
         </View>
       </LinearGradient>
+
+      {isGatewayConnected && gatewaySessions.length > 0 && (
+        <View style={styles.sessionSwitcherContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sessionScrollContent}>
+            <Pressable
+              style={[styles.sessionPill, styles.sessionPillActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+            >
+              <Ionicons name="phone-portrait-outline" size={14} color="#fff" />
+              <Text style={[styles.sessionPillText, styles.sessionPillTextActive]}>App Chat</Text>
+            </Pressable>
+            <View style={styles.sessionDivider} />
+            {gatewaySessions.map((session) => (
+              <Pressable
+                key={session.sessionKey}
+                style={[styles.sessionPill]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push('/sessions' as any);
+                }}
+              >
+                <Ionicons name={getChannelIcon(session.channelType || session.label)} size={14} color={C.textSecondary} />
+                <Text style={styles.sessionPillText} numberOfLines={1}>{session.label}</Text>
+                {session.isActive && <View style={styles.sessionActiveDot} />}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
@@ -256,24 +406,6 @@ export default function ChatListScreen() {
             <Text style={styles.statText}>{stats.pinned}</Text>
           </View>
         </View>
-      )}
-
-      {gatewayStatus === 'connected' && gatewaySessions.length > 0 && (
-        <Pressable
-          style={styles.gatewaySessionsBanner}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push('/sessions' as any);
-          }}
-        >
-          <View style={styles.gatewaySessionsLeft}>
-            <Ionicons name="radio" size={16} color={C.secondary} />
-            <Text style={styles.gatewaySessionsText}>
-              {gatewaySessions.length} gateway session{gatewaySessions.length !== 1 ? 's' : ''}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
-        </Pressable>
       )}
 
       <FlatList
@@ -336,18 +468,101 @@ export default function ChatListScreen() {
         }
       />
 
-      <Pressable
-        onPress={handleNewChat}
-        style={({ pressed }) => [
-          styles.fab,
-          { bottom: insets.bottom + (Platform.OS === 'web' ? 34 : 0) + 80 },
-          pressed && { opacity: 0.85, transform: [{ scale: 0.95 }] },
-        ]}
+      {fabExpanded && (
+        <Pressable style={styles.fabOverlay} onPress={closeFab} />
+      )}
+
+      <View style={[styles.fabContainer, { bottom: insets.bottom + (Platform.OS === 'web' ? 34 : 0) + 80 }]} pointerEvents="box-none">
+        <Animated.View style={[styles.fabMenuItem, { transform: [{ translateY: fabMenuItem3Y }, { scale: fabMenuScale }], opacity: fabMenuOpacity }]}>
+          <Pressable
+            style={styles.fabMenuItemInner}
+            onPress={handleVoiceInput}
+          >
+            <View style={[styles.fabMenuIcon, { backgroundColor: C.purpleMuted }]}>
+              <Ionicons name="mic" size={18} color={C.purple} />
+            </View>
+            <View style={styles.fabMenuLabel}>
+              <Text style={styles.fabMenuLabelText}>Voice Input</Text>
+            </View>
+          </Pressable>
+        </Animated.View>
+
+        <Animated.View style={[styles.fabMenuItem, { transform: [{ translateY: fabMenuItem2Y }, { scale: fabMenuScale }], opacity: fabMenuOpacity }]}>
+          <Pressable
+            style={styles.fabMenuItemInner}
+            onPress={handleQuickCommand}
+          >
+            <View style={[styles.fabMenuIcon, { backgroundColor: C.amberMuted }]}>
+              <Ionicons name="terminal" size={18} color={C.amber} />
+            </View>
+            <View style={styles.fabMenuLabel}>
+              <Text style={styles.fabMenuLabelText}>Quick Command</Text>
+            </View>
+          </Pressable>
+        </Animated.View>
+
+        <Animated.View style={[styles.fabMenuItem, { transform: [{ translateY: fabMenuItem1Y }, { scale: fabMenuScale }], opacity: fabMenuOpacity }]}>
+          <Pressable
+            style={styles.fabMenuItemInner}
+            onPress={handleNewChat}
+          >
+            <View style={[styles.fabMenuIcon, { backgroundColor: C.secondaryMuted }]}>
+              <Ionicons name="chatbubble" size={18} color={C.secondary} />
+            </View>
+            <View style={styles.fabMenuLabel}>
+              <Text style={styles.fabMenuLabelText}>New Chat</Text>
+            </View>
+          </Pressable>
+        </Animated.View>
+
+        <Pressable onPress={toggleFab} style={styles.fabButton}>
+          <LinearGradient colors={C.gradient.lobster} style={styles.fabGrad}>
+            <Animated.View style={{ transform: [{ rotate: fabRotation }] }}>
+              <Ionicons name="add" size={28} color="#fff" />
+            </Animated.View>
+          </LinearGradient>
+        </Pressable>
+      </View>
+
+      <Modal
+        visible={commandModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCommandModalVisible(false)}
       >
-        <LinearGradient colors={C.gradient.lobster} style={styles.fabGrad}>
-          <Ionicons name="add" size={28} color="#fff" />
-        </LinearGradient>
-      </Pressable>
+        <Pressable style={styles.modalOverlay} onPress={() => setCommandModalVisible(false)}>
+          <View style={styles.commandSheet}>
+            <Text style={styles.actionSheetTitle}>Quick Command</Text>
+            <TextInput
+              style={styles.renameInput}
+              value={commandText}
+              onChangeText={setCommandText}
+              placeholder="Type a command..."
+              placeholderTextColor={C.textTertiary}
+              autoFocus
+            />
+            <View style={styles.renameButtons}>
+              <Pressable
+                style={({ pressed }) => [styles.renameBtnCancel, pressed && { opacity: 0.7 }]}
+                onPress={() => setCommandModalVisible(false)}
+              >
+                <Text style={styles.renameBtnCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.renameBtnSave, pressed && { opacity: 0.7 }]}
+                onPress={async () => {
+                  if (!commandText.trim()) return;
+                  setCommandModalVisible(false);
+                  const convo = await createConversation(commandText.trim().slice(0, 40));
+                  router.push({ pathname: '/chat/[id]', params: { id: convo.id } });
+                }}
+              >
+                <Text style={styles.renameBtnSaveText}>Run</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
 
       <Modal
         visible={actionSheetVisible}
@@ -456,6 +671,52 @@ const styles = StyleSheet.create({
     fontSize: 26,
     color: C.text,
   },
+  sessionSwitcherContainer: {
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.borderLight,
+  },
+  sessionScrollContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+    alignItems: 'center',
+  },
+  sessionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: C.card,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+  },
+  sessionPillActive: {
+    backgroundColor: C.coral,
+    borderColor: C.coral,
+  },
+  sessionPillText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: C.textSecondary,
+    maxWidth: 100,
+  },
+  sessionPillTextActive: {
+    color: '#fff',
+  },
+  sessionDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: C.borderLight,
+    marginHorizontal: 4,
+  },
+  sessionActiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: C.secondary,
+  },
   searchContainer: {
     paddingHorizontal: 20,
     paddingTop: 12,
@@ -515,10 +776,18 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  fab: {
+  fabOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    zIndex: 9,
+  },
+  fabContainer: {
     position: 'absolute',
     right: 20,
     zIndex: 10,
+    alignItems: 'flex-end',
+  },
+  fabButton: {
     borderRadius: 30,
     overflow: 'hidden',
     ...C.shadow.glow,
@@ -529,6 +798,40 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  fabMenuItem: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  fabMenuItemInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  fabMenuLabel: {
+    backgroundColor: C.surface,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    ...C.shadow.card,
+  },
+  fabMenuLabelText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: C.text,
+  },
+  fabMenuIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...C.shadow.card,
   },
   listContent: {
     paddingHorizontal: 20,
@@ -627,6 +930,30 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: C.amber,
   },
+  chipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+  },
+  actionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  actionChipText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+  },
+  pulsingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 2,
+  },
   pinnedBg: {
     borderRadius: 8,
   },
@@ -684,6 +1011,14 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   actionSheet: {
+    backgroundColor: C.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
+    paddingHorizontal: 20,
+  },
+  commandSheet: {
     backgroundColor: C.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -756,7 +1091,4 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#fff',
   },
-  gatewaySessionsBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 20, marginTop: 8, marginBottom: 4, backgroundColor: C.secondaryMuted, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: C.secondary + '20' },
-  gatewaySessionsLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  gatewaySessionsText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.secondary },
 });
