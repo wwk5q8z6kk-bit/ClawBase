@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 
@@ -460,6 +461,16 @@ export default function SettingsScreen() {
               </View>
             </View>
           )}
+          <Pressable
+            style={({ pressed }) => [
+              styles.addConnBtn,
+              pressed && { opacity: 0.7 },
+            ]}
+            onPress={() => router.push({ pathname: '/pair', params: { from: 'settings' } })}
+          >
+            <Ionicons name="qr-code-outline" size={20} color={C.accent} />
+            <Text style={[styles.addConnText, { color: C.accent }]}>Scan / Pair</Text>
+          </Pressable>
           <Pressable
             style={({ pressed }) => [
               styles.addConnBtn,

@@ -155,8 +155,35 @@ export default function OnboardingScreen() {
           <Ionicons name="server-outline" size={32} color={C.accent} />
         </View>
         <Text style={styles.stepDesc}>
-          Choose your connection method, then enter your gateway address.
+          Connect to your OpenClaw gateway instantly, or set up manually.
         </Text>
+
+        <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
+          <Pressable
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/pair'); }}
+            style={({ pressed }) => [{ flex: 1, borderRadius: 14, overflow: 'hidden' }, pressed && { opacity: 0.85 }]}
+          >
+            <LinearGradient colors={[C.accent + '20', C.accent + '08']} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: C.accent + '30' }}>
+              <Ionicons name="qr-code" size={18} color={C.accent} />
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.accent }}>Scan QR</Text>
+            </LinearGradient>
+          </Pressable>
+          <Pressable
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/pair'); }}
+            style={({ pressed }) => [{ flex: 1, borderRadius: 14, overflow: 'hidden' }, pressed && { opacity: 0.85 }]}
+          >
+            <LinearGradient colors={[C.coral + '20', C.coral + '08']} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: C.coral + '30' }}>
+              <Ionicons name="keypad" size={18} color={C.coral} />
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.coral }}>Pair Code</Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%', paddingHorizontal: 8 }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
+          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textTertiary }}>or connect manually</Text>
+          <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
+        </View>
 
         <View style={styles.methodCardsRow}>
           {connectionMethods.map((method) => {

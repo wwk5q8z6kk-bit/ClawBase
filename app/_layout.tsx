@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
+import * as Linking from 'expo-linking';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -25,6 +26,7 @@ function RootLayoutNav() {
       <Stack.Screen name="calendar" options={{ headerShown: false }} />
       <Stack.Screen name="crm" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
+      <Stack.Screen name="pair" options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -42,6 +44,28 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
+
+  useEffect(() => {
+    const handleDeepLink = (event: { url: string }) => {
+      const { url } = event;
+      if (url && (url.startsWith('clawcockpit://connect') || url.startsWith('openclaw://connect'))) {
+        const parsed = Linking.parse(url);
+        if (parsed.queryParams?.url) {
+          router.push({
+            pathname: '/pair',
+            params: { from: 'deeplink' },
+          });
+        }
+      }
+    };
+
+    const sub = Linking.addEventListener('url', handleDeepLink);
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink({ url });
+    });
+
+    return () => sub.remove();
+  }, []);
 
   if (!fontsLoaded) return null;
 
