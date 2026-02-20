@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
+import { Swipeable } from 'react-native-gesture-handler';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { Conversation } from '@/lib/types';
@@ -186,6 +187,80 @@ function ConversationItem({
   return cardInner;
 }
 
+function SwipeableConversationItem({
+  item,
+  onPress,
+  onLongPress,
+  isFirstUnpinned,
+  onDelete,
+  onTogglePin,
+}: {
+  item: Conversation;
+  onPress: () => void;
+  onLongPress: () => void;
+  isFirstUnpinned?: boolean;
+  onDelete: (item: Conversation) => void;
+  onTogglePin: (item: Conversation) => void;
+}) {
+  const swipeableRef = useRef<Swipeable>(null);
+
+  const renderRightActions = useCallback(() => (
+    <Pressable
+      style={styles.swipeActionDelete}
+      onPress={() => {
+        swipeableRef.current?.close();
+        onDelete(item);
+      }}
+    >
+      <Ionicons name="trash" size={22} color="#fff" />
+      <Text style={styles.swipeActionText}>Delete</Text>
+    </Pressable>
+  ), [item, onDelete]);
+
+  const renderLeftActions = useCallback(() => (
+    <Pressable
+      style={styles.swipeActionPin}
+      onPress={() => {
+        swipeableRef.current?.close();
+        onTogglePin(item);
+      }}
+    >
+      <Ionicons name={item.pinned ? 'pin-outline' : 'pin'} size={22} color="#fff" />
+      <Text style={styles.swipeActionText}>{item.pinned ? 'Unpin' : 'Pin'}</Text>
+    </Pressable>
+  ), [item, onTogglePin]);
+
+  if (Platform.OS === 'web') {
+    return (
+      <ConversationItem
+        item={item}
+        onPress={onPress}
+        onLongPress={onLongPress}
+        isFirstUnpinned={isFirstUnpinned}
+      />
+    );
+  }
+
+  return (
+    <Swipeable
+      ref={swipeableRef}
+      testID="swipe-conversation"
+      renderRightActions={renderRightActions}
+      renderLeftActions={renderLeftActions}
+      overshootRight={false}
+      overshootLeft={false}
+      friction={2}
+    >
+      <ConversationItem
+        item={item}
+        onPress={onPress}
+        onLongPress={onLongPress}
+        isFirstUnpinned={isFirstUnpinned}
+      />
+    </Swipeable>
+  );
+}
+
 export default function ChatListScreen() {
   const insets = useSafeAreaInsets();
   const { conversations, createConversation, updateConversation, deleteConversation, gatewayStatus, gatewaySessions } = useApp();
@@ -336,6 +411,27 @@ export default function ChatListScreen() {
     ]);
   }, [selectedConvo, deleteConversation, closeActionSheet]);
 
+  const handleSwipeDelete = useCallback((item: Conversation) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (Platform.OS === 'web') {
+      deleteConversation(item.id);
+      return;
+    }
+    Alert.alert('Delete Conversation', `Remove "${item.title}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => deleteConversation(item.id),
+      },
+    ]);
+  }, [deleteConversation]);
+
+  const handleSwipeTogglePin = useCallback((item: Conversation) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    updateConversation(item.id, { pinned: !item.pinned });
+  }, [updateConversation]);
+
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   const fabRotation = fabRotateAnim.interpolate({
@@ -438,11 +534,13 @@ export default function ChatListScreen() {
               </View>
             )}
             <View style={styles.conversationItemWrapper}>
-              <ConversationItem
+              <SwipeableConversationItem
                 item={item}
                 onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.id } })}
                 onLongPress={() => openActionSheet(item)}
                 isFirstUnpinned={index === firstUnpinnedIndex}
+                onDelete={handleSwipeDelete}
+                onTogglePin={handleSwipeTogglePin}
               />
             </View>
           </View>
@@ -1124,5 +1222,27 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 15,
     color: '#fff',
+  },
+  swipeActionDelete: {
+    backgroundColor: C.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    borderRadius: 8,
+    marginLeft: 4,
+  },
+  swipeActionPin: {
+    backgroundColor: C.coral,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    borderRadius: 8,
+    marginRight: 4,
+  },
+  swipeActionText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: '#fff',
+    marginTop: 4,
   },
 });

@@ -6,6 +6,8 @@ import React, { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import ConnectionBanner from '@/components/ConnectionBanner';
+import { ToastProvider } from '@/components/Toast';
 import { queryClient } from '@/lib/query-client';
 import { AppProvider } from '@/lib/AppContext';
 import {
@@ -75,7 +77,10 @@ export default function RootLayout() {
         <AppProvider>
           <GestureHandlerRootView>
             <KeyboardProvider>
-              <RootLayoutNav />
+              <ToastProvider>
+                <RootLayoutNav />
+                <ConnectionBanner />
+              </ToastProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>
         </AppProvider>
