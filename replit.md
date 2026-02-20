@@ -33,10 +33,21 @@ Preferred communication style: Simple, everyday language.
 - **Migrations**: Output to `./migrations` directory via `drizzle-kit`
 - **Note**: The database is not yet heavily used. Most app data lives in client-side AsyncStorage. The Postgres database will likely grow as server-side features are added
 
+### Gateway Integration (lib/gateway.ts)
+- **WebSocket Client**: `OpenClawGateway` class connects to user's self-hosted OpenClaw Gateway on port 18789
+- **Protocol**: Handshake → device pairing → token auth → RPC calls (chat.send, sessions.list, sessions.history, config.get, tools.invoke)
+- **Streaming**: Real-time message.chunk events render streaming text in chat with blinking cursor
+- **Session Browser**: `app/sessions.tsx` lists active gateway sessions (WhatsApp, Telegram, Discord, etc.) with conversation history modal
+- **Memory Sync**: Memory tab fetches MEMORY.md, SESSION-STATE.md, and daily logs from gateway via tools.invoke
+- **Auto-reconnect**: Exponential backoff with max 30s delay, automatic reconnection on connection loss
+- **Event System**: 6+ event types (status_change, gateway_info, sessions_list, memory_data, message_chunk, message_complete)
+- **Dashboard Widget**: GatewayStatusWidget shows live connection status, channel chips, session/model counts
+
 ### Key Design Patterns
 - **Local-first architecture**: All user data (connections, chats, tasks, memory) is stored locally on device via AsyncStorage. No central server required for core functionality
 - **Gateway connection model**: Users connect to their own OpenClaw Gateway instances via WebSocket URLs (supports local discovery, manual URL, Tailscale, Cloudflare Tunnel)
 - **Shared types**: `lib/types.ts` defines TypeScript interfaces used across the app (GatewayConnection, ChatMessage, Conversation, Task, MemoryEntry)
+- **Gateway types**: `lib/gateway.ts` exports GatewaySession, GatewaySessionMessage, GatewayMemoryFile interfaces
 - **Onboarding flow**: First-launch experience guides users through connecting to a gateway, with option to skip
 - **Error boundaries**: Class-based ErrorBoundary component wraps the app for graceful error handling
 - **Platform-aware components**: Components like `KeyboardAwareScrollViewCompat` provide platform-specific implementations (web vs native)
