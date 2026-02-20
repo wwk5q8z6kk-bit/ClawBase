@@ -242,9 +242,15 @@ function disconnectGateway() {
 
 function connectToGateway() {
   if (!gatewayConfig) return;
+  const savedAttempts = reconnectAttempts;
   if (gatewayWs) {
-    disconnectGateway();
+    gatewayWs.onclose = null;
+    gatewayWs.onerror = null;
+    gatewayWs.onmessage = null;
+    gatewayWs.close();
+    gatewayWs = null;
   }
+  reconnectAttempts = savedAttempts;
 
   gatewayStatus = 'connecting';
   let wsUrl = gatewayConfig.url.replace(/\/$/, '');

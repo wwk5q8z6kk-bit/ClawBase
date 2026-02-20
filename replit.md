@@ -21,9 +21,17 @@ Preferred communication style: Simple, everyday language.
 - **Fonts**: Inter font family (400, 500, 600, 700 weights) via `@expo-google-fonts/inter`
 - **Security**: expo-local-authentication for biometric/PIN lock, expo-secure-store for sensitive data
 
-### Backend (Express Server)
+### Backend (Express Server + Relay)
 - **Framework**: Express 5 (TypeScript) running on the server side
-- **Purpose**: Serves as API proxy and static file server. In development, proxies to Expo's Metro bundler. In production, serves pre-built static web assets
+- **Purpose**: Serves as relay server between mobile app and OpenClaw gateway, plus API proxy and static file server
+- **Relay Server** (`server/relay.ts`): WebSocket bridge between mobile clients and OpenClaw gateway. Keeps gateway token server-side (never exposed to mobile). Each deployment runs its own relay instance
+  - **JWT Authentication**: Mobile devices authenticate with deviceId + pairingCode → receive 1-hour JWT → connect via `/ws/relay?token=JWT`
+  - **Gateway Connection Manager**: Maintains server-side WebSocket to gateway with OpenClaw protocol (connect.challenge → connect → hello-ok), exponential backoff reconnection (max 10 attempts, 30s max delay)
+  - **WebSocket Bridge**: Bridges messages between mobile ↔ gateway, handles streaming (message.chunk, done), tool calls, presence, session updates
+  - **16 REST API Endpoints**: `/api/relay/*` — setup, auth, health, status, sessions, automations, approvals, approve/deny, toggle, events, memory, chat, invoke, quick-action, audit
+  - **Rate Limiting**: express-rate-limit at 100 req/min per IP on all relay endpoints
+  - **Audit Trail**: In-memory log (max 1000 entries) of every action with timestamp, deviceId, action type, result
+  - **Token Isolation**: Gateway token stored server-side only, mobile never receives or transmits it
 - **Routes**: Defined in `server/routes.ts`, prefixed with `/api`
 - **Storage**: Currently uses in-memory storage (`MemStorage` class in `server/storage.ts`) with a simple user model. Drizzle ORM is configured for PostgreSQL but the DB connection is optional — the app primarily uses client-side AsyncStorage
 
