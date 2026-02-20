@@ -18,7 +18,6 @@ import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { MemoryEntry } from '@/lib/types';
-import type { GatewayMemoryFile } from '@/lib/gateway';
 
 const C = Colors.dark;
 

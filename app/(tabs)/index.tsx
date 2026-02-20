@@ -724,18 +724,29 @@ function CircularRing({ percent, size, color, trackColor }: { percent: number; s
 }
 
 const SystemHealthWidget = React.memo(function SystemHealthWidget() {
-  const { gatewayStatus } = useApp();
+  const { gateway, gatewayStatus } = useApp();
   const connected = gatewayStatus === 'connected';
+  const [health, setHealth] = useState<{
+    cpu: number; memUsed: number; memTotal: number; diskPercent: number; uptimeMs: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!connected) { setHealth(null); return; }
+    gateway.fetchSystemHealth().then((data) => {
+      setHealth(data);
+    });
+  }, [gateway, connected]);
 
   if (gatewayStatus === 'connecting') return <SkeletonLoader height={140} />;
 
-  const cpuPct = connected ? 34 : 0;
-  const memUsed = connected ? 6.2 : 0;
-  const memTotal = connected ? 16 : 1;
-  const memPct = connected ? Math.round((memUsed / memTotal) * 100) : 0;
-  const diskPct = connected ? 47 : 0;
-  const uptimeDays = connected ? 3 : 0;
-  const uptimeHours = connected ? 12 : 0;
+  const cpuPct = health?.cpu ?? 0;
+  const memUsed = health?.memUsed ?? 0;
+  const memTotal = health?.memTotal ?? 16;
+  const memPct = memTotal > 0 ? Math.round((memUsed / memTotal) * 100) : 0;
+  const diskPct = health?.diskPercent ?? 0;
+  const totalMs = health?.uptimeMs ?? 0;
+  const uptimeDays = Math.floor(totalMs / 86400000);
+  const uptimeHours = Math.floor((totalMs % 86400000) / 3600000);
 
   const cpuColor = cpuPct < 50 ? C.success : cpuPct < 80 ? C.amber : C.error;
   const memColor = memPct < 50 ? C.success : memPct < 80 ? C.amber : C.error;
@@ -786,75 +797,140 @@ const SystemHealthWidget = React.memo(function SystemHealthWidget() {
   );
 });
 
-const WORKSTREAMS = [
-  { id: 'email', icon: 'mail', label: 'Email', color: C.amber, status: '3 unread', activity: [3, 5, 2, 7, 4, 6, 3] },
-  { id: 'github', icon: 'logo-github', label: 'GitHub', color: '#fff', status: '2 PRs open', activity: [1, 3, 6, 2, 5, 1, 4] },
-  { id: 'research', icon: 'search', label: 'Research', color: C.accent, status: '5 papers', activity: [2, 4, 1, 3, 6, 2, 5] },
-  { id: 'social', icon: 'people', label: 'Social', color: C.secondary, status: '12 mentions', activity: [4, 2, 5, 3, 7, 4, 2] },
-] as const;
+const DEFAULT_WORKSTREAMS = [
+  { id: 'email', icon: 'mail', label: 'Email', color: C.amber, status: 'No data', sessionCount: 0, recentActivity: [0, 0, 0, 0, 0, 0, 0], type: 'email' },
+  { id: 'github', icon: 'logo-github', label: 'GitHub', color: '#fff', status: 'No data', sessionCount: 0, recentActivity: [0, 0, 0, 0, 0, 0, 0], type: 'github' },
+  { id: 'research', icon: 'search', label: 'Research', color: C.accent, status: 'No data', sessionCount: 0, recentActivity: [0, 0, 0, 0, 0, 0, 0], type: 'research' },
+  { id: 'social', icon: 'people', label: 'Social', color: C.secondary, status: 'No data', sessionCount: 0, recentActivity: [0, 0, 0, 0, 0, 0, 0], type: 'social' },
+];
 
 const WorkstreamCards = React.memo(function WorkstreamCards() {
+  const { gateway, gatewayStatus } = useApp();
+  const connected = gatewayStatus === 'connected';
+  const [workstreams, setWorkstreams] = useState<{
+    id: string; label: string; type: string; status: string;
+    sessionCount: number; recentActivity: number[];
+    icon?: string; color?: string;
+  }[]>(DEFAULT_WORKSTREAMS);
+
+  useEffect(() => {
+    if (!connected) { setWorkstreams(DEFAULT_WORKSTREAMS); return; }
+    gateway.fetchWorkstreams().then((data) => {
+      if (data.length > 0) {
+        setWorkstreams(data);
+      }
+    });
+  }, [gateway, connected]);
+
+  const channelIcons: Record<string, { icon: string; color: string }> = {
+    whatsapp: { icon: 'logo-whatsapp', color: '#25D366' },
+    telegram: { icon: 'paper-plane', color: '#0088cc' },
+    discord: { icon: 'logo-discord', color: '#5865F2' },
+    slack: { icon: 'chatbubble-ellipses', color: '#E01E5A' },
+    email: { icon: 'mail', color: '#FF9F5A' },
+    github: { icon: 'logo-github', color: '#ffffff' },
+    webchat: { icon: 'globe', color: '#00D4FF' },
+    imessage: { icon: 'chatbubble', color: '#34C759' },
+    signal: { icon: 'shield-checkmark', color: '#3A76F0' },
+    main: { icon: 'terminal', color: C.accent },
+    dm: { icon: 'chatbubbles', color: C.accent },
+    direct: { icon: 'chatbubbles', color: C.accent },
+    research: { icon: 'search', color: C.accent },
+    social: { icon: 'people', color: C.secondary },
+  };
+
   return (
     <View>
       <View style={styles.sectionHeader}>
         <View style={styles.sectionTitleRow}>
           <Ionicons name="layers" size={16} color={C.purple} />
           <Text style={styles.sectionTitle}>Workstreams</Text>
+          {connected && <PulsingDot color={C.success} size={6} />}
         </View>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.workstreamScroll}>
-        {WORKSTREAMS.map((ws) => (
-          <Pressable
-            key={ws.id}
-            style={({ pressed }) => [styles.workstreamCard, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/(tabs)/chat');
-            }}
-          >
-            <View style={styles.workstreamCardTop}>
-              <View style={[styles.workstreamIcon, { backgroundColor: ws.color + '15' }]}>
-                <Ionicons name={ws.icon as any} size={16} color={ws.color} />
+        {workstreams.map((ws) => {
+          const iconInfo = channelIcons[ws.type] || channelIcons[ws.id] || { icon: 'layers', color: C.purple };
+          const icon = (ws as any).icon || iconInfo.icon;
+          const color = (ws as any).color || iconInfo.color;
+          const maxVal = Math.max(...ws.recentActivity, 1);
+
+          return (
+            <Pressable
+              key={ws.id}
+              style={({ pressed }) => [styles.workstreamCard, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/chat');
+              }}
+            >
+              <View style={styles.workstreamCardTop}>
+                <View style={[styles.workstreamIcon, { backgroundColor: color + '15' }]}>
+                  <Ionicons name={icon as any} size={16} color={color} />
+                </View>
+                <Text style={styles.workstreamLabel}>{ws.label}</Text>
               </View>
-              <Text style={styles.workstreamLabel}>{ws.label}</Text>
-            </View>
-            <Text style={styles.workstreamStatus}>{ws.status}</Text>
-            <View style={styles.workstreamSparkline}>
-              {ws.activity.map((val, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.workstreamDot,
-                    {
-                      height: 3 + (val / 7) * 10,
-                      backgroundColor: ws.color + (i === ws.activity.length - 1 ? 'FF' : '60'),
-                    },
-                  ]}
-                />
-              ))}
-            </View>
-          </Pressable>
-        ))}
+              <Text style={styles.workstreamStatus}>{ws.status}</Text>
+              <View style={styles.workstreamSparkline}>
+                {ws.recentActivity.map((val, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.workstreamDot,
+                      {
+                        height: 3 + (val / maxVal) * 10,
+                        backgroundColor: color + (i === ws.recentActivity.length - 1 ? 'FF' : '60'),
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
+            </Pressable>
+          );
+        })}
       </ScrollView>
     </View>
   );
 });
 
 function AgentSkillsBar() {
-  const { activeConnection } = useApp();
+  const { activeConnection, gatewayInfo } = useApp();
   if (!activeConnection) return null;
 
-  const skills = [
-    { name: 'Email', icon: 'mail', color: C.amber },
-    { name: 'GitHub', icon: 'logo-github', color: '#fff' },
-    { name: 'Calendar', icon: 'calendar', color: C.accent },
-    { name: 'Shell', icon: 'terminal', color: C.secondary },
-    { name: 'Web', icon: 'globe', color: C.purple },
-  ];
+  const SKILL_META: Record<string, { icon: string; color: string }> = {
+    email: { icon: 'mail', color: C.amber },
+    github: { icon: 'logo-github', color: '#fff' },
+    calendar: { icon: 'calendar', color: C.accent },
+    shell: { icon: 'terminal', color: C.secondary },
+    web: { icon: 'globe', color: C.purple },
+    search: { icon: 'search', color: C.accent },
+    memory: { icon: 'brain', color: C.coral },
+    whatsapp: { icon: 'logo-whatsapp', color: '#25D366' },
+    telegram: { icon: 'paper-plane', color: '#0088cc' },
+    discord: { icon: 'logo-discord', color: '#5865F2' },
+    slack: { icon: 'chatbubble-ellipses', color: '#E01E5A' },
+    code: { icon: 'code-slash', color: C.secondary },
+    files: { icon: 'folder', color: C.amber },
+    notes: { icon: 'document-text', color: C.coral },
+  };
+
+  const skills = (gatewayInfo.skills && gatewayInfo.skills.length > 0)
+    ? gatewayInfo.skills.map((s: string) => {
+      const key = s.toLowerCase();
+      const meta = SKILL_META[key] || { icon: 'extension-puzzle', color: C.textSecondary };
+      return { name: s.charAt(0).toUpperCase() + s.slice(1), icon: meta.icon, color: meta.color };
+    })
+    : [
+      { name: 'Email', icon: 'mail', color: C.amber },
+      { name: 'GitHub', icon: 'logo-github', color: '#fff' },
+      { name: 'Calendar', icon: 'calendar', color: C.accent },
+      { name: 'Shell', icon: 'terminal', color: C.secondary },
+      { name: 'Web', icon: 'globe', color: C.purple },
+    ];
 
   return (
     <View style={styles.skillsBar}>
-      {skills.map((skill) => (
+      {skills.slice(0, 6).map((skill) => (
         <View key={skill.name} style={styles.skillItem}>
           <View style={[styles.skillIcon, { backgroundColor: skill.color + '12' }]}>
             <Ionicons name={skill.icon as any} size={14} color={skill.color} />

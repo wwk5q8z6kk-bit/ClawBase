@@ -187,7 +187,7 @@ function SessionHistoryModal({
 
 export default function SessionsScreen() {
   const insets = useSafeAreaInsets();
-  const { gatewaySessions, fetchGatewaySessions, gatewayStatus, activeConnection } = useApp();
+  const { gatewaySessions, fetchGatewaySessions, gatewayStatus } = useApp();
   const [refreshing, setRefreshing] = useState(false);
   const [selectedSession, setSelectedSession] = useState<GatewaySession | null>(null);
   const [historyVisible, setHistoryVisible] = useState(false);

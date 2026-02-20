@@ -481,7 +481,7 @@ function TaskDetailModal({
       setEditTags(task.tags?.join(', ') || '');
       setEditAssignee(task.assignee || '');
     }
-  }, [task?.id]);
+  }, [task]);
 
   if (!task) return null;
 
@@ -657,9 +657,6 @@ function BoardColumn({ title, tasks: columnTasks, color, onMove, onDelete }: {
         {columnTasks.map((task) => {
           const progress = STATUS_PROGRESS[task.status];
           const statusColor = STATUS_CONFIG[task.status].color;
-          const statusCycle: TaskStatus[] = ['todo', 'in_progress', 'done', 'deferred', 'archived'];
-          const currentIdx = statusCycle.indexOf(task.status);
-          const nextStatus = statusCycle[(currentIdx + 1) % statusCycle.length];
           return (
             <Pressable
               key={task.id}
@@ -1035,6 +1032,7 @@ function MemoryDetailModal({
 
 type FilterType = 'all' | 'conversation' | 'note' | 'task' | 'event' | 'summary' | 'document';
 type ReviewFilter = typeof REVIEW_FILTERS[number]['key'];
+const VAULT_SEGMENTS: VaultSegment[] = ['tasks', 'knowledge', 'files'];
 
 function AnimatedSegmentSwitcher({
   activeSegment,
@@ -1053,7 +1051,6 @@ function AnimatedSegmentSwitcher({
   const underlineWidthRef = useRef(new Animated.Value(0)).current;
   const segmentWidthsRef = useRef<Record<VaultSegment, number>>({ tasks: 0, knowledge: 0, files: 0 });
 
-  const segments: VaultSegment[] = ['tasks', 'knowledge', 'files'];
   const labels: Record<VaultSegment, string> = { tasks: 'Tasks', knowledge: 'Knowledge', files: 'Files' };
 
   const counts: Record<VaultSegment, number> = {
@@ -1063,12 +1060,12 @@ function AnimatedSegmentSwitcher({
   };
 
   useEffect(() => {
-    const activeIndex = segments.indexOf(activeSegment);
+    const activeIndex = VAULT_SEGMENTS.indexOf(activeSegment);
     let leftOffset = 0;
     let width = 0;
 
     for (let i = 0; i < activeIndex; i++) {
-      leftOffset += segmentWidthsRef.current[segments[i]];
+      leftOffset += segmentWidthsRef.current[VAULT_SEGMENTS[i]];
     }
 
     width = segmentWidthsRef.current[activeSegment];
@@ -1086,7 +1083,7 @@ function AnimatedSegmentSwitcher({
       friction: 8,
       tension: 100,
     }).start();
-  }, [activeSegment]);
+  }, [activeSegment, underlineLeftRef, underlineWidthRef]);
 
   const handleSegmentPress = (segment: VaultSegment) => {
     onSegmentChange(segment);
@@ -1096,7 +1093,7 @@ function AnimatedSegmentSwitcher({
   return (
     <View style={styles.segmentContainer}>
       <View style={styles.segmentRow}>
-        {segments.map((seg) => {
+        {VAULT_SEGMENTS.map((seg) => {
           const isActive = activeSegment === seg;
           return (
             <Pressable

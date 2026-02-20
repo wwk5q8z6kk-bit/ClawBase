@@ -18,6 +18,8 @@ import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import { getGateway } from '@/lib/gateway';
+import { PulsingDot } from '@/components/PulsingDot';
+import { GlassCard } from '@/components/GlassCard';
 
 const C = Colors.dark;
 
@@ -62,32 +64,7 @@ const RISK_TIER_CONFIG: Record<string, { color: string; label: string; glowColor
   P3: { color: C.textSecondary, label: 'LOW', glowColor: C.textSecondary + '15' },
 };
 
-function PulsingDot({ color, size = 8 }: { color: string; size?: number }) {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 0.3, duration: 1000, useNativeDriver: Platform.OS !== 'web' }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: Platform.OS !== 'web' }),
-      ]),
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, [pulseAnim]);
-
-  return (
-    <Animated.View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: color,
-        opacity: pulseAnim,
-      }}
-    />
-  );
-}
 
 function formatTimeAgo(ts: number) {
   const diff = Date.now() - ts;
@@ -122,12 +99,6 @@ const STATUS_CONFIG: Record<string, { color: string; label: string; icon: string
   idle: { color: C.textTertiary, label: 'Idle', icon: 'ellipse-outline' },
 };
 
-const RISK_COLORS: Record<string, string> = {
-  P1: C.primary,
-  P2: C.amber,
-  P3: C.textSecondary,
-};
-
 function ToastNotification({ toast, onHide }: { toast: ToastState; onHide: () => void }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(-20)).current;
@@ -146,7 +117,7 @@ function ToastNotification({ toast, onHide }: { toast: ToastState; onHide: () =>
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [toast.visible]);
+  }, [onHide, opacity, toast.visible, translateY]);
 
   if (!toast.visible) return null;
 
@@ -246,7 +217,7 @@ function QuickActionsBar({
       const enabled = automations.filter(a => a.enabled);
       const gw = getGateway() as any;
       for (const a of enabled) {
-        await gw.rpc('automations.trigger', { id: a.id }).catch(() => {});
+        await gw.rpc('automations.trigger', { id: a.id }).catch(() => { });
       }
       onToast(`Triggered ${enabled.length} automations`, 'success');
     } catch {
@@ -296,21 +267,16 @@ function SystemHealthBanner() {
 
   const statusLabel = connected ? 'Connected' :
     gatewayStatus === 'connecting' ? 'Connecting...' :
-    gatewayStatus === 'authenticating' ? 'Authenticating...' :
-    gatewayStatus === 'pairing' ? 'Pairing...' :
-    gatewayStatus === 'error' ? 'Error' : 'Disconnected';
+      gatewayStatus === 'authenticating' ? 'Authenticating...' :
+        gatewayStatus === 'pairing' ? 'Pairing...' :
+          gatewayStatus === 'error' ? 'Error' : 'Disconnected';
 
   const statusColor = connected ? C.success :
     gatewayStatus === 'error' ? C.error :
-    gatewayStatus === 'disconnected' ? C.textTertiary : C.amber;
+      gatewayStatus === 'disconnected' ? C.textTertiary : C.amber;
 
   return (
-    <LinearGradient
-      colors={C.gradient.card}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.healthBanner}
-    >
+    <GlassCard variant="card" style={styles.healthBanner}>
       <View style={styles.healthTop}>
         <View style={styles.healthLeft}>
           <View style={styles.healthDotWrap}>
@@ -346,7 +312,7 @@ function SystemHealthBanner() {
       {!connected && gatewayStatus === 'disconnected' && (
         <Text style={styles.healthHint}>Connect to a gateway to manage automations</Text>
       )}
-    </LinearGradient>
+    </GlassCard>
   );
 }
 
@@ -360,7 +326,6 @@ function ApprovalCard({
   onDeny: (id: string) => void;
 }) {
   const [countdown, setCountdown] = useState(formatCountdown(approval.expiresAt));
-  const riskColor = RISK_COLORS[approval.riskTier] || C.textSecondary;
   const tierConfig = RISK_TIER_CONFIG[approval.riskTier] || RISK_TIER_CONFIG.P3;
 
   useEffect(() => {
@@ -557,12 +522,7 @@ function AnalyticsCard({ cronOutputs }: { cronOutputs: CronOutput[] }) {
   }, [cronOutputs]);
 
   return (
-    <LinearGradient
-      colors={C.gradient.card}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.analyticsCard}
-    >
+    <GlassCard variant="card" style={styles.analyticsCard}>
       <View style={styles.analyticsHeader}>
         <View style={styles.sectionTitleRow}>
           <Ionicons name="analytics" size={16} color={C.accent} />
@@ -605,14 +565,14 @@ function AnalyticsCard({ cronOutputs }: { cronOutputs: CronOutput[] }) {
           <Text key={i} style={styles.weekLabel}>{d}</Text>
         ))}
       </View>
-    </LinearGradient>
+    </GlassCard>
   );
 }
 
 export default function AutomationsScreen() {
   const insets = useSafeAreaInsets();
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
-  const { gatewayStatus, activeConnection, gateway } = useApp();
+  const { gatewayStatus } = useApp();
 
   const [refreshing, setRefreshing] = useState(false);
   const [automations, setAutomations] = useState<Automation[]>([]);
@@ -649,7 +609,7 @@ export default function AutomationsScreen() {
           type: a.type || 'cron',
         })));
       }
-    } catch {}
+    } catch { }
 
     try {
       const approvalList = await gw.rpc('automations.approvals');
@@ -663,7 +623,7 @@ export default function AutomationsScreen() {
           source: a.source,
         })));
       }
-    } catch {}
+    } catch { }
 
     try {
       const outputs = await gw.rpc('automations.outputs', { limit: 5 });
@@ -677,7 +637,7 @@ export default function AutomationsScreen() {
           duration: o.duration,
         })));
       }
-    } catch {}
+    } catch { }
   }, [gatewayStatus]);
 
   useEffect(() => {
@@ -698,7 +658,7 @@ export default function AutomationsScreen() {
       try {
         const gw = getGateway() as any;
         await gw.rpc('automations.toggle', { id, enabled });
-      } catch {}
+      } catch { }
     }
   }, [gatewayStatus]);
 
@@ -708,7 +668,7 @@ export default function AutomationsScreen() {
       try {
         const gw = getGateway() as any;
         await gw.rpc('automations.approve', { id });
-      } catch {}
+      } catch { }
     }
   }, [gatewayStatus]);
 
@@ -718,7 +678,7 @@ export default function AutomationsScreen() {
       try {
         const gw = getGateway() as any;
         await gw.rpc('automations.deny', { id });
-      } catch {}
+      } catch { }
     }
   }, [gatewayStatus]);
 
@@ -731,7 +691,7 @@ export default function AutomationsScreen() {
       for (const a of p3Approvals) {
         try {
           await gw.rpc('automations.approve', { id: a.id });
-        } catch {}
+        } catch { }
       }
     }
     showToast(`Approved ${p3Approvals.length} low-risk items`, 'success');
@@ -748,7 +708,7 @@ export default function AutomationsScreen() {
       try {
         const gw = getGateway() as any;
         await gw.rpc('automations.pauseAll', { paused: newPaused });
-      } catch {}
+      } catch { }
     }
     showToast(newPaused ? 'All automations paused' : 'All automations resumed', newPaused ? 'error' : 'success');
   }, [allPaused, gatewayStatus, showToast]);

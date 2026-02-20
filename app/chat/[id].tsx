@@ -362,7 +362,7 @@ function AnimatedMessageWrapper({ children, shouldAnimate }: { children: React.R
         Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: Platform.OS !== 'web' }),
       ]).start();
     }
-  }, []);
+  }, [opacity, shouldAnimate, translateY]);
 
   if (!shouldAnimate) return <>{children}</>;
 

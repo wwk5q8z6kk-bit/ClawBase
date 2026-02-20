@@ -37,7 +37,14 @@ import type {
   CRMInteraction,
 } from './types';
 import * as Crypto from 'expo-crypto';
-import { getGateway, OpenClawGateway, GatewayStatus, GatewayInfo, GatewaySession, GatewayMemoryFile, StreamChunk } from './gateway';
+import * as Notifications from 'expo-notifications';
+import { getGateway, OpenClawGateway, GatewayStatus, GatewayInfo, GatewaySession, GatewayMemoryFile } from './gateway';
+import {
+  setupNotificationHandler,
+  setupNotificationCategories,
+  registerForPushNotifications,
+  showLocalNotification,
+} from './notifications';
 
 interface AppContextValue {
   connections: GatewayConnection[];
@@ -258,6 +265,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [gateway]);
 
+  // ------ Notification setup ------
+  useEffect(() => {
+    setupNotificationHandler();
+    setupNotificationCategories();
+  }, []);
+
+  // Register push token when gateway connects
+  useEffect(() => {
+    if (gatewayStatus === 'connected') {
+      registerForPushNotifications().then((token) => {
+        if (token) {
+          gateway.registerPushToken(token);
+        }
+      });
+    }
+  }, [gatewayStatus, gateway]);
+
+  // Handle interactive notification responses (Approve / Deny buttons)
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const actionId = response.actionIdentifier;
+      const data = response.notification.request.content.data;
+      const approvalId = data?.approvalId as string | undefined;
+
+      if (approvalId && actionId === 'approve') {
+        gateway.approveAction(approvalId);
+      } else if (approvalId && actionId === 'deny') {
+        gateway.denyAction(approvalId);
+      }
+    });
+
+    return () => sub.remove();
+  }, [gateway]);
+
+  // Show local notification when gateway sends a notification event while app is foregrounded
+  useEffect(() => {
+    const unsub = gateway.on('notification', (event) => {
+      const { title, body, approvalId, category } = event.data || {};
+      showLocalNotification({
+        title: title || 'ClawBase',
+        body: body || 'New notification from your agent',
+        data: approvalId ? { approvalId } : {},
+        categoryIdentifier: category || (approvalId ? 'approval' : 'alert'),
+        channelId: approvalId ? 'approvals' : 'alerts',
+      });
+    });
+    return unsub;
+  }, [gateway]);
+
   const activeConnection = useMemo(
     () => connections.find((c) => c.id === activeConnectionId) || null,
     [connections, activeConnectionId],
@@ -270,7 +326,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.log('[AppContext] Auto-connect failed:', e);
       });
     }
-  }, [activeConnection?.id]);
+  }, [activeConnection, gateway, gatewayStatus]);
 
   const addConnection = useCallback(
     async (name: string, url: string, token?: string) => {

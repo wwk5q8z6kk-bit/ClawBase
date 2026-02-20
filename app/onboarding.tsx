@@ -6,7 +6,6 @@ import {
   Pressable,
   TextInput,
   Platform,
-  Dimensions,
   Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,7 +17,6 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 
 const C = Colors.dark;
-const { width } = Dimensions.get('window');
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -36,7 +34,7 @@ export default function OnboardingScreen() {
         Animated.timing(glowAnim, { toValue: 0.3, duration: 2000, useNativeDriver: true }),
       ])
     ).start();
-  }, []);
+  }, [glowAnim]);
 
   const connectionMethods = [
     { id: 'local', label: 'Local Network', icon: 'wifi' as const, color: '#FFB020', subtitle: 'Same Wi-Fi network', prefill: '192.168.1.x:18789' },

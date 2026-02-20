@@ -25,6 +25,14 @@ import { router } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import { getGateway } from '@/lib/gateway';
+import { GlassCard } from '@/components/GlassCard';
+import {
+  getNotificationPrefs,
+  setNotificationPrefs,
+  getStoredPushToken,
+  showLocalNotification,
+  type NotificationPrefs,
+} from '@/lib/notifications';
 
 interface Automation {
   id: string;
@@ -141,8 +149,8 @@ function AgentHealthMonitor() {
   const statusColor = isConnected ? C.success : isConnecting || gatewayStatus === 'pairing' ? C.amber : gatewayStatus === 'error' ? C.error : C.textTertiary;
 
   return (
-    <LinearGradient
-      colors={isConnected ? ['#0F2020', '#0E1A1A'] : isConnecting ? ['#201A10', '#1A1510'] : ['#201510', '#1A1210']}
+    <GlassCard
+      variant={isConnected ? 'card' : 'cardElevated'}
       style={styles.healthCard}
     >
       <View style={styles.healthHeader}>
@@ -175,7 +183,7 @@ function AgentHealthMonitor() {
       {gatewayStatus === 'error' && (
         <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: C.error, marginTop: 4 }}>Check your gateway URL and token</Text>
       )}
-    </LinearGradient>
+    </GlassCard>
   );
 }
 
@@ -215,6 +223,14 @@ export default function SettingsScreen() {
   const [quickActionLoading, setQuickActionLoading] = useState<string | null>(null);
   const [showApprovals, setShowApprovals] = useState(false);
 
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>({
+    approvals: true,
+    agentErrors: true,
+    automationResults: false,
+    dailyBrief: false,
+  });
+  const [pushToken, setPushToken] = useState<string | null>(null);
+
   const [storageStats, setStorageStats] = useState<{
     tasks: number;
     conversations: number;
@@ -234,12 +250,17 @@ export default function SettingsScreen() {
         contacts: crmContacts.length,
         events: calendarEvents.length,
       });
-    } catch {}
+    } catch { }
   }, [tasks, conversations, memoryEntries, crmContacts, calendarEvents]);
 
   useEffect(() => {
     loadStorageStats();
   }, [loadStorageStats]);
+
+  useEffect(() => {
+    getNotificationPrefs().then(setNotifPrefs);
+    getStoredPushToken().then(setPushToken);
+  }, []);
 
   useEffect(() => {
     const unsub = gateway.on('error', (event) => {
@@ -284,7 +305,7 @@ export default function SettingsScreen() {
           source: a.source,
         })));
       }
-    } catch {}
+    } catch { }
     setAutomationsLoading(false);
   }, [gatewayStatus]);
 
@@ -312,7 +333,7 @@ export default function SettingsScreen() {
       for (const a of automations) {
         await gw.toggleAutomation(a.id, newEnabled);
       }
-    } catch {}
+    } catch { }
   }, [automations]);
 
   const handleQuickAction = useCallback(async (label: string, command: string) => {
@@ -321,7 +342,7 @@ export default function SettingsScreen() {
     setQuickActionLoading(label);
     try {
       await getGateway().invokeCommand(command);
-    } catch {}
+    } catch { }
     setQuickActionLoading(null);
   }, [gatewayStatus]);
 
@@ -431,7 +452,7 @@ export default function SettingsScreen() {
         await AsyncStorage.multiRemove(clawKeys);
         await refreshAll();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch {}
+      } catch { }
     };
     if (Platform.OS === 'web') {
       doClear();
@@ -668,8 +689,8 @@ export default function SettingsScreen() {
                 onPress={() => openWithTemplate(method.templateName, method.templateUrl)}
                 style={({ pressed }) => [pressed && { opacity: 0.8 }]}
               >
-                <LinearGradient
-                  colors={C.gradient.cardElevated}
+                <GlassCard
+                  variant="cardElevated"
                   style={[styles.methodCard, { borderColor: C.borderLight }]}
                 >
                   {index === 0 && (
@@ -692,7 +713,7 @@ export default function SettingsScreen() {
                       <Text style={[styles.methodHint, { color: method.color + 'CC' }]}>{method.hint}</Text>
                     </View>
                   </View>
-                </LinearGradient>
+                </GlassCard>
               </Pressable>
             ))}
           </View>
@@ -712,6 +733,102 @@ export default function SettingsScreen() {
               />
             }
           />
+        </SettingsSection>
+
+        <SettingsSection title="Notifications">
+          <View style={styles.pushStatusRow}>
+            <Ionicons
+              name={pushToken ? 'notifications' : 'notifications-off-outline'}
+              size={16}
+              color={pushToken ? C.success : C.textTertiary}
+            />
+            <Text style={[styles.pushStatusText, { color: pushToken ? C.success : C.textTertiary }]}>
+              {pushToken ? 'Push notifications active' : 'Push not registered'}
+            </Text>
+          </View>
+          <SettingsRow
+            icon="shield-checkmark"
+            iconColor={C.error}
+            label="Approval Requests"
+            trailing={
+              <Switch
+                value={notifPrefs.approvals}
+                onValueChange={(val) => {
+                  const updated = { ...notifPrefs, approvals: val };
+                  setNotifPrefs(updated);
+                  setNotificationPrefs(updated);
+                }}
+                trackColor={{ false: C.border, true: C.accent + '60' }}
+                thumbColor={notifPrefs.approvals ? C.accent : C.textSecondary}
+              />
+            }
+          />
+          <SettingsRow
+            icon="warning"
+            iconColor={C.amber}
+            label="Agent Errors"
+            trailing={
+              <Switch
+                value={notifPrefs.agentErrors}
+                onValueChange={(val) => {
+                  const updated = { ...notifPrefs, agentErrors: val };
+                  setNotifPrefs(updated);
+                  setNotificationPrefs(updated);
+                }}
+                trackColor={{ false: C.border, true: C.amber + '60' }}
+                thumbColor={notifPrefs.agentErrors ? C.amber : C.textSecondary}
+              />
+            }
+          />
+          <SettingsRow
+            icon="flash"
+            iconColor={C.secondary}
+            label="Automation Results"
+            trailing={
+              <Switch
+                value={notifPrefs.automationResults}
+                onValueChange={(val) => {
+                  const updated = { ...notifPrefs, automationResults: val };
+                  setNotifPrefs(updated);
+                  setNotificationPrefs(updated);
+                }}
+                trackColor={{ false: C.border, true: C.secondary + '60' }}
+                thumbColor={notifPrefs.automationResults ? C.secondary : C.textSecondary}
+              />
+            }
+          />
+          <SettingsRow
+            icon="sunny"
+            iconColor={C.accent}
+            label="Daily Brief"
+            trailing={
+              <Switch
+                value={notifPrefs.dailyBrief}
+                onValueChange={(val) => {
+                  const updated = { ...notifPrefs, dailyBrief: val };
+                  setNotifPrefs(updated);
+                  setNotificationPrefs(updated);
+                }}
+                trackColor={{ false: C.border, true: C.accent + '60' }}
+                thumbColor={notifPrefs.dailyBrief ? C.accent : C.textSecondary}
+              />
+            }
+          />
+          <Pressable
+            style={({ pressed }) => [styles.testPushBtn, pressed && { opacity: 0.7 }]}
+            onPress={() => {
+              showLocalNotification({
+                title: '\ud83d\udc4b Test Notification',
+                body: 'Push notifications are working! Your agent can now alert you.',
+                categoryIdentifier: 'alert',
+                channelId: 'alerts',
+              });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }}
+          >
+            <Ionicons name="paper-plane-outline" size={16} color={C.accent} />
+            <Text style={styles.testPushText}>Send Test Notification</Text>
+          </Pressable>
         </SettingsSection>
 
         <SettingsSection title="Automations">
@@ -931,7 +1048,7 @@ export default function SettingsScreen() {
                       style={({ pressed }) => [styles.approvalDenyBtn, pressed && { opacity: 0.7 }]}
                       onPress={async () => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        try { await getGateway().denyAction(approval.id); } catch {}
+                        try { await getGateway().denyAction(approval.id); } catch { }
                         setApprovals(prev => prev.filter(a => a.id !== approval.id));
                       }}
                     >
@@ -941,7 +1058,7 @@ export default function SettingsScreen() {
                       style={({ pressed }) => [styles.approvalApproveBtn, pressed && { opacity: 0.7 }]}
                       onPress={async () => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        try { await getGateway().approveAction(approval.id); } catch {}
+                        try { await getGateway().approveAction(approval.id); } catch { }
                         setApprovals(prev => prev.filter(a => a.id !== approval.id));
                       }}
                     >
@@ -1408,4 +1525,8 @@ const styles = StyleSheet.create({
   recommendedText: { fontFamily: 'Inter_500Medium', fontSize: 10, color: C.secondary },
   storageBarTrack: { width: '100%' as const, height: 2, backgroundColor: C.border, borderRadius: 1, marginTop: 2 },
   storageBarFill: { height: 2, backgroundColor: C.coral, borderRadius: 1 },
+  pushStatusRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.border + '30' },
+  pushStatusText: { fontFamily: 'Inter_500Medium', fontSize: 13 },
+  testPushBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingVertical: 12, marginTop: 4, borderTopWidth: 1, borderTopColor: C.border + '30' },
+  testPushText: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.accent },
 });

@@ -1,11 +1,9 @@
-import { timingSafeEqual, randomBytes } from 'crypto';
+import { randomUUID, timingSafeEqual } from 'crypto';
 import { IncomingMessage, Server } from 'http';
-import { randomUUID } from 'crypto';
 import WebSocket, { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
 
 const PING_INTERVAL = 15000;
-const PONG_TIMEOUT = 5000;
 const RPC_TIMEOUT = 30000;
 const JWT_EXPIRY = '1h';
 const MIN_SESSION_SECRET_LENGTH = 32;
@@ -59,6 +57,12 @@ const mobileClients = new Set<WebSocket>();
 const streamBuffers = new Map<string, string>();
 const authorizedDevices = new Map<string, { pairingCode: string; authorizedAt: number }>();
 
+// Push notification token storage: deviceId -> { token, platform, lastSeen }
+const pushTokens = new Map<string, { expoPushToken: string; platform: string; lastSeen: number }>();
+
+// Track which deviceIds have active WS connections
+const activeDeviceConnections = new Map<WebSocket, string>();
+
 function secureEquals(a: string, b: string): boolean {
   const lhs = Buffer.from(a);
   const rhs = Buffer.from(b);
@@ -109,6 +113,54 @@ function broadcastToMobile(msg: any) {
     if (client.readyState === WebSocket.OPEN) {
       client.send(data);
     }
+  }
+}
+
+function hasActiveMobileClients(): boolean {
+  for (const client of mobileClients) {
+    if (client.readyState === WebSocket.OPEN) return true;
+  }
+  return false;
+}
+
+async function sendPushNotification(opts: {
+  title: string;
+  body: string;
+  data?: Record<string, any>;
+  categoryId?: string;
+  channelId?: string;
+}) {
+  const tokens: string[] = [];
+  for (const entry of pushTokens.values()) {
+    tokens.push(entry.expoPushToken);
+  }
+  if (tokens.length === 0) return;
+
+  const messages = tokens.map((token) => ({
+    to: token,
+    title: opts.title,
+    body: opts.body,
+    data: opts.data || {},
+    sound: 'default',
+    categoryId: opts.categoryId,
+    channelId: opts.channelId || 'alerts',
+    priority: 'high',
+  }));
+
+  try {
+    const resp = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(messages),
+    });
+    const result = await resp.json();
+    console.log('[Relay] Push notification sent:', result?.data?.length || 0, 'tickets');
+  } catch (err) {
+    console.error('[Relay] Failed to send push notification:', err);
   }
 }
 
@@ -182,6 +234,36 @@ function handleGatewayMessage(raw: string) {
       msg.type === 'session.update' || msg.event === 'session.update' ||
       msg.type === 'node.invoke' || msg.event === 'node.invoke') {
       broadcastToMobile(msg);
+      return;
+    }
+
+    // Push notifications for events when no mobile client is connected
+    if (msg.type === 'exec.approval.requested' || msg.event === 'exec.approval.requested') {
+      broadcastToMobile(msg);
+      if (!hasActiveMobileClients()) {
+        const data = msg.data || msg.payload || {};
+        sendPushNotification({
+          title: '🔐 Approval Required',
+          body: data.description || data.action || 'Your agent needs your approval for an action',
+          data: { approvalId: data.id, type: 'approval' },
+          categoryId: 'approval',
+          channelId: 'approvals',
+        });
+      }
+      return;
+    }
+
+    if (msg.type === 'agent.error' || msg.event === 'agent.error') {
+      broadcastToMobile(msg);
+      if (!hasActiveMobileClients()) {
+        const data = msg.data || msg.payload || {};
+        sendPushNotification({
+          title: '⚠️ Agent Error',
+          body: data.message || 'An error occurred in your agent',
+          data: { type: 'error' },
+          channelId: 'alerts',
+        });
+      }
       return;
     }
   } catch { }
@@ -430,6 +512,7 @@ export function setupRelay(app: any, httpServer: Server) {
     const deviceId = (request as any).deviceId || 'unknown';
     console.log('[Relay] Mobile client connected:', deviceId);
     mobileClients.add(ws);
+    activeDeviceConnections.set(ws, deviceId);
     addAudit(deviceId, 'ws.connect', 'success');
 
     ws.on('message', (data) => {
@@ -442,6 +525,21 @@ export function setupRelay(app: any, httpServer: Server) {
             params: msg.params,
           });
           addAudit(deviceId, 'chat.send', 'success');
+        } else if (msg.method === 'device.registerPushToken') {
+          const { token, platform } = msg.params || {};
+          if (token) {
+            pushTokens.set(deviceId, {
+              expoPushToken: token,
+              platform: platform || 'unknown',
+              lastSeen: Date.now(),
+            });
+            console.log('[Relay] Push token registered for device:', deviceId);
+            addAudit(deviceId, 'device.registerPushToken', 'success');
+            // Send RPC response
+            if (msg.id) {
+              ws.send(JSON.stringify({ id: msg.id, result: { ok: true } }));
+            }
+          }
         } else if (msg.type === 'ping') {
           ws.send(JSON.stringify({ type: 'pong' }));
         } else {
@@ -453,6 +551,7 @@ export function setupRelay(app: any, httpServer: Server) {
     ws.on('close', () => {
       console.log('[Relay] Mobile client disconnected:', deviceId);
       mobileClients.delete(ws);
+      activeDeviceConnections.delete(ws);
       addAudit(deviceId, 'ws.disconnect', 'success');
     });
 

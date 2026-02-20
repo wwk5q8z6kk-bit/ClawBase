@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useRef, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -21,7 +21,6 @@ import { Swipeable } from 'react-native-gesture-handler';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import { PulsingDot } from '@/components/PulsingDot';
-import { GlassCard } from '@/components/GlassCard';
 import type { Conversation } from '@/lib/types';
 
 const C = Colors.dark;

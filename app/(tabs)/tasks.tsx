@@ -341,7 +341,7 @@ function TaskDetailModal({
       setEditTags(task.tags?.join(', ') || '');
       setEditAssignee(task.assignee || '');
     }
-  }, [task?.id]);
+  }, [task]);
 
   if (!task) return null;
 
@@ -517,9 +517,6 @@ function BoardColumn({ title, tasks: columnTasks, color, onMove, onDelete }: {
         {columnTasks.map((task) => {
           const progress = STATUS_PROGRESS[task.status];
           const statusColor = STATUS_CONFIG[task.status].color;
-          const statusCycle: TaskStatus[] = ['todo', 'in_progress', 'done', 'deferred', 'archived'];
-          const currentIdx = statusCycle.indexOf(task.status);
-          const nextStatus = statusCycle[(currentIdx + 1) % statusCycle.length];
           return (
             <Pressable
               key={task.id}

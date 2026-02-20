@@ -118,12 +118,6 @@ export default function PairScreen() {
     ).start();
   }, [pulseAnim]);
 
-  useEffect(() => {
-    if (Platform.OS !== 'web' && !method) {
-      runDiscovery();
-    }
-  }, []);
-
   const runDiscovery = useCallback(async () => {
     setScanning(true);
     setDiscoveredGateways([]);
@@ -136,6 +130,12 @@ export default function PairScreen() {
     } catch {}
     setScanning(false);
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' && !method) {
+      runDiscovery();
+    }
+  }, [method, runDiscovery]);
 
   const saveAndFinish = useCallback(async (name: string, url: string, token?: string) => {
     try {

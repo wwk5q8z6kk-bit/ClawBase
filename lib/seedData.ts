@@ -1,5 +1,4 @@
 import type { Task, CalendarEvent, CRMContact, MemoryEntry } from './types';
-import * as Crypto from 'expo-crypto';
 
 function hoursFromNow(h: number) {
   return Date.now() + h * 3600000;
