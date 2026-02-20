@@ -109,8 +109,9 @@ Preferred communication style: Simple, everyday language.
 - **OpenClaw Gateway**: The primary external service the app connects to. User's self-hosted AI gateway running on port 18789 with WebSocket protocol
 
 ### Key npm Packages
-- **expo** (~54.0.27): Core mobile framework
-- **expo-router** (~6.0.17): File-based navigation
+- **expo** (~54.0.33): Core mobile framework
+- **expo-dev-client** (~6.0.20): Development build client (replaces Expo Go for device testing)
+- **expo-router** (~6.0.23): File-based navigation
 - **express** (^5.0.1): Backend HTTP server
 - **drizzle-orm** (^0.39.3) + **pg** (^8.16.3): Database ORM and PostgreSQL driver
 - **@tanstack/react-query** (^5.83.0): Server state management
