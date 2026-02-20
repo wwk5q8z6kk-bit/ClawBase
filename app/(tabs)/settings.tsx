@@ -11,6 +11,7 @@ import {
   Modal,
   Alert,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,44 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
+import { getGateway } from '@/lib/gateway';
+
+interface Automation {
+  id: string;
+  name: string;
+  schedule: string;
+  enabled: boolean;
+  status: 'running' | 'paused' | 'error' | 'idle';
+  lastRun?: number;
+  lastOutput?: string;
+  type: 'heartbeat' | 'cron';
+}
+
+interface PendingApproval {
+  id: string;
+  action: string;
+  description: string;
+  riskTier: 'P1' | 'P2' | 'P3';
+  expiresAt: number;
+  source?: string;
+}
+
+const STATUS_CONFIG: Record<string, { color: string; label: string; icon: string }> = {
+  running: { color: Colors.dark.success, label: 'Running', icon: 'play-circle' },
+  paused: { color: Colors.dark.amber, label: 'Paused', icon: 'pause-circle' },
+  error: { color: Colors.dark.error, label: 'Error', icon: 'alert-circle' },
+  idle: { color: Colors.dark.textTertiary, label: 'Idle', icon: 'ellipse-outline' },
+};
+
+function formatTimeAgo(ts: number) {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 const C = Colors.dark;
 
@@ -169,6 +208,12 @@ export default function SettingsScreen() {
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
+  const [automations, setAutomations] = useState<Automation[]>([]);
+  const [approvals, setApprovals] = useState<PendingApproval[]>([]);
+  const [automationsLoading, setAutomationsLoading] = useState(false);
+  const [quickActionLoading, setQuickActionLoading] = useState<string | null>(null);
+  const [showApprovals, setShowApprovals] = useState(false);
+
   const [storageStats, setStorageStats] = useState<{
     tasks: number;
     conversations: number;
@@ -207,6 +252,81 @@ export default function SettingsScreen() {
     });
     return () => { unsub(); unsub2(); };
   }, [gateway]);
+
+  const fetchAutomationsData = useCallback(async () => {
+    if (gatewayStatus !== 'connected') return;
+    setAutomationsLoading(true);
+    try {
+      const gw = getGateway();
+      const [autoList, approvalList] = await Promise.all([
+        gw.fetchAutomations(),
+        gw.fetchApprovals(),
+      ]);
+      if (Array.isArray(autoList)) {
+        setAutomations(autoList.map((a: any) => ({
+          id: a.id || a.name,
+          name: a.name || a.id,
+          schedule: a.schedule || a.cron || 'Manual',
+          enabled: a.enabled !== false,
+          status: a.status || 'idle',
+          lastRun: a.lastRun || a.lastRunAt,
+          lastOutput: a.lastOutput || a.output,
+          type: a.type || 'cron',
+        })));
+      }
+      if (Array.isArray(approvalList)) {
+        setApprovals(approvalList.map((a: any) => ({
+          id: a.id,
+          action: a.action || a.title || 'Unknown action',
+          description: a.description || '',
+          riskTier: a.riskTier || a.risk || 'P3',
+          expiresAt: a.expiresAt || Date.now() + 300000,
+          source: a.source,
+        })));
+      }
+    } catch {}
+    setAutomationsLoading(false);
+  }, [gatewayStatus]);
+
+  useEffect(() => {
+    fetchAutomationsData();
+  }, [fetchAutomationsData]);
+
+  const handleToggleAutomation = useCallback(async (id: string, enabled: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAutomations(prev => prev.map(a => a.id === id ? { ...a, enabled } : a));
+    try {
+      await getGateway().toggleAutomation(id, enabled);
+    } catch {
+      setAutomations(prev => prev.map(a => a.id === id ? { ...a, enabled: !enabled } : a));
+    }
+  }, []);
+
+  const handlePauseResumeAll = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const anyEnabled = automations.some(a => a.enabled);
+    const newEnabled = !anyEnabled;
+    setAutomations(prev => prev.map(a => ({ ...a, enabled: newEnabled })));
+    try {
+      const gw = getGateway();
+      for (const a of automations) {
+        await gw.toggleAutomation(a.id, newEnabled);
+      }
+    } catch {}
+  }, [automations]);
+
+  const handleQuickAction = useCallback(async (label: string, command: string) => {
+    if (gatewayStatus !== 'connected') return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setQuickActionLoading(label);
+    try {
+      await getGateway().invokeCommand(command);
+    } catch {}
+    setQuickActionLoading(null);
+  }, [gatewayStatus]);
+
+  const enabledCount = automations.filter(a => a.enabled).length;
+  const pausedCount = automations.filter(a => !a.enabled).length;
 
   const handleTestConnection = useCallback(async () => {
     if (!connUrl.trim()) return;
@@ -533,6 +653,95 @@ export default function SettingsScreen() {
           />
         </SettingsSection>
 
+        <SettingsSection title="Automations">
+          <View style={styles.autoSummaryCard}>
+            <View style={styles.autoSummaryRow}>
+              <View style={styles.autoSummaryStat}>
+                <Text style={[styles.autoSummaryCount, { color: C.success }]}>{enabledCount}</Text>
+                <Text style={styles.autoSummaryLabel}>Enabled</Text>
+              </View>
+              <View style={styles.autoSummaryDivider} />
+              <View style={styles.autoSummaryStat}>
+                <Text style={[styles.autoSummaryCount, { color: C.amber }]}>{pausedCount}</Text>
+                <Text style={styles.autoSummaryLabel}>Paused</Text>
+              </View>
+              <Pressable
+                style={({ pressed }) => [styles.autoPauseAllBtn, pressed && { opacity: 0.7 }]}
+                onPress={handlePauseResumeAll}
+              >
+                <Ionicons
+                  name={enabledCount > 0 ? 'pause' : 'play'}
+                  size={14}
+                  color={enabledCount > 0 ? C.amber : C.success}
+                />
+                <Text style={[styles.autoPauseAllText, { color: enabledCount > 0 ? C.amber : C.success }]}>
+                  {enabledCount > 0 ? 'Pause All' : 'Resume All'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+          {automationsLoading && automations.length === 0 ? (
+            <View style={styles.autoLoadingWrap}>
+              <ActivityIndicator size="small" color={C.accent} />
+            </View>
+          ) : (
+            automations.map((auto) => {
+              const config = STATUS_CONFIG[auto.status] || STATUS_CONFIG.idle;
+              return (
+                <View key={auto.id} style={styles.autoItem}>
+                  <View style={[styles.autoStatusDot, { backgroundColor: config.color }]} />
+                  <View style={styles.autoItemContent}>
+                    <Text style={styles.autoItemName}>{auto.name}</Text>
+                    <Text style={styles.autoItemSchedule}>
+                      {auto.schedule}
+                      {auto.lastRun ? ` · ${formatTimeAgo(auto.lastRun)}` : ''}
+                    </Text>
+                  </View>
+                  <View style={[styles.autoStatusPill, { backgroundColor: config.color + '18' }]}>
+                    <Ionicons name={config.icon as any} size={11} color={config.color} />
+                    <Text style={[styles.autoStatusText, { color: config.color }]}>{config.label}</Text>
+                  </View>
+                  <Switch
+                    value={auto.enabled}
+                    onValueChange={(val) => handleToggleAutomation(auto.id, val)}
+                    trackColor={{ false: C.border, true: C.success + '40' }}
+                    thumbColor={auto.enabled ? C.success : C.textTertiary}
+                    style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                  />
+                </View>
+              );
+            })
+          )}
+          <View style={styles.quickActionsRow}>
+            {[
+              { label: 'Daily Brief', icon: 'newspaper', cmd: 'daily-brief' },
+              { label: 'Health Check', icon: 'pulse', cmd: 'health-check' },
+              { label: 'Sync Memory', icon: 'sync-circle', cmd: 'sync-memory' },
+            ].map((action) => (
+              <Pressable
+                key={action.label}
+                style={({ pressed }) => [styles.quickActionChip, pressed && { opacity: 0.7 }]}
+                onPress={() => handleQuickAction(action.label, action.cmd)}
+                disabled={quickActionLoading === action.label}
+              >
+                {quickActionLoading === action.label ? (
+                  <ActivityIndicator size={14} color={C.accent} />
+                ) : (
+                  <Ionicons name={action.icon as any} size={14} color={C.accent} />
+                )}
+                <Text style={styles.quickActionChipText}>{action.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <SettingsRow
+            icon="shield-checkmark-outline"
+            iconColor={approvals.length > 0 ? C.amber : C.textTertiary}
+            label="Pending Approvals"
+            value={`${approvals.length} pending`}
+            onPress={() => setShowApprovals(true)}
+          />
+        </SettingsSection>
+
         <SettingsSection title="About">
           <SettingsRow
             icon="information-circle-outline"
@@ -607,6 +816,44 @@ export default function SettingsScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showApprovals}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowApprovals(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Pending Approvals</Text>
+              <Pressable onPress={() => setShowApprovals(false)}>
+                <Ionicons name="close" size={24} color={C.textSecondary} />
+              </Pressable>
+            </View>
+            {approvals.length === 0 ? (
+              <View style={styles.approvalEmptyWrap}>
+                <Ionicons name="checkmark-done-outline" size={32} color={C.textTertiary} />
+                <Text style={styles.approvalEmptyText}>No pending approvals</Text>
+              </View>
+            ) : (
+              approvals.map((approval) => (
+                <View key={approval.id} style={styles.approvalItem}>
+                  <View style={styles.approvalItemHeader}>
+                    <View style={[styles.approvalRiskBadge, { backgroundColor: (approval.riskTier === 'P1' ? C.error : approval.riskTier === 'P2' ? C.amber : C.textTertiary) + '20' }]}>
+                      <Text style={[styles.approvalRiskText, { color: approval.riskTier === 'P1' ? C.error : approval.riskTier === 'P2' ? C.amber : C.textTertiary }]}>{approval.riskTier}</Text>
+                    </View>
+                    <Text style={styles.approvalAction} numberOfLines={1}>{approval.action}</Text>
+                  </View>
+                  {approval.description ? (
+                    <Text style={styles.approvalDesc} numberOfLines={2}>{approval.description}</Text>
+                  ) : null}
+                </View>
+              ))
+            )}
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={showConnModal}
@@ -986,4 +1233,31 @@ const styles = StyleSheet.create({
   connActionText: { fontFamily: 'Inter_500Medium', fontSize: 14 },
   testResultRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
   testResultText: { fontFamily: 'Inter_500Medium', fontSize: 13, flex: 1 },
+  autoSummaryCard: { padding: 14, borderBottomWidth: 1, borderBottomColor: C.borderLight },
+  autoSummaryRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+  autoSummaryStat: { alignItems: 'center' as const },
+  autoSummaryCount: { fontFamily: 'Inter_700Bold', fontSize: 18 },
+  autoSummaryLabel: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textSecondary, marginTop: 2 },
+  autoSummaryDivider: { width: 1, height: 28, backgroundColor: C.border },
+  autoPauseAllBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginLeft: 'auto' as const, backgroundColor: C.cardElevated, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: C.borderLight },
+  autoPauseAllText: { fontFamily: 'Inter_500Medium', fontSize: 13 },
+  autoLoadingWrap: { padding: 20, alignItems: 'center' as const },
+  autoItem: { flexDirection: 'row' as const, alignItems: 'center' as const, padding: 14, gap: 10, borderBottomWidth: 1, borderBottomColor: C.borderLight },
+  autoStatusDot: { width: 8, height: 8, borderRadius: 4 },
+  autoItemContent: { flex: 1 },
+  autoItemName: { fontFamily: 'Inter_500Medium', fontSize: 15, color: C.text },
+  autoItemSchedule: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textSecondary, marginTop: 2 },
+  autoStatusPill: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  autoStatusText: { fontFamily: 'Inter_500Medium', fontSize: 11 },
+  quickActionsRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, padding: 14, borderBottomWidth: 1, borderBottomColor: C.borderLight },
+  quickActionChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, backgroundColor: C.cardElevated, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: C.borderLight },
+  quickActionChipText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.accent },
+  approvalEmptyWrap: { alignItems: 'center' as const, paddingVertical: 24, gap: 8 },
+  approvalEmptyText: { fontFamily: 'Inter_400Regular', fontSize: 14, color: C.textTertiary },
+  approvalItem: { padding: 14, borderBottomWidth: 1, borderBottomColor: C.borderLight, gap: 6 },
+  approvalItemHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  approvalRiskBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  approvalRiskText: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
+  approvalAction: { fontFamily: 'Inter_500Medium', fontSize: 15, color: C.text, flex: 1 },
+  approvalDesc: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textSecondary, lineHeight: 18 },
 });

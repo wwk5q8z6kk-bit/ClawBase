@@ -9,31 +9,28 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 
 function NativeTabLayout() {
+  const { tasks, memoryEntries } = useApp();
+  const activeTasks = tasks.filter((t) => t.status === 'in_progress').length;
+  const unreadMemories = memoryEntries.filter((m) => m.reviewStatus === 'unread').length;
+  const vaultBadge = activeTasks + unreadMemories;
+
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: 'gauge.open.with.lines.needle.33percent', selected: 'gauge.open.with.lines.needle.33percent' }} />
-        <Label>Mission</Label>
+        <Label>Mission Control</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="chat">
         <Icon sf={{ default: 'bubble.left.and.bubble.right', selected: 'bubble.left.and.bubble.right.fill' }} />
         <Label>Chat</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="automations">
-        <Icon sf={{ default: 'bolt.circle', selected: 'bolt.circle.fill' }} />
-        <Label>Auto</Label>
+      <NativeTabs.Trigger name="vault">
+        <Icon sf={{ default: 'shield.lefthalf.filled', selected: 'shield.lefthalf.filled' }} />
+        <Label>Vault</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="timeline">
-        <Icon sf={{ default: 'clock.arrow.circlepath', selected: 'clock.arrow.circlepath' }} />
-        <Label>Timeline</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="memory">
-        <Icon sf={{ default: 'brain.head.profile', selected: 'brain.head.profile.fill' }} />
-        <Label>Memory</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="tasks">
-        <Icon sf={{ default: 'rectangle.stack', selected: 'rectangle.stack.fill' }} />
-        <Label>Tasks</Label>
+      <NativeTabs.Trigger name="calendar">
+        <Icon sf={{ default: 'calendar', selected: 'calendar' }} />
+        <Label>Calendar</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <Icon sf={{ default: 'gearshape', selected: 'gearshape.fill' }} />
@@ -50,6 +47,7 @@ function ClassicTabLayout() {
 
   const activeTasks = tasks.filter((t) => t.status === 'in_progress').length;
   const unreadMemories = memoryEntries.filter((m) => m.reviewStatus === 'unread').length;
+  const vaultBadge = activeTasks + unreadMemories;
 
   return (
     <Tabs
@@ -77,7 +75,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Mission',
+          title: 'Mission Control',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="speedometer-outline" size={size} color={color} />
           ),
@@ -93,32 +91,32 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="automations"
+        name="vault"
         options={{
-          title: 'Auto',
+          title: 'Vault',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="flash-outline" size={size} color={color} />
+            <Ionicons name="shield-checkmark-outline" size={size} color={color} />
           ),
-        }}
-      />
-      <Tabs.Screen
-        name="timeline"
-        options={{
-          title: 'Timeline',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="time-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="memory"
-        options={{
-          title: 'Memory',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="globe-outline" size={size} color={color} />
-          ),
-          tabBarBadge: unreadMemories > 0 ? unreadMemories : undefined,
+          tabBarBadge: vaultBadge > 0 ? vaultBadge : undefined,
           tabBarBadgeStyle: { backgroundColor: Colors.dark.coral, fontSize: 10, fontFamily: 'Inter_600SemiBold' },
+        }}
+      />
+      <Tabs.Screen
+        name="calendar"
+        options={{
+          title: 'Calendar',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="calendar-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="settings-outline" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
@@ -128,7 +126,19 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="settings"
+        name="memory"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="automations"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="timeline"
         options={{
           href: null,
         }}
