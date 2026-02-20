@@ -206,8 +206,8 @@ export default function TimelineScreen() {
   const fetchGatewayEvents = useCallback(async () => {
     if (gatewayStatus !== 'connected') return;
     try {
-      const result = await (gateway as any).rpc('events.list', { limit: 50 });
-      if (Array.isArray(result)) {
+      const result = await gateway.fetchEvents(50);
+      if (Array.isArray(result) && result.length > 0) {
         const mapped: TimelineEvent[] = result.map((e: any, i: number) => ({
           id: `gw-${e.id || i}`,
           type: (e.type || 'info') as EventType,

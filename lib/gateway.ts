@@ -729,6 +729,69 @@ export class OpenClawGateway {
     }
   }
 
+  async fetchAutomations(): Promise<any[]> {
+    try {
+      const result = await this.rpc('automations.list');
+      return Array.isArray(result) ? result : result?.automations || [];
+    } catch {
+      return [];
+    }
+  }
+
+  async fetchApprovals(): Promise<any[]> {
+    try {
+      const result = await this.rpc('automations.approvals');
+      return Array.isArray(result) ? result : result?.approvals || [];
+    } catch {
+      return [];
+    }
+  }
+
+  async toggleAutomation(id: string, enabled: boolean): Promise<boolean> {
+    try {
+      await this.rpc('automations.toggle', { id, enabled });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async approveAction(id: string): Promise<boolean> {
+    try {
+      await this.rpc('automations.approve', { id });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async denyAction(id: string): Promise<boolean> {
+    try {
+      await this.rpc('automations.deny', { id });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async fetchEvents(limit = 50): Promise<any[]> {
+    try {
+      const result = await this.rpc('events.list', { limit });
+      return Array.isArray(result) ? result : result?.events || [];
+    } catch {
+      return [];
+    }
+  }
+
+  async fetchCronOutputs(limit = 10): Promise<any[]> {
+    try {
+      const result = await this.rpc('automations.outputs', { limit });
+      return Array.isArray(result) ? result : result?.outputs || [];
+    } catch {
+      return [];
+    }
+  }
+
   async rebindGateway(bind = '0.0.0.0', port = 18789): Promise<{ success: boolean; error?: string }> {
     try {
       const result = await this.rpc('config.set', { bind, port }, 10000);

@@ -101,6 +101,17 @@ function HeroHeader() {
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/(tabs)/settings' as any);
+            }}
+            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+          >
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.borderLight }}>
+              <Ionicons name="settings-outline" size={18} color={C.textSecondary} />
+            </View>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push('/(tabs)/chat');
             }}
             style={({ pressed }) => [styles.heroActionBtn, pressed && { opacity: 0.7 }]}

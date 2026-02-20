@@ -14,7 +14,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Frontend (Mobile App)
 - **Framework**: React Native with Expo SDK 54, using Expo Router v6 for file-based routing
-- **Navigation**: Tab-based layout with 5 main tabs: Dashboard, Chat, Tasks, Memory, Settings. Uses `expo-router` with typed routes enabled
+- **Navigation**: Tab-based layout with 5 visible tabs: Mission Control, Chat, Automations, Timeline, Memory + Files. Tasks and Settings are hidden tabs accessible via navigation. Uses `expo-router` with typed routes enabled
 - **State Management**: React Context (`AppContext`) provides global state for connections, conversations, tasks, and memory. React Query (`@tanstack/react-query`) handles server-state for API calls
 - **Local Storage**: AsyncStorage (`@react-native-async-storage/async-storage`) persists all local data (connections, conversations, messages, tasks, memory entries) with a key-prefixed storage pattern (`@clawbase:*`)
 - **UI Libraries**: expo-linear-gradient for gradients, expo-blur for glass effects, expo-haptics for tactile feedback, react-native-reanimated for animations, react-native-gesture-handler for gestures, react-native-keyboard-controller for keyboard handling
@@ -42,14 +42,16 @@ Preferred communication style: Simple, everyday language.
 - **Auto-reconnect**: Exponential backoff with max 30s delay, automatic reconnection on connection loss
 - **Event System**: 6+ event types (status_change, gateway_info, sessions_list, memory_data, message_chunk, message_complete)
 - **Dashboard Widget**: GatewayStatusWidget shows live connection status, channel chips, session/model counts
-- **Gateway Orchestration**: App can tell the gateway to start/stop tunnels (`config.tunnel.start/stop/status`), generate pairing codes (`config.pair.generate`), and invoke arbitrary commands (`tools.invoke` with `command` tool)
+- **Gateway Orchestration**: App can tell the gateway to start/stop tunnels (`config.tunnel.start/stop/status`), generate pairing codes (`config.pair.generate`), rebind gateway (`config.set`), and invoke arbitrary commands (`tools.invoke` with `command` tool)
+- **Automations RPC**: `automations.list`, `automations.approvals`, `automations.toggle`, `automations.approve`, `automations.deny`, `automations.outputs` for managing heartbeat/cron automations
+- **Events RPC**: `events.list` for fetching unified timeline of agent actions, alerts, and errors
 - **Zero Relay Architecture**: All communication is direct between app and gateway — no intermediary servers, no relay dependencies. The pairing code flow calls the gateway's own `/api/pair/<code>` endpoint
 - **Node Registration**: App registers as a "node" with capabilities (chat, tasks, memory, calendar, crm, canvas, notifications) following the OpenClaw protocol
 - **Node.invoke Handling**: Gateway can send commands to the app via node.invoke; the app responds with node.invoke.result
 - **Pairing Approval**: When gateway returns pairing.required, app shows approval waiting screen with CLI commands (openclaw nodes pending/approve)
 
 ### Pairing System (app/pair.tsx)
-- **Three connection methods**: QR code scanning (camera), gateway pairing code (gateway URL + code), manual URL entry
+- **Four connection methods**: QR code scanning (camera), Tailscale/remote URL, gateway pairing code (gateway URL + code), manual URL entry
 - **Reachability test**: Before saving a connection, the app tests the gateway's `/healthz` endpoint with a 6-second timeout
 - **Unreachable flow**: If gateway can't be reached, shows diagnostic tips and offers "Try again" or "Save anyway for later"
 - **Deep links**: Supports `clawbase://` and `openclaw://` URL schemes for one-tap connection
