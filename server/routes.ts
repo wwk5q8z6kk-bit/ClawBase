@@ -1,10 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "node:http";
-import rateLimit from "express-rate-limit";
+import createRateLimit from "express-rate-limit";
 import { setupRelay } from "./relay";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  const relayLimiter = rateLimit({
+  const relayLimiter = createRateLimit({
     windowMs: 60 * 1000,
     max: 100,
     standardHeaders: true,
