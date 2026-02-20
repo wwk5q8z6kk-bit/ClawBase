@@ -44,6 +44,9 @@ Preferred communication style: Simple, everyday language.
 - **Dashboard Widget**: GatewayStatusWidget shows live connection status, channel chips, session/model counts
 - **Gateway Orchestration**: App can tell the gateway to start/stop tunnels (`config.tunnel.start/stop/status`), generate pairing codes (`config.pair.generate`), and invoke arbitrary commands (`tools.invoke` with `command` tool)
 - **Zero Relay Architecture**: All communication is direct between app and gateway — no intermediary servers, no relay dependencies. The pairing code flow calls the gateway's own `/api/pair/<code>` endpoint
+- **Node Registration**: App registers as a "node" with capabilities (chat, tasks, memory, calendar, crm, canvas, notifications) following the OpenClaw protocol
+- **Node.invoke Handling**: Gateway can send commands to the app via node.invoke; the app responds with node.invoke.result
+- **Pairing Approval**: When gateway returns pairing.required, app shows approval waiting screen with CLI commands (openclaw nodes pending/approve)
 
 ### Pairing System (app/pair.tsx)
 - **Three connection methods**: QR code scanning (camera), gateway pairing code (gateway URL + code), manual URL entry
@@ -51,11 +54,21 @@ Preferred communication style: Simple, everyday language.
 - **Unreachable flow**: If gateway can't be reached, shows diagnostic tips and offers "Try again" or "Save anyway for later"
 - **Deep links**: Supports `clawbase://` and `openclaw://` URL schemes for one-tap connection
 - **Direct-to-gateway pairing**: Pairing code is looked up via `GET http://<gateway>/api/pair/<code>` — the gateway generates and validates its own codes
+- **Auto-discovery**: On mobile (Expo Go), the app scans the local network (192.168.x.x, 10.0.x.x ranges) for gateways on port 18789 by probing /healthz endpoints
+- **Discovered gateways**: Discovered gateways are shown at the top of the connection screen with one-tap connect
+
+### Network Discovery (lib/discovery.ts)
+- **Network scanning for OpenClaw gateways**: HTTP-based subnet scanning as a fallback since native mDNS/Bonjour is not available in Expo Go
+- **Scanning strategy**: Scans common LAN subnets (192.168.x.x, 10.0.x.x ranges) in batches of 15 with 2-second timeout per probe
+- **Gateway detection**: Gateways are detected by probing the /healthz endpoint on port 18789
+- **Discovery response**: Returns DiscoveredGateway[] array with host, port, name, version, and url for each discovered gateway
 
 ### Key Design Patterns
 - **Local-first architecture**: All user data (connections, chats, tasks, memory) is stored locally on device via AsyncStorage. No central server required for core functionality
 - **Zero-dependency design**: The app connects directly to user's OpenClaw Gateway with no relay, proxy, or intermediary service. The Express backend only serves static files and a landing page
 - **Gateway connection model**: Users connect to their own OpenClaw Gateway instances via WebSocket URLs (supports local discovery, manual URL, Tailscale, Cloudflare Tunnel)
+- **Local-first discovery**: Native mDNS/Bonjour not available in Expo Go, so HTTP-based subnet scanning is used as a fallback. Gateways are detected by probing port 18789
+- **Smart URL scheme detection**: Local/private IPs automatically use http/ws; public domains use https/wss
 - **Shared types**: `lib/types.ts` defines TypeScript interfaces used across the app (GatewayConnection, ChatMessage, Conversation, Task, MemoryEntry)
 - **Gateway types**: `lib/gateway.ts` exports GatewaySession, GatewaySessionMessage, GatewayMemoryFile interfaces
 - **Onboarding flow**: First-launch experience guides users through connecting to a gateway, with option to skip
