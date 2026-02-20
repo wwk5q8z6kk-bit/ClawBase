@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useMemo, useState, type ReactNode } from 'react';
 import {
   StyleSheet,
   Text,
@@ -46,6 +46,47 @@ function PulsingDot({ color, size = 8 }: { color: string; size?: number }) {
         opacity: pulseAnim,
       }}
     />
+  );
+}
+
+function SkeletonLoader({ height = 120 }: { height?: number }) {
+  const shimmerAnim = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const shimmer = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmerAnim, { toValue: 0.6, duration: 800, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(shimmerAnim, { toValue: 0.3, duration: 800, useNativeDriver: Platform.OS !== 'web' }),
+      ]),
+    );
+    shimmer.start();
+    return () => shimmer.stop();
+  }, [shimmerAnim]);
+
+  return (
+    <Animated.View style={{ backgroundColor: C.card, borderRadius: 16, padding: 16, height, justifyContent: 'center', gap: 12, borderWidth: 1, borderColor: C.borderLight, opacity: shimmerAnim }}>
+      <View style={{ width: '60%', height: 12, borderRadius: 6, backgroundColor: C.cardElevated }} />
+      <View style={{ width: '40%', height: 12, borderRadius: 6, backgroundColor: C.cardElevated }} />
+      <View style={{ width: '80%', height: 12, borderRadius: 6, backgroundColor: C.cardElevated }} />
+    </Animated.View>
+  );
+}
+
+function FadeInWidget({ delay, children }: { delay: number; children: ReactNode }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 400, delay, useNativeDriver: Platform.OS !== 'web' }),
+      Animated.timing(translateAnim, { toValue: 0, duration: 400, delay, useNativeDriver: Platform.OS !== 'web' }),
+    ]).start();
+  }, [fadeAnim, translateAnim, delay]);
+
+  return (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: translateAnim }] }}>
+      {children}
+    </Animated.View>
   );
 }
 
@@ -104,7 +145,7 @@ function HeroHeader() {
   const connected = gatewayStatus === 'connected';
   const now = new Date();
   const hour = now.getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   const activeTasks = tasks.filter((t) => t.status === 'in_progress').length;
   const unreadMemories = memoryEntries.filter((m) => m.reviewStatus === 'unread').length;
@@ -417,6 +458,8 @@ function GatewayStatusWidget() {
   const { gatewayStatus, gatewayInfo, gatewaySessions, activeConnection } = useApp();
   if (!activeConnection) return null;
 
+  if (gatewayStatus === 'connecting') return <SkeletonLoader height={130} />;
+
   const statusConfig: Record<string, { color: string; label: string; icon: string }> = {
     connected: { color: C.success, label: 'Connected', icon: 'checkmark-circle' },
     connecting: { color: C.amber, label: 'Connecting...', icon: 'sync-circle' },
@@ -640,6 +683,8 @@ function SystemHealthWidget() {
   const { gatewayStatus, activeConnection } = useApp();
   const connected = gatewayStatus === 'connected';
 
+  if (gatewayStatus === 'connecting') return <SkeletonLoader height={140} />;
+
   const cpuPct = connected ? 34 : 0;
   const memUsed = connected ? 6.2 : 0;
   const memTotal = connected ? 16 : 1;
@@ -802,19 +847,19 @@ function QuickActionsRow() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <Pressable
-            style={({ pressed }) => [
-              styles.quickTile,
-              pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
-            ]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               router.push(item.route as any);
             }}
           >
-            <View style={[styles.quickTileIcon, { backgroundColor: item.color + '15' }]}>
-              <Ionicons name={item.icon as any} size={22} color={item.color} />
-            </View>
-            <Text style={styles.quickTileLabel} numberOfLines={2}>{item.label}</Text>
+            {({ pressed }) => (
+              <View style={[styles.quickTile, pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] }]}>
+                <View style={[styles.quickTileIcon, { backgroundColor: pressed ? item.color + '40' : item.color + '15' }]}>
+                  <Ionicons name={item.icon as any} size={22} color={item.color} />
+                </View>
+                <Text style={styles.quickTileLabel} numberOfLines={2}>{item.label}</Text>
+              </View>
+            )}
           </Pressable>
         )}
         contentContainerStyle={styles.quickActionsScroll}
@@ -964,6 +1009,20 @@ function CommandBar() {
   const [commandText, setCommandText] = useState('');
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
   const { createTask, createCalendarEvent } = useApp();
+  const borderAnim = useRef(new Animated.Value(0)).current;
+
+  const onFocusInput = () => {
+    Animated.timing(borderAnim, { toValue: 1, duration: 250, useNativeDriver: false }).start();
+  };
+
+  const onBlurInput = () => {
+    Animated.timing(borderAnim, { toValue: 0, duration: 250, useNativeDriver: false }).start();
+  };
+
+  const animatedBorderColor = borderAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [C.borderLight, C.coral],
+  });
 
   useEffect(() => {
     if (feedbackMsg) {
@@ -1029,7 +1088,7 @@ function CommandBar() {
 
   return (
     <View style={styles.commandBarWrapper}>
-      <View style={styles.commandBarInput}>
+      <Animated.View style={[styles.commandBarInput, { borderColor: animatedBorderColor }]}>
         <Ionicons name="sparkles" size={18} color={C.coral} />
         <TextInput
           style={styles.commandBarTextInput}
@@ -1038,6 +1097,8 @@ function CommandBar() {
           value={commandText}
           onChangeText={setCommandText}
           onSubmitEditing={() => handleSend(commandText)}
+          onFocus={onFocusInput}
+          onBlur={onBlurInput}
           returnKeyType="send"
         />
         {commandText.length > 0 && (
@@ -1047,7 +1108,7 @@ function CommandBar() {
             </LinearGradient>
           </Pressable>
         )}
-      </View>
+      </Animated.View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.commandChipsScroll}>
         {COMMAND_CHIPS.map((chip) => (
           <Pressable
@@ -1102,49 +1163,77 @@ export default function DashboardScreen() {
       >
         <HeroHeader />
 
-        <CommandBar />
+        <FadeInWidget delay={0}>
+          <CommandBar />
+        </FadeInWidget>
 
         {!activeConnection && (
-          <ProactiveAlert
-            type="warn"
-            icon="link"
-            message="Connect to your OpenClaw gateway to unlock all features"
-            onPress={() => router.push('/(tabs)/settings')}
-            priority="P2"
-          />
+          <FadeInWidget delay={50}>
+            <ProactiveAlert
+              type="warn"
+              icon="link"
+              message="Connect to your OpenClaw gateway to unlock all features"
+              onPress={() => router.push('/(tabs)/settings')}
+              priority="P2"
+            />
+          </FadeInWidget>
         )}
 
         {dueToday.length > 0 && (
-          <ProactiveAlert
-            type="info"
-            icon="flame"
-            message={`${dueToday.length} task${dueToday.length !== 1 ? 's' : ''} due today`}
-            onPress={() => router.push('/(tabs)/vault')}
-            priority={dueToday.length >= 3 ? 'P1' : 'P2'}
-          />
+          <FadeInWidget delay={100}>
+            <ProactiveAlert
+              type="info"
+              icon="flame"
+              message={`${dueToday.length} task${dueToday.length !== 1 ? 's' : ''} due today`}
+              onPress={() => router.push('/(tabs)/vault')}
+              priority={dueToday.length >= 3 ? 'P1' : 'P2'}
+            />
+          </FadeInWidget>
         )}
 
-        <SystemHealthWidget />
+        <FadeInWidget delay={100}>
+          <SystemHealthWidget />
+        </FadeInWidget>
 
-        <AgentSkillsBar />
+        <FadeInWidget delay={200}>
+          <AgentSkillsBar />
+        </FadeInWidget>
 
-        <GatewayStatusWidget />
+        <FadeInWidget delay={300}>
+          <GatewayStatusWidget />
+        </FadeInWidget>
 
-        <AutomationStatusWidget />
+        <FadeInWidget delay={400}>
+          <AutomationStatusWidget />
+        </FadeInWidget>
 
-        <KanbanProgressWidget />
+        <FadeInWidget delay={500}>
+          <KanbanProgressWidget />
+        </FadeInWidget>
 
-        <CalendarAgendaWidget />
+        <FadeInWidget delay={600}>
+          <CalendarAgendaWidget />
+        </FadeInWidget>
 
-        <QuickActionsRow />
+        <FadeInWidget delay={700}>
+          <QuickActionsRow />
+        </FadeInWidget>
 
-        <WorkstreamCards />
+        <FadeInWidget delay={800}>
+          <WorkstreamCards />
+        </FadeInWidget>
 
-        <CRMHighlightsWidget />
+        <FadeInWidget delay={900}>
+          <CRMHighlightsWidget />
+        </FadeInWidget>
 
-        <DeferredPKMWidget />
+        <FadeInWidget delay={1000}>
+          <DeferredPKMWidget />
+        </FadeInWidget>
 
-        <RecentActivityWidget />
+        <FadeInWidget delay={1100}>
+          <RecentActivityWidget />
+        </FadeInWidget>
       </ScrollView>
     </View>
   );

@@ -43,11 +43,12 @@ function NativeTabLayout() {
 function ClassicTabLayout() {
   const isWeb = Platform.OS === 'web';
   const isIOS = Platform.OS === 'ios';
-  const { tasks, memoryEntries } = useApp();
+  const { tasks, memoryEntries, conversations } = useApp();
 
   const activeTasks = tasks.filter((t) => t.status === 'in_progress').length;
   const unreadMemories = memoryEntries.filter((m) => m.reviewStatus === 'unread').length;
   const vaultBadge = activeTasks + unreadMemories;
+  const recentChatCount = conversations.filter((c) => Date.now() - c.lastMessageTime < 3600000).length;
 
   return (
     <Tabs
@@ -88,6 +89,8 @@ function ClassicTabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubbles-outline" size={size} color={color} />
           ),
+          tabBarBadge: recentChatCount > 0 ? recentChatCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: Colors.dark.coral, fontSize: 10, fontFamily: 'Inter_600SemiBold' },
         }}
       />
       <Tabs.Screen

@@ -606,7 +606,7 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Connection Methods</Text>
           <View style={{ gap: 10 }}>
-            {connectionMethods.map((method) => (
+            {connectionMethods.map((method, index) => (
               <Pressable
                 key={method.title}
                 onPress={() => openWithTemplate(method.templateName, method.templateUrl)}
@@ -616,6 +616,11 @@ export default function SettingsScreen() {
                   colors={C.gradient.cardElevated}
                   style={[styles.methodCard, { borderColor: C.borderLight }]}
                 >
+                  {index === 0 && (
+                    <View style={styles.recommendedBadge}>
+                      <Text style={styles.recommendedText}>Recommended</Text>
+                    </View>
+                  )}
                   <View style={[styles.methodAccent, { backgroundColor: method.color }]} />
                   <View style={styles.methodBody}>
                     <View style={styles.methodHeader}>
@@ -654,63 +659,75 @@ export default function SettingsScreen() {
         </SettingsSection>
 
         <SettingsSection title="Automations">
-          <View style={styles.autoSummaryCard}>
-            <View style={styles.autoSummaryRow}>
-              <View style={styles.autoSummaryStat}>
-                <Text style={[styles.autoSummaryCount, { color: C.success }]}>{enabledCount}</Text>
-                <Text style={styles.autoSummaryLabel}>Enabled</Text>
+          {gatewayStatus !== 'connected' && automations.length === 0 ? (
+            <View style={styles.autoEmptyState}>
+              <View style={styles.autoEmptyIconWrap}>
+                <Ionicons name="flash-outline" size={40} color={C.amber} />
               </View>
-              <View style={styles.autoSummaryDivider} />
-              <View style={styles.autoSummaryStat}>
-                <Text style={[styles.autoSummaryCount, { color: C.amber }]}>{pausedCount}</Text>
-                <Text style={styles.autoSummaryLabel}>Paused</Text>
-              </View>
-              <Pressable
-                style={({ pressed }) => [styles.autoPauseAllBtn, pressed && { opacity: 0.7 }]}
-                onPress={handlePauseResumeAll}
-              >
-                <Ionicons
-                  name={enabledCount > 0 ? 'pause' : 'play'}
-                  size={14}
-                  color={enabledCount > 0 ? C.amber : C.success}
-                />
-                <Text style={[styles.autoPauseAllText, { color: enabledCount > 0 ? C.amber : C.success }]}>
-                  {enabledCount > 0 ? 'Pause All' : 'Resume All'}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-          {automationsLoading && automations.length === 0 ? (
-            <View style={styles.autoLoadingWrap}>
-              <ActivityIndicator size="small" color={C.accent} />
+              <Text style={styles.autoEmptyTitle}>Automations</Text>
+              <Text style={styles.autoEmptySubtitle}>Connect to your gateway to manage heartbeat and cron automations</Text>
             </View>
           ) : (
-            automations.map((auto) => {
-              const config = STATUS_CONFIG[auto.status] || STATUS_CONFIG.idle;
-              return (
-                <View key={auto.id} style={styles.autoItem}>
-                  <View style={[styles.autoStatusDot, { backgroundColor: config.color }]} />
-                  <View style={styles.autoItemContent}>
-                    <Text style={styles.autoItemName}>{auto.name}</Text>
-                    <Text style={styles.autoItemSchedule}>
-                      {auto.schedule}
-                      {auto.lastRun ? ` · ${formatTimeAgo(auto.lastRun)}` : ''}
+            <>
+              <View style={styles.autoSummaryCard}>
+                <View style={styles.autoSummaryRow}>
+                  <View style={styles.autoSummaryStat}>
+                    <Text style={[styles.autoSummaryCount, { color: C.success }]}>{enabledCount}</Text>
+                    <Text style={styles.autoSummaryLabel}>Enabled</Text>
+                  </View>
+                  <View style={styles.autoSummaryDivider} />
+                  <View style={styles.autoSummaryStat}>
+                    <Text style={[styles.autoSummaryCount, { color: C.amber }]}>{pausedCount}</Text>
+                    <Text style={styles.autoSummaryLabel}>Paused</Text>
+                  </View>
+                  <Pressable
+                    style={({ pressed }) => [styles.autoPauseAllBtn, pressed && { opacity: 0.7 }]}
+                    onPress={handlePauseResumeAll}
+                  >
+                    <Ionicons
+                      name={enabledCount > 0 ? 'pause' : 'play'}
+                      size={14}
+                      color={enabledCount > 0 ? C.amber : C.success}
+                    />
+                    <Text style={[styles.autoPauseAllText, { color: enabledCount > 0 ? C.amber : C.success }]}>
+                      {enabledCount > 0 ? 'Pause All' : 'Resume All'}
                     </Text>
-                  </View>
-                  <View style={[styles.autoStatusPill, { backgroundColor: config.color + '18' }]}>
-                    <Ionicons name={config.icon as any} size={11} color={config.color} />
-                    <Text style={[styles.autoStatusText, { color: config.color }]}>{config.label}</Text>
-                  </View>
-                  <Switch
-                    value={auto.enabled}
-                    onValueChange={(val) => handleToggleAutomation(auto.id, val)}
-                    trackColor={{ false: C.border, true: C.success + '40' }}
-                    thumbColor={auto.enabled ? C.success : C.textTertiary}
-                    style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                  />
+                  </Pressable>
                 </View>
-              );
-            })
+              </View>
+              {automationsLoading && automations.length === 0 ? (
+                <View style={styles.autoLoadingWrap}>
+                  <ActivityIndicator size="small" color={C.accent} />
+                </View>
+              ) : (
+                automations.map((auto) => {
+                  const config = STATUS_CONFIG[auto.status] || STATUS_CONFIG.idle;
+                  return (
+                    <View key={auto.id} style={styles.autoItem}>
+                      <View style={[styles.autoStatusDot, { backgroundColor: config.color }]} />
+                      <View style={styles.autoItemContent}>
+                        <Text style={styles.autoItemName}>{auto.name}</Text>
+                        <Text style={styles.autoItemSchedule}>
+                          {auto.schedule}
+                          {auto.lastRun ? ` · ${formatTimeAgo(auto.lastRun)}` : ''}
+                        </Text>
+                      </View>
+                      <View style={[styles.autoStatusPill, { backgroundColor: config.color + '18' }]}>
+                        <Ionicons name={config.icon as any} size={11} color={config.color} />
+                        <Text style={[styles.autoStatusText, { color: config.color }]}>{config.label}</Text>
+                      </View>
+                      <Switch
+                        value={auto.enabled}
+                        onValueChange={(val) => handleToggleAutomation(auto.id, val)}
+                        trackColor={{ false: C.border, true: C.success + '40' }}
+                        thumbColor={auto.enabled ? C.success : C.textTertiary}
+                        style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                      />
+                    </View>
+                  );
+                })
+              )}
+            </>
           )}
           <View style={styles.quickActionsRow}>
             {[
@@ -770,25 +787,32 @@ export default function SettingsScreen() {
         </SettingsSection>
 
         <SettingsSection title="Data & Storage">
-          {storageStats && (
-            <View style={styles.storageGrid}>
-              {[
-                { label: 'Tasks', count: storageStats.tasks, icon: 'checkbox-outline', color: C.amber },
-                { label: 'Chats', count: storageStats.conversations, icon: 'chatbubble-outline', color: C.coral },
-                { label: 'Memories', count: storageStats.memories, icon: 'document-text-outline', color: C.accent },
-                { label: 'Contacts', count: storageStats.contacts, icon: 'people-outline', color: C.secondary },
-                { label: 'Events', count: storageStats.events, icon: 'calendar-outline', color: '#8B7FFF' },
-              ].map((item) => (
-                <View key={item.label} style={styles.storageItem}>
-                  <View style={[styles.storageItemIcon, { backgroundColor: item.color + '15' }]}>
-                    <Ionicons name={item.icon as any} size={16} color={item.color} />
+          {storageStats && (() => {
+            const items = [
+              { label: 'Tasks', count: storageStats.tasks, icon: 'checkbox-outline', color: C.amber },
+              { label: 'Chats', count: storageStats.conversations, icon: 'chatbubble-outline', color: C.coral },
+              { label: 'Memories', count: storageStats.memories, icon: 'document-text-outline', color: C.accent },
+              { label: 'Contacts', count: storageStats.contacts, icon: 'people-outline', color: C.secondary },
+              { label: 'Events', count: storageStats.events, icon: 'calendar-outline', color: '#8B7FFF' },
+            ];
+            const maxCount = Math.max(...items.map(i => i.count), 1);
+            return (
+              <View style={styles.storageGrid}>
+                {items.map((item) => (
+                  <View key={item.label} style={styles.storageItem}>
+                    <View style={[styles.storageItemIcon, { backgroundColor: item.color + '15' }]}>
+                      <Ionicons name={item.icon as any} size={16} color={item.color} />
+                    </View>
+                    <Text style={styles.storageItemCount}>{item.count}</Text>
+                    <Text style={styles.storageItemLabel}>{item.label}</Text>
+                    <View style={styles.storageBarTrack}>
+                      <View style={[styles.storageBarFill, { width: `${(item.count / maxCount) * 100}%` }]} />
+                    </View>
                   </View>
-                  <Text style={styles.storageItemCount}>{item.count}</Text>
-                  <Text style={styles.storageItemLabel}>{item.label}</Text>
-                </View>
-              ))}
-            </View>
-          )}
+                ))}
+              </View>
+            );
+          })()}
           <SettingsRow
             icon="cloud-download-outline"
             iconColor={C.accent}
@@ -848,6 +872,28 @@ export default function SettingsScreen() {
                   {approval.description ? (
                     <Text style={styles.approvalDesc} numberOfLines={2}>{approval.description}</Text>
                   ) : null}
+                  <View style={styles.approvalBtnsRow}>
+                    <Pressable
+                      style={({ pressed }) => [styles.approvalDenyBtn, pressed && { opacity: 0.7 }]}
+                      onPress={async () => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        try { await getGateway().denyAction(approval.id); } catch {}
+                        setApprovals(prev => prev.filter(a => a.id !== approval.id));
+                      }}
+                    >
+                      <Text style={styles.approvalDenyText}>Deny</Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [styles.approvalApproveBtn, pressed && { opacity: 0.7 }]}
+                      onPress={async () => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        try { await getGateway().approveAction(approval.id); } catch {}
+                        setApprovals(prev => prev.filter(a => a.id !== approval.id));
+                      }}
+                    >
+                      <Text style={styles.approvalApproveText}>Approve</Text>
+                    </Pressable>
+                  </View>
                 </View>
               ))
             )}
@@ -1260,4 +1306,17 @@ const styles = StyleSheet.create({
   approvalRiskText: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
   approvalAction: { fontFamily: 'Inter_500Medium', fontSize: 15, color: C.text, flex: 1 },
   approvalDesc: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textSecondary, lineHeight: 18 },
+  approvalBtnsRow: { flexDirection: 'row' as const, gap: 8, marginTop: 4 },
+  approvalDenyBtn: { flex: 1, backgroundColor: C.errorMuted, borderRadius: 8, paddingVertical: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  approvalDenyText: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.error },
+  approvalApproveBtn: { flex: 1, backgroundColor: C.successMuted, borderRadius: 8, paddingVertical: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  approvalApproveText: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.success },
+  autoEmptyState: { alignItems: 'center' as const, paddingVertical: 28, paddingHorizontal: 24, gap: 8 },
+  autoEmptyIconWrap: { width: 64, height: 64, borderRadius: 32, backgroundColor: C.amberMuted, alignItems: 'center' as const, justifyContent: 'center' as const, marginBottom: 4 },
+  autoEmptyTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: C.text },
+  autoEmptySubtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary, textAlign: 'center' as const },
+  recommendedBadge: { position: 'absolute' as const, top: 8, right: 8, backgroundColor: C.secondaryMuted, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, zIndex: 1 },
+  recommendedText: { fontFamily: 'Inter_500Medium', fontSize: 10, color: C.secondary },
+  storageBarTrack: { width: '100%' as const, height: 2, backgroundColor: C.border, borderRadius: 1, marginTop: 2 },
+  storageBarFill: { height: 2, backgroundColor: C.coral, borderRadius: 1 },
 });

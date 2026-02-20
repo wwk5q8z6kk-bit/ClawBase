@@ -80,10 +80,12 @@ function ConversationItem({
   item,
   onPress,
   onLongPress,
+  isFirstUnpinned,
 }: {
   item: Conversation;
   onPress: () => void;
   onLongPress: () => void;
+  isFirstUnpinned?: boolean;
 }) {
   const formatTime = (ts: number) => {
     const diff = Date.now() - ts;
@@ -114,7 +116,7 @@ function ConversationItem({
     <Pressable
       style={({ pressed }) => [
         styles.conversationItem,
-        { borderLeftWidth: 3, borderLeftColor: item.pinned ? C.coral : 'transparent' },
+        { borderLeftWidth: 3, borderLeftColor: item.pinned ? C.coral : (isFirstUnpinned ? C.accent : 'transparent') },
         pressed && { backgroundColor: C.cardElevated },
       ]}
       onPress={onPress}
@@ -196,6 +198,21 @@ export default function ChatListScreen() {
   const [fabExpanded, setFabExpanded] = useState(false);
   const [commandModalVisible, setCommandModalVisible] = useState(false);
   const [commandText, setCommandText] = useState('');
+
+  const searchBorderAnim = useRef(new Animated.Value(0)).current;
+
+  const onSearchFocus = useCallback(() => {
+    Animated.timing(searchBorderAnim, { toValue: 1, duration: 200, useNativeDriver: false }).start();
+  }, [searchBorderAnim]);
+
+  const onSearchBlur = useCallback(() => {
+    Animated.timing(searchBorderAnim, { toValue: 0, duration: 200, useNativeDriver: false }).start();
+  }, [searchBorderAnim]);
+
+  const searchBorderColor = searchBorderAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [C.borderLight, C.coral],
+  });
 
   const fabAnim = useRef(new Animated.Value(0)).current;
   const fabRotateAnim = useRef(new Animated.Value(0)).current;
@@ -374,7 +391,7 @@ export default function ChatListScreen() {
       )}
 
       <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
+        <Animated.View style={[styles.searchBar, { borderColor: searchBorderColor }]}>
           <Ionicons name="search" size={18} color={C.textTertiary} />
           <TextInput
             style={styles.searchInput}
@@ -382,29 +399,24 @@ export default function ChatListScreen() {
             placeholderTextColor={C.textTertiary}
             value={searchQuery}
             onChangeText={setSearchQuery}
+            onFocus={onSearchFocus}
+            onBlur={onSearchBlur}
           />
           {searchQuery.length > 0 && (
             <Pressable onPress={() => setSearchQuery('')}>
               <Ionicons name="close-circle" size={18} color={C.textTertiary} />
             </Pressable>
           )}
-        </View>
+        </Animated.View>
       </View>
 
       {conversations.length > 0 && (
         <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Ionicons name="chatbubbles-outline" size={14} color={C.textSecondary} />
-            <Text style={styles.statText}>{stats.total}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Ionicons name="mail-outline" size={14} color={C.textSecondary} />
-            <Text style={styles.statText}>{stats.messages}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Ionicons name="pin-outline" size={14} color={C.textSecondary} />
-            <Text style={styles.statText}>{stats.pinned}</Text>
-          </View>
+          <Text style={styles.statText}>{stats.total} chats</Text>
+          <Text style={styles.statDivider}>·</Text>
+          <Text style={styles.statText}>{stats.messages} msgs</Text>
+          <Text style={styles.statDivider}>·</Text>
+          <Text style={styles.statText}>{stats.pinned} pinned</Text>
         </View>
       )}
 
@@ -430,6 +442,7 @@ export default function ChatListScreen() {
                 item={item}
                 onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.id } })}
                 onLongPress={() => openActionSheet(item)}
+                isFirstUnpinned={index === firstUnpinnedIndex}
               />
             </View>
           </View>
@@ -442,29 +455,41 @@ export default function ChatListScreen() {
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         scrollEnabled={!!conversations.length}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <LinearGradient colors={C.gradient.lobster} style={styles.emptyIconWrap}>
-              <Ionicons name="chatbubbles-outline" size={36} color="#fff" />
-            </LinearGradient>
-            <Text style={styles.emptyTitle}>No conversations yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Tap the compose button to start chatting with your agent
-            </Text>
-            <Pressable
-              onPress={handleNewChat}
-              style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.8 }]}
-            >
-              <LinearGradient
-                colors={C.gradient.lobster}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.emptyBtnGradient}
-              >
-                <Ionicons name="add" size={20} color="#fff" />
-                <Text style={styles.emptyBtnText}>New Chat</Text>
+          searchQuery.trim().length > 0 ? (
+            <View style={styles.emptyState}>
+              <View style={styles.emptySearchIconWrap}>
+                <Ionicons name="search" size={36} color={C.textTertiary} />
+              </View>
+              <Text style={styles.emptyTitle}>No matches found</Text>
+              <Text style={styles.emptySubtitle}>
+                No conversations matching "{searchQuery}"
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <LinearGradient colors={C.gradient.lobster} style={styles.emptyIconWrap}>
+                <Ionicons name="chatbubbles-outline" size={36} color="#fff" />
               </LinearGradient>
-            </Pressable>
-          </View>
+              <Text style={styles.emptyTitle}>No conversations yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Tap the compose button to start chatting with your agent
+              </Text>
+              <Pressable
+                onPress={handleNewChat}
+                style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.8 }]}
+              >
+                <LinearGradient
+                  colors={C.gradient.lobster}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.emptyBtnGradient}
+                >
+                  <Ionicons name="add" size={20} color="#fff" />
+                  <Text style={styles.emptyBtnText}>New Chat</Text>
+                </LinearGradient>
+              </Pressable>
+            </View>
+          )
         }
       />
 
@@ -687,8 +712,8 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: C.card,
     borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderWidth: 1,
     borderColor: C.borderLight,
   },
@@ -698,7 +723,7 @@ const styles = StyleSheet.create({
   },
   sessionPillText: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 13,
+    fontSize: 12,
     color: C.textSecondary,
     maxWidth: 100,
   },
@@ -750,17 +775,17 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    gap: 20,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+    gap: 8,
   },
   statText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
     color: C.textSecondary,
+  },
+  statDivider: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: C.textTertiary,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -972,6 +997,15 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  emptySearchIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: C.card,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,

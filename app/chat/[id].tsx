@@ -10,6 +10,7 @@ import {
   Animated,
   Modal,
   Alert,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
@@ -49,6 +50,117 @@ function DateSeparator({ label }: { label: string }) {
       <View style={styles.dateLine} />
     </View>
   );
+}
+
+function renderFormattedText(content: string, isUser: boolean): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  const codeBlockRegex = /```[\s\S]*?```/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  const renderInlineText = (text: string, key: string): React.ReactNode[] => {
+    const inlineNodes: React.ReactNode[] = [];
+    const inlineRegex = /(\*\*(.+?)\*\*)|(https?:\/\/[^\s)\]]+)/g;
+    let inlineLastIndex = 0;
+    let inlineMatch: RegExpExecArray | null;
+    let inlineKey = 0;
+
+    while ((inlineMatch = inlineRegex.exec(text)) !== null) {
+      if (inlineMatch.index > inlineLastIndex) {
+        inlineNodes.push(
+          <Text key={`${key}-t${inlineKey++}`}>{text.slice(inlineLastIndex, inlineMatch.index)}</Text>
+        );
+      }
+      if (inlineMatch[1]) {
+        inlineNodes.push(
+          <Text key={`${key}-b${inlineKey++}`} style={{ fontFamily: 'Inter_700Bold' }}>{inlineMatch[2]}</Text>
+        );
+      } else if (inlineMatch[3]) {
+        const url = inlineMatch[3];
+        inlineNodes.push(
+          <Text
+            key={`${key}-l${inlineKey++}`}
+            style={{ color: C.coral, textDecorationLine: 'underline' }}
+            onPress={() => Linking.openURL(url)}
+          >{url}</Text>
+        );
+      }
+      inlineLastIndex = inlineMatch.index + inlineMatch[0].length;
+    }
+    if (inlineLastIndex < text.length) {
+      inlineNodes.push(<Text key={`${key}-tail`}>{text.slice(inlineLastIndex)}</Text>);
+    }
+    if (inlineNodes.length === 0) {
+      inlineNodes.push(<Text key={`${key}-empty`}>{text}</Text>);
+    }
+    return inlineNodes;
+  };
+
+  while ((match = codeBlockRegex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      const textBefore = content.slice(lastIndex, match.index);
+      parts.push(
+        <Text
+          key={`text-${lastIndex}`}
+          style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant]}
+        >
+          {renderInlineText(textBefore, `inline-${lastIndex}`)}
+        </Text>
+      );
+    }
+    const codeContent = match[0].replace(/^```\w*\n?/, '').replace(/\n?```$/, '');
+    parts.push(
+      <View
+        key={`code-${match.index}`}
+        style={{
+          backgroundColor: isUser ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.3)',
+          padding: 10,
+          borderRadius: 8,
+          marginVertical: 4,
+        }}
+      >
+        <Text style={{
+          fontSize: 9,
+          color: C.textTertiary,
+          position: 'absolute',
+          top: 4,
+          right: 6,
+        }}>code</Text>
+        <Text style={{
+          fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+          fontSize: 12,
+          color: isUser ? '#FFFFFF' : C.text,
+          lineHeight: 18,
+        }}>{codeContent}</Text>
+      </View>
+    );
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < content.length) {
+    const remaining = content.slice(lastIndex);
+    parts.push(
+      <Text
+        key={`text-${lastIndex}`}
+        style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant]}
+      >
+        {renderInlineText(remaining, `inline-${lastIndex}`)}
+      </Text>
+    );
+  }
+
+  if (parts.length === 0) {
+    parts.push(
+      <Text
+        key="full"
+        style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant]}
+      >
+        {content}
+      </Text>
+    );
+  }
+
+  return parts;
 }
 
 function MessageBubble({
@@ -97,14 +209,7 @@ function MessageBubble({
               isUser ? styles.bubbleUser : styles.bubbleAssistant,
             ]}
           >
-            <Text
-              style={[
-                styles.bubbleText,
-                isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant,
-              ]}
-            >
-              {message.content}
-            </Text>
+            {renderFormattedText(message.content, isUser)}
             <View style={styles.bubbleFooter}>
               <Text
                 style={[
@@ -119,6 +224,12 @@ function MessageBubble({
               </Text>
               {isUser && message.status === 'sent' && (
                 <Ionicons name="checkmark-done" size={14} color="rgba(255,255,255,0.5)" style={{ marginLeft: 4 }} />
+              )}
+              {isUser && message.status === 'sending' && (
+                <Ionicons name="checkmark" size={14} color="rgba(255,255,255,0.35)" style={{ marginLeft: 4 }} />
+              )}
+              {isUser && message.status === 'pending' && (
+                <Ionicons name="time-outline" size={13} color="rgba(255,255,255,0.3)" style={{ marginLeft: 4 }} />
               )}
             </View>
           </View>
@@ -234,6 +345,19 @@ function MessageActionSheet({
 }
 
 function StreamingBubble({ text }: { text: string }) {
+  const cursorOpacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(cursorOpacity, { toValue: 0.3, duration: 500, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(cursorOpacity, { toValue: 1, duration: 500, useNativeDriver: Platform.OS !== 'web' }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [cursorOpacity]);
+
   return (
     <View style={[styles.bubbleWrap, styles.bubbleWrapAssistant]}>
       <LinearGradient colors={C.gradient.lobster} style={styles.assistantAvatar}>
@@ -242,7 +366,7 @@ function StreamingBubble({ text }: { text: string }) {
       <View style={[styles.bubble, styles.bubbleAssistant]}>
         <Text style={[styles.bubbleText, styles.bubbleTextAssistant]}>
           {text}
-          <Text style={{ color: C.coral }}>{'▊'}</Text>
+          <Animated.Text style={{ color: C.coral, opacity: cursorOpacity }}>{'▊'}</Animated.Text>
         </Text>
       </View>
     </View>
@@ -368,7 +492,7 @@ export default function ChatDetailScreen() {
   }, [actionMenuMsg]);
 
   const suggestions = messages.length === 0
-    ? ['Summarize my inbox', 'What tasks are pending?', 'System health check']
+    ? ['Summarize my inbox', 'What tasks are pending?', 'System health check', "What's my schedule today?", 'Run a system health check', 'Summarize recent activity']
     : [];
 
   const shouldShowAvatar = (index: number) => {
