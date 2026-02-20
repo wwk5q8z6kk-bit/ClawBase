@@ -42,9 +42,19 @@ Preferred communication style: Simple, everyday language.
 - **Auto-reconnect**: Exponential backoff with max 30s delay, automatic reconnection on connection loss
 - **Event System**: 6+ event types (status_change, gateway_info, sessions_list, memory_data, message_chunk, message_complete)
 - **Dashboard Widget**: GatewayStatusWidget shows live connection status, channel chips, session/model counts
+- **Gateway Orchestration**: App can tell the gateway to start/stop tunnels (`config.tunnel.start/stop/status`), generate pairing codes (`config.pair.generate`), and invoke arbitrary commands (`tools.invoke` with `command` tool)
+- **Zero Relay Architecture**: All communication is direct between app and gateway — no intermediary servers, no relay dependencies. The pairing code flow calls the gateway's own `/api/pair/<code>` endpoint
+
+### Pairing System (app/pair.tsx)
+- **Three connection methods**: QR code scanning (camera), gateway pairing code (gateway URL + code), manual URL entry
+- **Reachability test**: Before saving a connection, the app tests the gateway's `/healthz` endpoint with a 6-second timeout
+- **Unreachable flow**: If gateway can't be reached, shows diagnostic tips and offers "Try again" or "Save anyway for later"
+- **Deep links**: Supports `clawbase://` and `openclaw://` URL schemes for one-tap connection
+- **Direct-to-gateway pairing**: Pairing code is looked up via `GET http://<gateway>/api/pair/<code>` — the gateway generates and validates its own codes
 
 ### Key Design Patterns
 - **Local-first architecture**: All user data (connections, chats, tasks, memory) is stored locally on device via AsyncStorage. No central server required for core functionality
+- **Zero-dependency design**: The app connects directly to user's OpenClaw Gateway with no relay, proxy, or intermediary service. The Express backend only serves static files and a landing page
 - **Gateway connection model**: Users connect to their own OpenClaw Gateway instances via WebSocket URLs (supports local discovery, manual URL, Tailscale, Cloudflare Tunnel)
 - **Shared types**: `lib/types.ts` defines TypeScript interfaces used across the app (GatewayConnection, ChatMessage, Conversation, Task, MemoryEntry)
 - **Gateway types**: `lib/gateway.ts` exports GatewaySession, GatewaySessionMessage, GatewayMemoryFile interfaces
