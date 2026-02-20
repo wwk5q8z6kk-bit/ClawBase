@@ -64,6 +64,7 @@ export type GatewayEventType =
   | 'session_update'
   | 'presence'
   | 'tool_call'
+  | 'node_invoke'
   | 'error'
   | 'gateway_info'
   | 'sessions_list'
@@ -291,6 +292,11 @@ export class OpenClawGateway {
         return;
       }
 
+      if (msg.type === 'node.invoke' || msg.event === 'node.invoke') {
+        this.handleNodeInvoke(msg);
+        return;
+      }
+
     } catch {}
   }
 
@@ -300,13 +306,23 @@ export class OpenClawGateway {
       minProtocol: 1,
       maxProtocol: 1,
       params: {
-        role: 'operator',
-        scopes: ['operator.chat', 'operator.sessions', 'operator.config'],
+        role: 'node',
+        scopes: ['operator.chat', 'operator.sessions', 'operator.config', 'node.invoke'],
         device: {
           id: this.deviceId,
           name: 'ClawBase Mobile',
           type: 'mobile',
+          platform: Platform.OS,
         },
+        capabilities: [
+          'chat',
+          'tasks',
+          'memory',
+          'calendar',
+          'crm',
+          'canvas',
+          'notifications',
+        ],
         auth: {} as any,
       },
     };
@@ -373,6 +389,32 @@ export class OpenClawGateway {
       done: true,
       stopReason: data.stopReason || 'end_turn',
     } as StreamChunk);
+  }
+
+  private handleNodeInvoke(msg: any) {
+    const command = msg.command || msg.data?.command || '';
+    const params = msg.params || msg.data?.params || {};
+    const invokeId = msg.id || msg.invokeId;
+
+    this.emit('node_invoke', { command, params, invokeId });
+
+    if (command === 'node.status') {
+      this.send({
+        type: 'node.invoke.result',
+        id: invokeId,
+        result: {
+          status: 'active',
+          platform: Platform.OS,
+          capabilities: ['chat', 'tasks', 'memory', 'calendar', 'crm', 'canvas', 'notifications'],
+        },
+      });
+    } else {
+      this.send({
+        type: 'node.invoke.result',
+        id: invokeId,
+        result: { acknowledged: true, command },
+      });
+    }
   }
 
   private send(msg: any) {
