@@ -233,10 +233,26 @@ function MessageActionSheet({
   );
 }
 
+function StreamingBubble({ text }: { text: string }) {
+  return (
+    <View style={[styles.bubbleWrap, styles.bubbleWrapAssistant]}>
+      <LinearGradient colors={C.gradient.lobster} style={styles.assistantAvatar}>
+        <Ionicons name="sparkles" size={12} color="#fff" />
+      </LinearGradient>
+      <View style={[styles.bubble, styles.bubbleAssistant]}>
+        <Text style={[styles.bubbleText, styles.bubbleTextAssistant]}>
+          {text}
+          <Text style={{ color: C.coral }}>{'▊'}</Text>
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export default function ChatDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getMessages, sendMessage, conversations, activeConnection } = useApp();
+  const { getMessages, sendMessage, conversations, activeConnection, gateway, gatewayStatus, streamingText, isStreaming } = useApp();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -248,7 +264,7 @@ export default function ChatDetailScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   const conversation = conversations.find((c) => c.id === id);
-  const connected = !!activeConnection;
+  const connected = gatewayStatus === 'connected';
 
   const loadMessages = useCallback(async () => {
     if (!id) return;
@@ -259,6 +275,31 @@ export default function ChatDetailScreen() {
   useEffect(() => {
     loadMessages();
   }, [loadMessages]);
+
+  useEffect(() => {
+    if (!id) return;
+    const unsub = gateway.on('message_complete', async (event) => {
+      const fullText = event.data?.text || '';
+      if (fullText) {
+        const { messageStorage, conversationStorage } = await import('@/lib/storage');
+        await messageStorage.add({
+          conversationId: id,
+          role: 'assistant',
+          content: fullText,
+          timestamp: Date.now(),
+          status: 'sent',
+        });
+        await conversationStorage.update(id, {
+          lastMessage: fullText.slice(0, 100),
+          lastMessageTime: Date.now(),
+        });
+        const updated = await getMessages(id);
+        setMessages(updated);
+        setIsSending(false);
+      }
+    });
+    return unsub;
+  }, [id, gateway, getMessages]);
 
   const handleSend = useCallback(async (text?: string) => {
     const content = (text || inputText).trim();
@@ -364,9 +405,9 @@ export default function ChatDetailScreen() {
             {conversation?.title || 'Chat'}
           </Text>
           <View style={styles.headerStatus}>
-            <View style={[styles.headerDot, { backgroundColor: connected ? C.success : C.textTertiary }]} />
-            <Text style={[styles.headerStatusText, { color: connected ? C.success : C.textTertiary }]}>
-              {connected ? 'Online' : 'Offline'}
+            <View style={[styles.headerDot, { backgroundColor: gatewayStatus === 'connected' ? C.success : gatewayStatus === 'connecting' || gatewayStatus === 'authenticating' ? C.amber : C.textTertiary }]} />
+            <Text style={[styles.headerStatusText, { color: gatewayStatus === 'connected' ? C.success : gatewayStatus === 'connecting' || gatewayStatus === 'authenticating' ? C.amber : C.textTertiary }]}>
+              {gatewayStatus === 'connected' ? 'Connected' : gatewayStatus === 'connecting' ? 'Connecting...' : gatewayStatus === 'authenticating' ? 'Authenticating...' : 'Offline'}
             </Text>
           </View>
         </View>
@@ -410,7 +451,13 @@ export default function ChatDetailScreen() {
             ]}
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
-            ListFooterComponent={isSending ? <TypingIndicator /> : null}
+            ListFooterComponent={
+              isStreaming && streamingText ? (
+                <StreamingBubble text={streamingText} />
+              ) : isSending ? (
+                <TypingIndicator />
+              ) : null
+            }
             ListEmptyComponent={
               <View style={styles.welcomeState}>
                 <LinearGradient

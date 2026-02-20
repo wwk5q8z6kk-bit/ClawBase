@@ -74,8 +74,8 @@ function ProactiveAlert({ type, message, icon, onPress }: { type: 'info' | 'warn
 }
 
 function HeroHeader() {
-  const { activeConnection, tasks, memoryEntries } = useApp();
-  const connected = !!activeConnection;
+  const { activeConnection, tasks, memoryEntries, gatewayStatus, gatewayInfo } = useApp();
+  const connected = gatewayStatus === 'connected';
   const now = new Date();
   const hour = now.getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -373,6 +373,105 @@ function DeferredPKMWidget() {
         </View>
       )}
     </View>
+  );
+}
+
+function GatewayStatusWidget() {
+  const { gatewayStatus, gatewayInfo, gatewaySessions, activeConnection } = useApp();
+  if (!activeConnection) return null;
+
+  const statusConfig: Record<string, { color: string; label: string; icon: string }> = {
+    connected: { color: C.success, label: 'Connected', icon: 'checkmark-circle' },
+    connecting: { color: C.amber, label: 'Connecting...', icon: 'sync-circle' },
+    authenticating: { color: C.amber, label: 'Authenticating...', icon: 'key' },
+    pairing: { color: C.accent, label: 'Pairing...', icon: 'link' },
+    error: { color: C.error, label: 'Error', icon: 'alert-circle' },
+    disconnected: { color: C.textTertiary, label: 'Disconnected', icon: 'cloud-offline' },
+  };
+
+  const config = statusConfig[gatewayStatus] || statusConfig.disconnected;
+  const channelCount = gatewayInfo.channels.filter((c) => c.status === 'active').length;
+
+  return (
+    <LinearGradient
+      colors={C.gradient.card}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gatewayWidget}
+    >
+      <View style={styles.gatewayHeader}>
+        <View style={styles.gatewayTitleRow}>
+          <Ionicons name="server" size={16} color={C.coral} />
+          <Text style={styles.widgetTitle}>Gateway</Text>
+        </View>
+        <View style={[styles.gatewayStatusBadge, { backgroundColor: config.color + '20' }]}>
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: config.color }} />
+          <Text style={[styles.gatewayStatusText, { color: config.color }]}>{config.label}</Text>
+        </View>
+      </View>
+
+      {gatewayStatus === 'connected' && (
+        <View style={styles.gatewayStats}>
+          <View style={styles.gatewayStat}>
+            <Ionicons name="chatbubbles-outline" size={16} color={C.secondary} />
+            <Text style={styles.gatewayStatNum}>{gatewaySessions.length}</Text>
+            <Text style={styles.gatewayStatLabel}>Sessions</Text>
+          </View>
+          <View style={styles.gatewayStatDiv} />
+          <View style={styles.gatewayStat}>
+            <Ionicons name="radio-outline" size={16} color={C.accent} />
+            <Text style={styles.gatewayStatNum}>{channelCount}</Text>
+            <Text style={styles.gatewayStatLabel}>Channels</Text>
+          </View>
+          <View style={styles.gatewayStatDiv} />
+          <View style={styles.gatewayStat}>
+            <Ionicons name="hardware-chip-outline" size={16} color={C.amber} />
+            <Text style={styles.gatewayStatNum}>{gatewayInfo.model ? '1' : '0'}</Text>
+            <Text style={styles.gatewayStatLabel}>Model</Text>
+          </View>
+        </View>
+      )}
+
+      {gatewayStatus === 'connected' && gatewayInfo.channels.length > 0 && (
+        <View style={styles.gatewayChannels}>
+          {gatewayInfo.channels.slice(0, 5).map((ch) => {
+            const iconMap: Record<string, string> = {
+              whatsapp: 'logo-whatsapp',
+              telegram: 'paper-plane',
+              discord: 'logo-discord',
+              slack: 'chatbox',
+              imessage: 'chatbubble-ellipses',
+              signal: 'shield-checkmark',
+              webchat: 'globe',
+            };
+            return (
+              <View key={ch.type} style={styles.gatewayChannelChip}>
+                <Ionicons name={(iconMap[ch.type] || 'radio') as any} size={12} color={ch.status === 'active' ? C.secondary : C.textTertiary} />
+                <Text style={[styles.gatewayChannelText, { color: ch.status === 'active' ? C.text : C.textTertiary }]}>{ch.label}</Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {gatewayStatus !== 'connected' && gatewayStatus !== 'disconnected' && (
+        <Text style={styles.gatewaySubText}>
+          {gatewayStatus === 'connecting' ? 'Establishing connection...' :
+           gatewayStatus === 'authenticating' ? 'Verifying credentials...' :
+           gatewayStatus === 'pairing' ? 'Approve on your gateway host' : 'Reconnecting...'}
+        </Text>
+      )}
+
+      {gatewayInfo.model && gatewayStatus === 'connected' && (
+        <View style={styles.gatewayModelRow}>
+          <Ionicons name="sparkles" size={12} color={C.coral} />
+          <Text style={styles.gatewayModelText}>{gatewayInfo.model}</Text>
+          {gatewayInfo.agentName && (
+            <Text style={styles.gatewayAgentName}>· {gatewayInfo.agentName}</Text>
+          )}
+        </View>
+      )}
+    </LinearGradient>
   );
 }
 
@@ -696,14 +795,15 @@ function CommandBar() {
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
-  const { refreshAll, activeConnection, tasks, memoryEntries } = useApp();
+  const { refreshAll, activeConnection, tasks, memoryEntries, gatewayStatus, gatewayInfo, gatewaySessions, fetchGatewaySessions } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refreshAll();
+    fetchGatewaySessions().catch(() => {});
     setRefreshing(false);
-  }, [refreshAll]);
+  }, [refreshAll, fetchGatewaySessions]);
 
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
@@ -747,6 +847,8 @@ export default function DashboardScreen() {
         )}
 
         <AgentSkillsBar />
+
+        <GatewayStatusWidget />
 
         <KanbanProgressWidget />
 
@@ -868,4 +970,21 @@ const styles = StyleSheet.create({
   commandChipText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary },
   feedbackToast: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.successMuted, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8, alignSelf: 'flex-start' },
   feedbackToastText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.success },
+  gatewayWidget: { borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.border, gap: 12 },
+  gatewayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  gatewayTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  gatewayStatusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  gatewayStatusText: { fontFamily: 'Inter_500Medium', fontSize: 12 },
+  gatewayStats: { flexDirection: 'row', alignItems: 'center' },
+  gatewayStat: { flex: 1, alignItems: 'center', gap: 2 },
+  gatewayStatNum: { fontFamily: 'Inter_700Bold', fontSize: 20, color: C.text },
+  gatewayStatLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textSecondary },
+  gatewayStatDiv: { width: 1, height: 24, backgroundColor: C.border },
+  gatewayChannels: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  gatewayChannelChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  gatewayChannelText: { fontFamily: 'Inter_500Medium', fontSize: 11 },
+  gatewaySubText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textSecondary },
+  gatewayModelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  gatewayModelText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.text },
+  gatewayAgentName: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textSecondary },
 });
