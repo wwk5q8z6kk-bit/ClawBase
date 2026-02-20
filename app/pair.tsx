@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Dimensions,
   ScrollView,
+  FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,12 +20,13 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router, useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
+import { discoverGateways, type DiscoveredGateway } from '@/lib/discovery';
 
 const C = Colors.dark;
 const { width: SCREEN_W } = Dimensions.get('window');
 
 type PairMethod = 'qr' | 'code' | 'manual';
-type ConnectPhase = 'idle' | 'testing' | 'success' | 'unreachable';
+type ConnectPhase = 'idle' | 'testing' | 'success' | 'unreachable' | 'pairing';
 
 function isLocalAddress(host: string): boolean {
   const h = host.replace(/:\d+$/, '');
@@ -93,6 +95,9 @@ export default function PairScreen() {
   const [connectPhase, setConnectPhase] = useState<ConnectPhase>('idle');
   const [pendingConnection, setPendingConnection] = useState<{ name: string; url: string; token?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [discoveredGateways, setDiscoveredGateways] = useState<DiscoveredGateway[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState({ checked: 0, total: 0 });
   const pulseAnim = useRef(new Animated.Value(0.5)).current;
 
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
@@ -105,6 +110,25 @@ export default function PairScreen() {
       ])
     ).start();
   }, [pulseAnim]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' && !method) {
+      runDiscovery();
+    }
+  }, []);
+
+  const runDiscovery = useCallback(async () => {
+    setScanning(true);
+    setDiscoveredGateways([]);
+    setScanProgress({ checked: 0, total: 0 });
+    try {
+      const found = await discoverGateways({
+        onProgress: (checked, total) => setScanProgress({ checked, total }),
+      });
+      setDiscoveredGateways(found);
+    } catch {}
+    setScanning(false);
+  }, []);
 
   const saveAndFinish = useCallback(async (name: string, url: string, token?: string) => {
     try {
@@ -247,6 +271,36 @@ export default function PairScreen() {
           <ActivityIndicator size="large" color={C.accent} />
           <Text style={styles.phaseTitle}>Testing connection...</Text>
           <Text style={styles.phaseSub}>{pendingConnection?.url || ''}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (connectPhase === 'pairing') {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top + webTopPad, backgroundColor: C.background }]}>
+        <View style={styles.phaseContent}>
+          <Animated.View style={{ opacity: pulseAnim }}>
+            <View style={[styles.successIcon, { backgroundColor: C.coral + '20' }]}>
+              <Ionicons name="finger-print" size={48} color={C.coral} />
+            </View>
+          </Animated.View>
+          <Text style={styles.phaseTitle}>Approve on Gateway</Text>
+          <Text style={[styles.phaseSub, { paddingHorizontal: 24 }]}>
+            Open your gateway terminal and approve this device:
+          </Text>
+          <View style={styles.unreachableTips}>
+            <Text style={[styles.tipText, { fontFamily: 'Inter_500Medium', color: C.coral }]}>
+              openclaw nodes pending{'\n'}openclaw nodes approve {'<requestId>'}
+            </Text>
+          </View>
+          <Text style={[styles.phaseUrl, { marginTop: 8 }]}>{pendingConnection?.url}</Text>
+          <Pressable
+            onPress={goBack}
+            style={({ pressed }) => [{ marginTop: 20 }, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.saveAnywayText}>Cancel</Text>
+          </Pressable>
         </View>
       </View>
     );
@@ -576,8 +630,60 @@ export default function PairScreen() {
         <View style={{ width: 28 }} />
       </View>
 
-      <View style={styles.methodList}>
-        <Text style={styles.methodListTitle}>Choose how to connect</Text>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.methodList}>
+        {Platform.OS !== 'web' && (
+          <View style={styles.discoverySection}>
+            <View style={styles.discoverHeader}>
+              <Text style={styles.methodListTitle}>Nearby Gateways</Text>
+              <Pressable onPress={runDiscovery} disabled={scanning} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+                {scanning ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <ActivityIndicator size="small" color={C.accent} />
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary }}>
+                      {scanProgress.total > 0 ? `${Math.round((scanProgress.checked / scanProgress.total) * 100)}%` : 'Scanning...'}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Ionicons name="refresh" size={16} color={C.accent} />
+                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: C.accent }}>Scan</Text>
+                  </View>
+                )}
+              </Pressable>
+            </View>
+            {discoveredGateways.length > 0 ? (
+              discoveredGateways.map((gw) => (
+                <Pressable
+                  key={gw.host}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    finishPairing(gw.name, gw.url);
+                  }}
+                  style={({ pressed }) => [pressed && { opacity: 0.85 }]}
+                >
+                  <LinearGradient colors={['#151A15', '#101510']} style={styles.pairMethodCard}>
+                    <View style={[styles.pairMethodIcon, { backgroundColor: C.success + '18' }]}>
+                      <Ionicons name="server" size={24} color={C.success} />
+                    </View>
+                    <View style={styles.pairMethodInfo}>
+                      <Text style={styles.pairMethodTitle}>{gw.name}</Text>
+                      <Text style={styles.pairMethodDesc}>{gw.host}:{gw.port}{gw.version ? ` \u00B7 v${gw.version}` : ''}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={C.textTertiary} />
+                  </LinearGradient>
+                </Pressable>
+              ))
+            ) : !scanning ? (
+              <View style={{ paddingVertical: 12, paddingHorizontal: 8 }}>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary }}>
+                  No gateways found on your network. Try manual setup or make sure your gateway is running.
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        )}
+
+        <Text style={[styles.methodListTitle, { marginTop: Platform.OS !== 'web' ? 12 : 0 }]}>Connect Manually</Text>
 
         <Pressable onPress={() => { setMethod('qr'); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }} style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
           <LinearGradient colors={['#1A1520', '#151020']} style={styles.pairMethodCard}>
@@ -624,7 +730,7 @@ export default function PairScreen() {
             You can also tap a clawbase:// link from your gateway to connect automatically.
           </Text>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -690,7 +796,9 @@ const styles = StyleSheet.create({
   manualContent: { paddingHorizontal: 24, paddingTop: 24, gap: 14, paddingBottom: 40 },
   manualInput: { backgroundColor: C.card, borderRadius: 12, padding: 14, fontFamily: 'Inter_400Regular', fontSize: 15, color: C.text, borderWidth: 1, borderColor: C.border, width: '100%' },
   helperText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary, alignSelf: 'flex-start', marginTop: -6 },
-  methodList: { flex: 1, paddingHorizontal: 20, paddingTop: 24, gap: 14 },
+  discoverySection: { gap: 10 },
+  discoverHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  methodList: { paddingHorizontal: 20, paddingTop: 24, gap: 14, paddingBottom: 40 },
   methodListTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: C.textSecondary, marginBottom: 4 },
   pairMethodCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 16, gap: 14, borderWidth: 1, borderColor: C.borderLight },
   pairMethodIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
