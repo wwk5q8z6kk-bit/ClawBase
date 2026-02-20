@@ -1,0 +1,74 @@
+
+> expo-app@1.0.0 lint
+> npx expo lint
+
+
+/Users/x/Projects/GitHub/ClawBase/app/(tabs)/_layout.tsx
+  15:9  warning  'vaultBadge' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/x/Projects/GitHub/ClawBase/app/(tabs)/automations.tsx
+  149:6   warning  React Hook useEffect has missing dependencies: 'onHide', 'opacity', and 'translateY'. Either include them or remove the dependency array. If 'onHide' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+  363:9   warning  'riskColor' is assigned a value but never used                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+  615:26  warning  'activeConnection' is assigned a value but never used                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+  615:44  warning  'gateway' is assigned a value but never used                                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+
+/Users/x/Projects/GitHub/ClawBase/app/(tabs)/calendar.tsx
+  186:54  error  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+
+/Users/x/Projects/GitHub/ClawBase/app/(tabs)/chat.tsx
+  575:43  error  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+  575:57  error  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+
+/Users/x/Projects/GitHub/ClawBase/app/(tabs)/index.tsx
+   198:11  warning  'activeConnection' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   198:66  warning  'gatewayInfo' is assigned a value but never used       @typescript-eslint/no-unused-vars
+   364:9   warning  'nextEvent' is assigned a value but never used         @typescript-eslint/no-unused-vars
+   365:9   warning  'pastCount' is assigned a value but never used         @typescript-eslint/no-unused-vars
+   739:26  warning  'activeConnection' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  1020:10  warning  'parseDueDate' is defined but never used               @typescript-eslint/no-unused-vars
+  1191:48  warning  'memoryEntries' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  1191:63  warning  'gatewayStatus' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  1191:78  warning  'gatewayInfo' is assigned a value but never used       @typescript-eslint/no-unused-vars
+  1191:91  warning  'gatewaySessions' is assigned a value but never used   @typescript-eslint/no-unused-vars
+
+/Users/x/Projects/GitHub/ClawBase/app/(tabs)/memory.tsx
+  21:15  warning  'GatewayMemoryFile' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/x/Projects/GitHub/ClawBase/app/(tabs)/settings.tsx
+  123:11  warning  'activeConnection' is assigned a value but never used      @typescript-eslint/no-unused-vars
+  123:57  warning  'gateway' is assigned a value but never used               @typescript-eslint/no-unused-vars
+  199:5   warning  'gatewayInfo' is assigned a value but never used           @typescript-eslint/no-unused-vars
+  209:10  warning  'testingConnection' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  230:13  warning  'clawKeys' is assigned a value but never used              @typescript-eslint/no-unused-vars
+  333:9   warning  'handleTestConnection' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  421:14  warning  'e' is defined but never used                              @typescript-eslint/no-unused-vars
+
+/Users/x/Projects/GitHub/ClawBase/app/(tabs)/tasks.tsx
+  344:6   warning  React Hook React.useEffect has a missing dependency: 'task'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  522:17  warning  'nextStatus' is assigned a value but never used                                                                @typescript-eslint/no-unused-vars
+
+/Users/x/Projects/GitHub/ClawBase/app/(tabs)/timeline.tsx
+  147:52  error  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+
+/Users/x/Projects/GitHub/ClawBase/app/(tabs)/vault.tsx
+   484:6   warning  React Hook React.useEffect has a missing dependency: 'task'. Either include it or remove the dependency array                                               react-hooks/exhaustive-deps
+   662:17  warning  'nextStatus' is assigned a value but never used                                                                                                             @typescript-eslint/no-unused-vars
+  1089:6   warning  React Hook useEffect has missing dependencies: 'segments', 'underlineLeftRef', and 'underlineWidthRef'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/x/Projects/GitHub/ClawBase/app/chat/[id].tsx
+  367:6   warning  React Hook useEffect has missing dependencies: 'opacity', 'shouldAnimate', and 'translateY'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  423:9   warning  'connected' is assigned a value but never used                                                                                                   @typescript-eslint/no-unused-vars
+  635:50  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                                                                  react/no-unescaped-entities
+
+/Users/x/Projects/GitHub/ClawBase/app/onboarding.tsx
+  21:9  warning  'width' is assigned a value but never used                                                                   @typescript-eslint/no-unused-vars
+  39:6  warning  React Hook useEffect has a missing dependency: 'glowAnim'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/x/Projects/GitHub/ClawBase/app/pair.tsx
+  125:6  warning  React Hook useEffect has missing dependencies: 'method' and 'runDiscovery'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/x/Projects/GitHub/ClawBase/app/sessions.tsx
+  190:65  warning  'activeConnection' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+✖ 39 problems (5 errors, 34 warnings)
+

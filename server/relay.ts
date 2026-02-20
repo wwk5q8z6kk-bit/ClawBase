@@ -18,6 +18,7 @@ if (!SESSION_SECRET || SESSION_SECRET.length < MIN_SESSION_SECRET_LENGTH) {
     `SESSION_SECRET must be configured and at least ${MIN_SESSION_SECRET_LENGTH} characters for relay security.`,
   );
 }
+const VERIFIED_SESSION_SECRET: string = SESSION_SECRET;
 
 if (process.env.NODE_ENV === 'production' && !RELAY_SETUP_TOKEN) {
   throw new Error('RELAY_SETUP_TOKEN must be configured in production to protect /api/relay/setup.');
@@ -68,7 +69,7 @@ function secureEquals(a: string, b: string): boolean {
 function signDeviceToken(deviceId: string): string {
   return jwt.sign(
     { deviceId, iat: Math.floor(Date.now() / 1000) },
-    SESSION_SECRET,
+    VERIFIED_SESSION_SECRET,
     { expiresIn: JWT_EXPIRY },
   );
 }
@@ -352,7 +353,7 @@ function connectToGateway() {
 
 function verifyJwt(token: string): { deviceId: string } | null {
   try {
-    const payload = jwt.verify(token, SESSION_SECRET) as any;
+    const payload = jwt.verify(token, VERIFIED_SESSION_SECRET) as any;
     return { deviceId: payload.deviceId };
   } catch {
     return null;

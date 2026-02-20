@@ -226,7 +226,9 @@ const MessageBubble = React.memo(function MessageBubble({
                 <Ionicons name="checkmark-done" size={14} color="rgba(255,255,255,0.5)" style={{ marginLeft: 4 }} />
               )}
               {isUser && message.status === 'sending' && (
-                <Ionicons name="checkmark" size={14} color="rgba(255,255,255,0.35)" style={{ marginLeft: 4 }} />
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: 'rgba(255,255,255,0.7)', textAlign: 'center', marginTop: 8 }}>
+                  You&apos;re connected to OpenClaw. Say hi!
+                </Text>
               )}
             </View>
           </View>
@@ -514,7 +516,7 @@ export default function ChatDetailScreen() {
   const handleCopyAction = useCallback(() => {
     if (!actionMenuMsg) return;
     if (Platform.OS === 'web') {
-      try { navigator.clipboard.writeText(actionMenuMsg.content); } catch {}
+      try { navigator.clipboard.writeText(actionMenuMsg.content); } catch { }
     }
     setCopiedId(actionMenuMsg.id);
     setTimeout(() => setCopiedId(null), 1500);
@@ -630,7 +632,7 @@ export default function ChatDetailScreen() {
                 </LinearGradient>
                 <Text style={styles.welcomeTitle}>Start a conversation</Text>
                 <Text style={styles.welcomeSubtitle}>
-                  Ask your agent anything{'\n'}it's ready to help
+                  Ask your agent anything{'\n'}it&apos;s ready to help
                 </Text>
                 {activeConnection && (
                   <View style={styles.welcomeGateway}>
@@ -776,8 +778,8 @@ export default function ChatDetailScreen() {
               <Text style={styles.infoValue}>
                 {conversation?.lastMessageTime
                   ? new Date(conversation.lastMessageTime).toLocaleDateString(undefined, {
-                      month: 'short', day: 'numeric', year: 'numeric',
-                    })
+                    month: 'short', day: 'numeric', year: 'numeric',
+                  })
                   : 'Unknown'}
               </Text>
             </View>
