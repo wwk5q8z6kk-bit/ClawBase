@@ -179,11 +179,11 @@ function TimelineItem({
 function EmptyState() {
   return (
     <View style={styles.emptyState}>
-      <View style={styles.emptyIconWrapTl}>
-        <Ionicons name="pulse-outline" size={48} color={C.textTertiary} />
+      <View style={[styles.emptyIconWrapTl, { backgroundColor: C.coral + '15' }]}>
+        <Ionicons name="pulse-outline" size={40} color={C.coral} />
       </View>
-      <Text style={styles.emptyTitleTl}>No Activity Yet</Text>
-      <Text style={styles.emptySubtitleTl}>Your agent's activity will appear here</Text>
+      <Text style={styles.emptyTitleTl}>No activity yet</Text>
+      <Text style={styles.emptySubtitleTl}>Your agent's actions will appear here when connected</Text>
     </View>
   );
 }
@@ -838,20 +838,11 @@ export default function CalendarTab() {
         <ScrollView style={styles.eventsList} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }} showsVerticalScrollIndicator={false}>
           {selectedDayEvents.length === 0 ? (
             <View style={styles.emptyDay}>
-              <LinearGradient colors={[C.coral + '15', C.amber + '10']} style={styles.emptyIconWrap}>
-                <Ionicons name="sunny-outline" size={32} color={C.coral} />
-              </LinearGradient>
-              <Text style={styles.emptyDayTitle}>Nothing scheduled</Text>
-              <Text style={styles.emptyDayText}>Enjoy your free time or plan something new</Text>
-              <Pressable
-                onPress={() => setShowAddModal(true)}
-                style={styles.emptyAddBtn}
-              >
-                <LinearGradient colors={C.gradient.lobster} style={styles.emptyAddGradient}>
-                  <Ionicons name="add" size={16} color="#fff" />
-                  <Text style={styles.emptyAddText}>Add Event</Text>
-                </LinearGradient>
-              </Pressable>
+              <View style={[styles.emptyIconWrap, { backgroundColor: C.accent + '15' }]}>
+                <Ionicons name="calendar-outline" size={40} color={C.accent} />
+              </View>
+              <Text style={styles.emptyDayTitle}>No events</Text>
+              <Text style={styles.emptyDayText}>Tap + to create an event</Text>
             </View>
           ) : (
             selectedDayEvents.map((event) => (
@@ -1127,12 +1118,9 @@ const styles = StyleSheet.create({
   eventCount: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary },
   eventsList: { flex: 1, paddingHorizontal: 16 },
   emptyDay: { alignItems: 'center', paddingVertical: 48, gap: 10 },
-  emptyIconWrap: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  emptyIconWrap: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   emptyDayTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 16, color: C.text },
-  emptyDayText: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary, textAlign: 'center' },
-  emptyAddBtn: { marginTop: 8, borderRadius: 20, overflow: 'hidden' },
-  emptyAddGradient: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 18, paddingVertical: 10 },
-  emptyAddText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#fff' },
+  emptyDayText: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary, textAlign: 'center', maxWidth: 260 },
   eventCard: { flexDirection: 'row', backgroundColor: C.card, borderRadius: 12, marginBottom: 8, overflow: 'hidden', borderWidth: 1, borderColor: C.borderLight },
   eventColorBar: { width: 4 },
   eventContent: { flex: 1, padding: 12, gap: 4 },
@@ -1212,7 +1200,7 @@ const styles = StyleSheet.create({
   rawBlock: { marginTop: 10, backgroundColor: C.background, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: C.border },
   rawText: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11, color: C.textSecondary, lineHeight: 16 },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
-  emptyIconWrapTl: { width: 80, height: 80, borderRadius: 40, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  emptyTitleTl: { fontFamily: 'Inter_600SemiBold', fontSize: 18, color: C.text, marginBottom: 6 },
-  emptySubtitleTl: { fontFamily: 'Inter_400Regular', fontSize: 14, color: C.textTertiary },
+  emptyIconWrapTl: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  emptyTitleTl: { fontFamily: 'Inter_600SemiBold', fontSize: 16, color: C.text, marginBottom: 6 },
+  emptySubtitleTl: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary, textAlign: 'center', maxWidth: 280 },
 });

@@ -14,7 +14,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Frontend (Mobile App)
 - **Framework**: React Native with Expo SDK 54, using Expo Router v6 for file-based routing
-- **Navigation**: Tab-based layout with 5 visible tabs: Mission Control, Chat, Automations, Timeline, Memory + Files. Tasks and Settings are hidden tabs accessible via navigation. Uses `expo-router` with typed routes enabled
+- **Navigation**: Tab-based layout with 5 visible tabs: Mission Control | Chat | Vault | Calendar | Settings. Vault combines Tasks + Memory with a segment switcher (Tasks | Knowledge | Files). Calendar merges Calendar + Timeline with a view toggle (Calendar | Activity). Automations config lives in Settings. Old tabs (tasks, memory, automations, timeline) are hidden routes. Uses `expo-router` with typed routes enabled
 - **State Management**: React Context (`AppContext`) provides global state for connections, conversations, tasks, and memory. React Query (`@tanstack/react-query`) handles server-state for API calls
 - **Local Storage**: AsyncStorage (`@react-native-async-storage/async-storage`) persists all local data (connections, conversations, messages, tasks, memory entries) with a key-prefixed storage pattern (`@clawbase:*`)
 - **UI Libraries**: expo-linear-gradient for gradients, expo-blur for glass effects, expo-haptics for tactile feedback, react-native-reanimated for animations, react-native-gesture-handler for gestures, react-native-keyboard-controller for keyboard handling

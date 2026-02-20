@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,6 +10,7 @@ import {
   Modal,
   Alert,
   ScrollView,
+  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -960,6 +961,102 @@ function MemoryDetailModal({
 type FilterType = 'all' | 'conversation' | 'note' | 'task' | 'event' | 'summary' | 'document';
 type ReviewFilter = typeof REVIEW_FILTERS[number]['key'];
 
+function AnimatedSegmentSwitcher({
+  activeSegment,
+  onSegmentChange,
+  tasks,
+  memoryEntries,
+  gatewayMemoryFiles,
+}: {
+  activeSegment: VaultSegment;
+  onSegmentChange: (segment: VaultSegment) => void;
+  tasks: Task[];
+  memoryEntries: MemoryEntry[];
+  gatewayMemoryFiles: GatewayMemoryFile[];
+}) {
+  const underlineLeftRef = useRef(new Animated.Value(0)).current;
+  const underlineWidthRef = useRef(new Animated.Value(0)).current;
+  const segmentWidthsRef = useRef<Record<VaultSegment, number>>({ tasks: 0, knowledge: 0, files: 0 });
+
+  const segments: VaultSegment[] = ['tasks', 'knowledge', 'files'];
+  const labels: Record<VaultSegment, string> = { tasks: 'Tasks', knowledge: 'Knowledge', files: 'Files' };
+
+  const counts: Record<VaultSegment, number> = {
+    tasks: tasks.filter(t => t.status !== 'archived').length,
+    knowledge: memoryEntries.length,
+    files: gatewayMemoryFiles.length,
+  };
+
+  useEffect(() => {
+    const activeIndex = segments.indexOf(activeSegment);
+    let leftOffset = 0;
+    let width = 0;
+
+    for (let i = 0; i < activeIndex; i++) {
+      leftOffset += segmentWidthsRef.current[segments[i]];
+    }
+
+    width = segmentWidthsRef.current[activeSegment];
+
+    Animated.spring(underlineLeftRef, {
+      toValue: leftOffset,
+      useNativeDriver: Platform.OS !== 'web',
+      friction: 8,
+      tension: 100,
+    }).start();
+
+    Animated.spring(underlineWidthRef, {
+      toValue: width,
+      useNativeDriver: Platform.OS !== 'web',
+      friction: 8,
+      tension: 100,
+    }).start();
+  }, [activeSegment]);
+
+  const handleSegmentPress = (segment: VaultSegment) => {
+    onSegmentChange(segment);
+    Haptics.selectionAsync();
+  };
+
+  return (
+    <View style={styles.segmentContainer}>
+      <View style={styles.segmentRow}>
+        {segments.map((seg) => {
+          const isActive = activeSegment === seg;
+          return (
+            <Pressable
+              key={seg}
+              style={styles.segmentBtn}
+              onPress={() => handleSegmentPress(seg)}
+              onLayout={(e) => {
+                segmentWidthsRef.current[seg] = e.nativeEvent.layout.width;
+              }}
+            >
+              <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
+                {labels[seg]}
+              </Text>
+              <View style={styles.countBadgeContainer}>
+                <View style={styles.countBadge}>
+                  <Text style={styles.countBadgeText}>{counts[seg]}</Text>
+                </View>
+              </View>
+            </Pressable>
+          );
+        })}
+        <Animated.View
+          style={[
+            styles.segmentUnderline,
+            {
+              left: underlineLeftRef,
+              width: underlineWidthRef,
+            },
+          ]}
+        />
+      </View>
+    </View>
+  );
+}
+
 export default function VaultScreen() {
   const insets = useSafeAreaInsets();
   const {
@@ -1263,24 +1360,13 @@ export default function VaultScreen() {
         </View>
       </LinearGradient>
 
-      <View style={styles.segmentRow}>
-        {(['tasks', 'knowledge', 'files'] as VaultSegment[]).map((seg) => {
-          const isActive = activeSegment === seg;
-          const labels: Record<VaultSegment, string> = { tasks: 'Tasks', knowledge: 'Knowledge', files: 'Files' };
-          return (
-            <Pressable
-              key={seg}
-              style={[styles.segmentBtn, isActive && styles.segmentBtnActive]}
-              onPress={() => {
-                setActiveSegment(seg);
-                Haptics.selectionAsync();
-              }}
-            >
-              <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>{labels[seg]}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <AnimatedSegmentSwitcher
+        activeSegment={activeSegment}
+        onSegmentChange={setActiveSegment}
+        tasks={tasks}
+        memoryEntries={memoryEntries}
+        gatewayMemoryFiles={gatewayMemoryFiles}
+      />
 
       {activeSegment === 'tasks' && (
         <>
@@ -1391,11 +1477,11 @@ export default function VaultScreen() {
                 scrollEnabled={!!filteredTasks.length}
                 ListEmptyComponent={
                   <View style={styles.emptyState}>
-                    <Ionicons name="checkbox-outline" size={44} color={C.textTertiary} />
+                    <View style={styles.emptyIconBg}>
+                      <Ionicons name="checkbox-outline" size={40} color={C.text} />
+                    </View>
                     <Text style={styles.emptyTitle}>No tasks yet</Text>
-                    <Text style={styles.emptySubtitle}>
-                      Tap + to create your first task
-                    </Text>
+                    <Text style={styles.emptySubtitle}>Create your first task or connect a gateway to sync</Text>
                   </View>
                 }
               />
@@ -1811,24 +1897,27 @@ export default function VaultScreen() {
             ]}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <LinearGradient
-                  colors={[C.coral + '20', C.accent + '15', C.purple + '10']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.emptyIconBg}
-                >
-                  <MaterialCommunityIcons name="brain" size={44} color={C.textSecondary} />
-                </LinearGradient>
-                <Text style={styles.emptyTitle}>
-                  {memSearch || selectedTag ? 'No results found' : 'No memories yet'}
-                </Text>
-                <Text style={styles.emptySubtitle}>
-                  {memSearch
-                    ? 'Try a different search term'
-                    : selectedTag
-                    ? `No memories tagged "${selectedTag}"`
-                    : 'Your conversations and tasks will appear here'}
-                </Text>
+                {!memSearch && !selectedTag ? (
+                  <>
+                    <View style={[styles.emptyIconBg, { backgroundColor: C.accent + '15' }]}>
+                      <MaterialCommunityIcons name="brain" size={40} color={C.accent} />
+                    </View>
+                    <Text style={styles.emptyTitle}>Knowledge base empty</Text>
+                    <Text style={styles.emptySubtitle}>Connect your gateway to sync knowledge, or add entries manually</Text>
+                  </>
+                ) : (
+                  <>
+                    <View style={[styles.emptyIconBg, { backgroundColor: C.textTertiary + '12' }]}>
+                      <Ionicons name="search-outline" size={40} color={C.textTertiary} />
+                    </View>
+                    <Text style={styles.emptyTitle}>
+                      {memSearch ? 'No results found' : `No memories tagged "${selectedTag}"`}
+                    </Text>
+                    <Text style={styles.emptySubtitle}>
+                      {memSearch ? 'Try a different search term' : 'Try a different tag'}
+                    </Text>
+                  </>
+                )}
               </View>
             }
           />
@@ -2056,13 +2145,11 @@ export default function VaultScreen() {
             </ScrollView>
           ) : (
             <View style={styles.filesEmptyState}>
-              <Ionicons name="folder-open-outline" size={48} color={C.textTertiary} />
-              <Text style={styles.emptyTitle}>No files yet</Text>
-              <Text style={styles.emptySubtitle}>
-                {gatewayStatus === 'connected'
-                  ? 'Tap sync to fetch memory files from your gateway'
-                  : 'Connect to a gateway to access memory files'}
-              </Text>
+              <View style={[styles.emptyIconBg, { backgroundColor: C.secondary + '15' }]}>
+                <Ionicons name="folder-open-outline" size={40} color={C.secondary} />
+              </View>
+              <Text style={styles.emptyTitle}>No files synced</Text>
+              <Text style={styles.emptySubtitle}>Connect to your OpenClaw gateway to browse agent files</Text>
             </View>
           )}
 
@@ -2318,11 +2405,15 @@ const styles = StyleSheet.create({
   headerGradient: { paddingBottom: 2 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
   headerTitle: { fontFamily: 'Inter_700Bold', fontSize: 26, color: C.text },
-  segmentRow: { flexDirection: 'row', marginHorizontal: 20, marginVertical: 8, backgroundColor: C.card, borderRadius: 12, padding: 3, borderWidth: 1, borderColor: C.borderLight },
-  segmentBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  segmentBtnActive: { backgroundColor: C.coral },
-  segmentText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.textSecondary },
-  segmentTextActive: { color: '#fff' },
+  segmentContainer: { marginHorizontal: 20, marginVertical: 8 },
+  segmentRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: C.borderLight, position: 'relative' as const },
+  segmentBtn: { flex: 1, paddingVertical: 12, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', position: 'relative' as const },
+  segmentText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.textTertiary },
+  segmentTextActive: { color: C.text },
+  countBadgeContainer: { marginTop: 4 },
+  countBadge: { backgroundColor: C.primaryMuted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, minWidth: 20, alignItems: 'center', justifyContent: 'center' },
+  countBadgeText: { fontFamily: 'Inter_500Medium', fontSize: 11, color: C.primary },
+  segmentUnderline: { position: 'absolute' as const, bottom: -1, height: 3, backgroundColor: C.coral, borderRadius: 1.5 },
   taskSubHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: 20, gap: 12, marginBottom: 6 },
   knowledgeSubHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: 20, gap: 8, marginBottom: 6 },
   viewToggle: { flexDirection: 'row', backgroundColor: C.card, borderRadius: 10, borderWidth: 1, borderColor: C.borderLight, overflow: 'hidden' },
@@ -2434,8 +2525,9 @@ const styles = StyleSheet.create({
   moveOptionDot: { width: 8, height: 8, borderRadius: 4 },
   moveOptionText: { fontFamily: 'Inter_500Medium', fontSize: 14, color: C.text, flex: 1 },
   emptyState: { alignItems: 'center', gap: 8, paddingVertical: 30 },
-  emptyTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 16, color: C.textSecondary, marginTop: 6 },
-  emptySubtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary, textAlign: 'center' },
+  emptyIconBg: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
+  emptyTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 16, color: C.text, marginTop: 6 },
+  emptySubtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary, textAlign: 'center', maxWidth: 280 },
   modalOverlay: { flex: 1, backgroundColor: C.overlay, justifyContent: 'flex-end' },
   modalContent: { backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 14, maxHeight: '85%' },
   detailModalContent: { backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 14, maxHeight: '90%' },
@@ -2531,7 +2623,6 @@ const styles = StyleSheet.create({
   digestStat: { alignItems: 'center', flex: 1 },
   digestStatValue: { fontFamily: 'Inter_700Bold', fontSize: 18, color: C.coral },
   digestStatLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary, marginTop: 2 },
-  emptyIconBg: { width: 88, height: 88, borderRadius: 44, alignItems: 'center', justifyContent: 'center' },
   tagBrowser: { marginHorizontal: 20, marginBottom: 4, backgroundColor: C.card, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: C.borderLight },
   tagBrowserTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.textTertiary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   tagCloudHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

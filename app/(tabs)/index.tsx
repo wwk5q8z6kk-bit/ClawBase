@@ -512,6 +512,73 @@ function GatewayStatusWidget() {
   );
 }
 
+function AutomationStatusWidget() {
+  const { gateway, gatewayStatus } = useApp();
+  const [autoCount, setAutoCount] = useState({ enabled: 0, paused: 0, approvals: 0 });
+
+  useEffect(() => {
+    if (gatewayStatus !== 'connected') return;
+    const load = async () => {
+      try {
+        const autos = await gateway.fetchAutomations();
+        const approvals = await gateway.fetchApprovals();
+        if (Array.isArray(autos)) {
+          setAutoCount({
+            enabled: autos.filter((a: any) => a.enabled).length,
+            paused: autos.filter((a: any) => !a.enabled).length,
+            approvals: Array.isArray(approvals) ? approvals.length : 0,
+          });
+        }
+      } catch {}
+    };
+    load();
+  }, [gateway, gatewayStatus]);
+
+  if (gatewayStatus !== 'connected') return null;
+
+  return (
+    <Pressable onPress={() => router.push('/(tabs)/settings')}>
+      <LinearGradient
+        colors={C.gradient.card}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.autoStatusWidget}
+      >
+        <View style={styles.autoStatusHeader}>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="flash" size={16} color={C.amber} />
+            <Text style={styles.widgetTitle}>Automations</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
+        </View>
+        <View style={styles.autoStatusRow}>
+          <View style={styles.autoStatusItem}>
+            <View style={[styles.autoStatusDot, { backgroundColor: C.success }]} />
+            <Text style={styles.autoStatusNum}>{autoCount.enabled}</Text>
+            <Text style={styles.autoStatusLabel}>Running</Text>
+          </View>
+          <View style={styles.autoStatusDiv} />
+          <View style={styles.autoStatusItem}>
+            <View style={[styles.autoStatusDot, { backgroundColor: C.textTertiary }]} />
+            <Text style={styles.autoStatusNum}>{autoCount.paused}</Text>
+            <Text style={styles.autoStatusLabel}>Paused</Text>
+          </View>
+          {autoCount.approvals > 0 && (
+            <>
+              <View style={styles.autoStatusDiv} />
+              <View style={styles.autoStatusItem}>
+                <View style={[styles.autoStatusDot, { backgroundColor: C.primary }]} />
+                <Text style={[styles.autoStatusNum, { color: C.primary }]}>{autoCount.approvals}</Text>
+                <Text style={[styles.autoStatusLabel, { color: C.primary }]}>Pending</Text>
+              </View>
+            </>
+          )}
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
 function CircularRing({ percent, size, color, trackColor }: { percent: number; size: number; color: string; trackColor: string }) {
   const clampedPct = Math.min(100, Math.max(0, percent));
   const rotation = `${(clampedPct / 100) * 360 - 90}deg`;
@@ -711,7 +778,7 @@ function AgentSkillsBar() {
 }
 
 const QUICK_ACTIONS = [
-  { id: '1', icon: 'calendar-outline', label: 'Calendar', color: C.amber, route: '/calendar' },
+  { id: '1', icon: 'calendar-outline', label: 'Calendar', color: C.amber, route: '/(tabs)/calendar' },
   { id: '2', icon: 'people-outline', label: 'Contacts', color: C.secondary, route: '/crm' },
   { id: '3', icon: 'mail-outline', label: 'Summarize\nInbox', color: C.coral, route: '/(tabs)/chat' },
   { id: '4', icon: 'git-branch-outline', label: 'Check\nGitHub', color: '#8B7FFF', route: '/(tabs)/chat' },
@@ -782,11 +849,11 @@ function RecentActivityWidget() {
         title: t.title,
         time: t.updatedAt,
         color: t.priority === 'urgent' ? C.primary : t.priority === 'high' ? C.amber : C.secondary,
-        route: '/(tabs)/tasks',
+        route: '/(tabs)/vault',
       });
     }
     for (const m of memoryEntries.slice(0, 2)) {
-      items.push({ icon: 'document-text-outline', title: m.title, time: m.timestamp, color: C.accent, route: '/(tabs)/memory' });
+      items.push({ icon: 'document-text-outline', title: m.title, time: m.timestamp, color: C.accent, route: '/(tabs)/vault' });
     }
 
     items.sort((a, b) => b.time - a.time);
@@ -1063,6 +1130,8 @@ export default function DashboardScreen() {
 
         <GatewayStatusWidget />
 
+        <AutomationStatusWidget />
+
         <KanbanProgressWidget />
 
         <CalendarAgendaWidget />
@@ -1204,6 +1273,15 @@ const styles = StyleSheet.create({
   gatewayAgentName: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textSecondary },
 
   alertP1: { ...C.shadow.glow },
+
+  autoStatusWidget: { borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.border, gap: 12 },
+  autoStatusHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  autoStatusRow: { flexDirection: 'row', alignItems: 'center' },
+  autoStatusItem: { flex: 1, alignItems: 'center', gap: 2 },
+  autoStatusDot: { width: 8, height: 8, borderRadius: 4, marginBottom: 2 },
+  autoStatusNum: { fontFamily: 'Inter_700Bold', fontSize: 20, color: C.text },
+  autoStatusLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textSecondary },
+  autoStatusDiv: { width: 1, height: 24, backgroundColor: C.border },
 
   systemHealthWidget: { backgroundColor: C.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.borderLight, gap: 12 },
   systemHealthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
