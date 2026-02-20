@@ -590,9 +590,11 @@ function GatewayStatusWidget() {
 
       {gatewayStatus !== 'connected' && gatewayStatus !== 'disconnected' && (
         <Text style={styles.gatewaySubText}>
-          {gatewayStatus === 'connecting' ? 'Establishing connection...' :
-           gatewayStatus === 'authenticating' ? 'Verifying credentials...' :
-           gatewayStatus === 'pairing' ? 'Approve on your gateway host' : 'Reconnecting...'}
+          {gatewayStatus === 'authenticating'
+            ? 'Verifying credentials...'
+            : gatewayStatus === 'pairing'
+              ? 'Approve on your gateway host'
+              : 'Connection error. Retrying...'}
         </Text>
       )}
 

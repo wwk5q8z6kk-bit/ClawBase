@@ -406,11 +406,11 @@ export default function SettingsScreen() {
         document.body.removeChild(anchor);
         URL.revokeObjectURL(url);
       } else {
-        const fileUri = FileSystem.documentDirectory + 'clawbase-backup.json';
-        await FileSystem.writeAsStringAsync(fileUri, jsonString, {
-          encoding: FileSystem.EncodingType.UTF8,
-        });
-        await Sharing.shareAsync(fileUri, {
+        const backupFile = new FileSystem.File(FileSystem.Paths.document, 'clawbase-backup.json');
+        backupFile.create({ overwrite: true, intermediates: true });
+        backupFile.write(jsonString, { encoding: 'utf8' });
+
+        await Sharing.shareAsync(backupFile.uri, {
           mimeType: 'application/json',
           dialogTitle: 'Export ClawBase Data',
           UTI: 'public.json',

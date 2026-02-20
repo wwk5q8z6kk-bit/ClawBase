@@ -228,9 +228,6 @@ const MessageBubble = React.memo(function MessageBubble({
               {isUser && message.status === 'sending' && (
                 <Ionicons name="checkmark" size={14} color="rgba(255,255,255,0.35)" style={{ marginLeft: 4 }} />
               )}
-              {isUser && message.status === 'pending' && (
-                <Ionicons name="time-outline" size={13} color="rgba(255,255,255,0.3)" style={{ marginLeft: 4 }} />
-              )}
             </View>
           </View>
         </View>
@@ -319,7 +316,7 @@ function MessageActionSheet({
 }) {
   if (!message) return null;
   const isUser = message.role === 'user';
-  
+
   const actions = [
     { icon: 'copy-outline', label: 'Copy Text', onPress: onCopy, color: C.accent },
     { icon: 'arrow-undo-outline', label: 'Reply', onPress: () => { onReply(message.content); onClose(); }, color: C.secondary },

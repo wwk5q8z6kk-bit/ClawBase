@@ -96,7 +96,7 @@ const MEMORY_SORT_OPTIONS: { key: MemorySortOption; label: string; icon: string 
   { key: 'alphabetical', label: 'Alphabetical', icon: 'text-outline' },
 ];
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const STATUS_PROGRESS: Record<TaskStatus, number> = {
   todo: 0,
@@ -901,12 +901,12 @@ function MemoryDetailModal({
                   <Ionicons
                     name={
                       item.reviewStatus === 'reviewed' ? 'checkmark-circle' :
-                      item.reviewStatus === 'deferred' ? 'time' : 'eye-off'
+                        item.reviewStatus === 'deferred' ? 'time' : 'eye-off'
                     }
                     size={12}
                     color={
                       item.reviewStatus === 'reviewed' ? C.success :
-                      item.reviewStatus === 'deferred' ? '#8B7FFF' : C.coral
+                        item.reviewStatus === 'deferred' ? '#8B7FFF' : C.coral
                     }
                   />
                   <Text style={[
@@ -1188,7 +1188,7 @@ export default function VaultScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await fetchGatewayMemory();
-    } catch {}
+    } catch { }
     setSyncingMemory(false);
   }, [fetchGatewayMemory]);
 
@@ -1435,7 +1435,7 @@ export default function VaultScreen() {
       <LinearGradient colors={C.gradient.ocean} style={styles.headerGradient}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Vault</Text>
-          <Pressable onPress={() => {}}>
+          <Pressable onPress={() => { }}>
             <Ionicons name="settings-outline" size={22} color={C.textSecondary} />
           </Pressable>
         </View>
@@ -2443,6 +2443,35 @@ const memModalStyles = StyleSheet.create({
     gap: 8,
     backgroundColor: C.surface,
   },
+  newMemActionBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: C.cardElevated,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  input: {
+    backgroundColor: C.background,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: C.text,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  statusBtnDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
   actionBtn: {
     flex: 1,
     flexDirection: 'column',
@@ -2482,6 +2511,7 @@ const createStyles = StyleSheet.create({
   typePillText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textTertiary },
   createBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, marginTop: 20 },
   createBtnText: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' },
+  saveBtnText: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' },
 });
 
 const styles = StyleSheet.create({
@@ -2564,7 +2594,9 @@ const styles = StyleSheet.create({
   priorityDot: { width: 5, height: 5, borderRadius: 3 },
   priorityText: { fontFamily: 'Inter_500Medium', fontSize: 11 },
   tagPill: { backgroundColor: C.accentMuted, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  tagText: { fontFamily: 'Inter_500Medium', fontSize: 10, color: C.textSecondary },
   sourcePill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  sourceText: { fontFamily: 'Inter_500Medium', fontSize: 10, color: C.textSecondary },
   taskAge: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary, marginLeft: 'auto' as const },
   taskMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 44 },
   dueDatePill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -2674,16 +2706,25 @@ const styles = StyleSheet.create({
   memorySummary: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.accent, lineHeight: 16, opacity: 0.85 },
   memoryText: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textSecondary, lineHeight: 18 },
   relevanceLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary },
+  relevanceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  relevanceBarBg: { flex: 1, height: 4, backgroundColor: C.borderLight, borderRadius: 2, overflow: 'hidden' },
+  relevanceBarFill: { height: '100%', backgroundColor: C.coral, borderRadius: 2 },
+  relevanceValue: { fontFamily: 'Inter_500Medium', fontSize: 10, color: C.coral },
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   memTagChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: C.accent + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   memTagChipText: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.accent },
   memoryFooter: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   sourceTextBadge: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary, textTransform: 'capitalize' },
+  typeBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginRight: 6 },
+  typeBadgeText: { fontFamily: 'Inter_500Medium', fontSize: 10, textTransform: 'uppercase' },
+  sourceBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.surface, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  reviewBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   reviewBadgeText: { fontFamily: 'Inter_500Medium', fontSize: 10, textTransform: 'capitalize' },
   memoryTime: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary, marginLeft: 'auto' },
   actionRow: { flexDirection: 'row', gap: 8, marginTop: 4, borderTopWidth: 1, borderTopColor: C.borderLight, paddingTop: 6 },
   memActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, height: 28, borderRadius: 6, backgroundColor: C.surface },
   actionBtnLabel: { fontFamily: 'Inter_500Medium', fontSize: 10, color: C.textTertiary },
+  container: { flex: 1, backgroundColor: C.background },
   digestCard: { marginHorizontal: 20, marginTop: 10, marginBottom: 2, borderRadius: 12 },
   digestGradient: { borderRadius: 12, padding: 14, borderWidth: 1, borderColor: C.borderLight },
   digestHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
@@ -2732,10 +2773,24 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 4,
   },
+  input: {
+    backgroundColor: C.background,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: C.text,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+  },
+
   swipeActionText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
     color: '#fff',
     marginTop: 4,
   },
+  deleteBtn: { marginTop: 16, padding: 14, borderRadius: 10, backgroundColor: C.error + '15', alignItems: 'center' },
+  deleteBtnText: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.error, textAlign: 'center' },
 });

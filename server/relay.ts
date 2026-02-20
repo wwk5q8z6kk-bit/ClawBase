@@ -1,13 +1,15 @@
-import WebSocket from 'ws';
-import { randomUUID, timingSafeEqual } from 'crypto';
+import { timingSafeEqual, randomBytes } from 'crypto';
+import { IncomingMessage, Server } from 'http';
+import { randomUUID } from 'crypto';
+import WebSocket, { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
-import type { IncomingMessage, Server } from 'node:http';
 
+const PING_INTERVAL = 15000;
+const PONG_TIMEOUT = 5000;
+const RPC_TIMEOUT = 30000;
 const JWT_EXPIRY = '1h';
-const MAX_AUDIT_ENTRIES = 1000;
-const PING_INTERVAL = 30000;
-const RPC_TIMEOUT = 15000;
 const MIN_SESSION_SECRET_LENGTH = 32;
+const MAX_AUDIT_ENTRIES = 1000;
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const RELAY_SETUP_TOKEN = process.env.RELAY_SETUP_TOKEN?.trim() || '';
 
@@ -175,13 +177,13 @@ function handleGatewayMessage(raw: string) {
     }
 
     if (msg.type === 'tool_call' || msg.event === 'tool_call' ||
-        msg.type === 'presence' || msg.event === 'presence' ||
-        msg.type === 'session.update' || msg.event === 'session.update' ||
-        msg.type === 'node.invoke' || msg.event === 'node.invoke') {
+      msg.type === 'presence' || msg.event === 'presence' ||
+      msg.type === 'session.update' || msg.event === 'session.update' ||
+      msg.type === 'node.invoke' || msg.event === 'node.invoke') {
       broadcastToMobile(msg);
       return;
     }
-  } catch {}
+  } catch { }
 }
 
 function handleChallenge(payload: any) {
@@ -398,7 +400,7 @@ function authenticateRequest(req: any, res: any): { deviceId: string } | null {
 }
 
 export function setupRelay(app: any, httpServer: Server) {
-  const wss = new WebSocket.Server({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true });
 
   httpServer.on('upgrade', (request: IncomingMessage, socket, head) => {
     const url = request.url || '';
@@ -417,7 +419,7 @@ export function setupRelay(app: any, httpServer: Server) {
         return;
       }
       (request as any).deviceId = payload.deviceId;
-      wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.handleUpgrade(request, socket, head, (ws: WebSocket) => {
         wss.emit('connection', ws, request);
       });
     }
@@ -444,7 +446,7 @@ export function setupRelay(app: any, httpServer: Server) {
         } else {
           sendToGateway(msg);
         }
-      } catch {}
+      } catch { }
     });
 
     ws.on('close', () => {
@@ -560,7 +562,7 @@ export function setupRelay(app: any, httpServer: Server) {
         if (gwHealth) {
           health.gateway.health = gwHealth;
         }
-      } catch {}
+      } catch { }
     }
 
     addAudit(auth.deviceId, 'health.check', 'success');
