@@ -6,16 +6,15 @@ import {
   Pressable,
   TextInput,
   Platform,
-  Alert,
   Animated,
   ActivityIndicator,
   Dimensions,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import * as Linking from 'expo-linking';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router, useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -25,20 +24,67 @@ const C = Colors.dark;
 const { width: SCREEN_W } = Dimensions.get('window');
 
 type PairMethod = 'qr' | 'code' | 'manual';
+type ConnectPhase = 'idle' | 'testing' | 'success' | 'unreachable';
+
+function buildHttpUrl(rawUrl: string): string {
+  let url = rawUrl.trim();
+  if (!url.startsWith('http') && !url.startsWith('ws')) {
+    url = 'https://' + url;
+  }
+  url = url.replace(/^ws:\/\//, 'http://').replace(/^wss:\/\//, 'https://');
+  return url.replace(/\/$/, '');
+}
+
+function buildWsUrl(rawUrl: string): string {
+  let url = rawUrl.trim();
+  if (!url.startsWith('http') && !url.startsWith('ws')) {
+    url = 'wss://' + url;
+  }
+  url = url.replace(/^http:\/\//, 'ws://').replace(/^https:\/\//, 'wss://');
+  const hasPort = /:\d+(\/|$)/.test(url.replace(/^wss?:\/\//, ''));
+  if (!hasPort) url += ':18789';
+  return url.replace(/\/$/, '');
+}
+
+async function testReachability(rawUrl: string): Promise<{ reachable: boolean; info?: any; error?: string }> {
+  try {
+    const httpUrl = buildHttpUrl(rawUrl);
+    const hasPort = /:\d+(\/|$)/.test(httpUrl.replace(/^https?:\/\//, ''));
+    const healthUrl = hasPort ? `${httpUrl}/healthz` : `${httpUrl}:18789/healthz`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    const resp = await fetch(healthUrl, { signal: controller.signal });
+    clearTimeout(timer);
+
+    if (resp.ok) {
+      const info = await resp.json().catch(() => null);
+      return { reachable: true, info };
+    }
+    return { reachable: false, error: `Gateway returned status ${resp.status}` };
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      return { reachable: false, error: 'Connection timed out — gateway may not be reachable from this network' };
+    }
+    return { reachable: false, error: "Cannot reach gateway — check the address and make sure it's accessible" };
+  }
+}
 
 export default function PairScreen() {
   const insets = useSafeAreaInsets();
-  const { addConnection, setHasOnboarded, connectGateway } = useApp();
+  const { addConnection, setHasOnboarded } = useApp();
   const params = useLocalSearchParams<{ from?: string }>();
   const [method, setMethod] = useState<PairMethod | null>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [pairCode, setPairCode] = useState('');
+  const [gatewayBaseUrl, setGatewayBaseUrl] = useState('');
   const [lookingUp, setLookingUp] = useState(false);
   const [manualUrl, setManualUrl] = useState('');
   const [manualToken, setManualToken] = useState('');
   const [manualName, setManualName] = useState('');
-  const [connectingResult, setConnectingResult] = useState<{ name: string; url: string } | null>(null);
+  const [connectPhase, setConnectPhase] = useState<ConnectPhase>('idle');
+  const [pendingConnection, setPendingConnection] = useState<{ name: string; url: string; token?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pulseAnim = useRef(new Animated.Value(0.5)).current;
 
@@ -53,25 +99,38 @@ export default function PairScreen() {
     ).start();
   }, [pulseAnim]);
 
-  const finishPairing = useCallback(async (name: string, url: string, token?: string) => {
-    setConnectingResult({ name, url });
-    setError(null);
+  const saveAndFinish = useCallback(async (name: string, url: string, token?: string) => {
     try {
-      let cleanUrl = url.trim();
-      if (!cleanUrl.startsWith('http') && !cleanUrl.startsWith('ws')) {
-        cleanUrl = 'http://' + cleanUrl;
-      }
-      await addConnection(name, cleanUrl, token || undefined);
+      const wsUrl = buildWsUrl(url);
+      await addConnection(name, wsUrl, token || undefined);
       await setHasOnboarded(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setConnectPhase('success');
+      setPendingConnection({ name, url: wsUrl, token });
       setTimeout(() => {
         router.replace('/(tabs)');
-      }, 800);
+      }, 1200);
     } catch (e: any) {
-      setError(e?.message || 'Connection failed');
-      setConnectingResult(null);
+      setError(e?.message || 'Failed to save connection');
+      setConnectPhase('idle');
     }
   }, [addConnection, setHasOnboarded]);
+
+  const finishPairing = useCallback(async (name: string, url: string, token?: string) => {
+    setError(null);
+    setConnectPhase('testing');
+    setPendingConnection({ name, url, token });
+
+    const result = await testReachability(url);
+
+    if (result.reachable) {
+      const gwName = result.info?.name || result.info?.agentName || name;
+      await saveAndFinish(gwName, url, token);
+    } else {
+      setConnectPhase('unreachable');
+      setError(result.error || 'Cannot reach gateway');
+    }
+  }, [saveAndFinish]);
 
   const handleQRScanned = useCallback(({ data }: { data: string }) => {
     if (scanned) return;
@@ -91,51 +150,63 @@ export default function PairScreen() {
       }
 
       let parsed: any;
-      try {
-        parsed = JSON.parse(data);
-      } catch {}
+      try { parsed = JSON.parse(data); } catch {}
 
       if (parsed?.url) {
         finishPairing(parsed.name || 'OpenClaw Gateway', parsed.url, parsed.token);
         return;
       }
 
-      if (data.match(/^(https?:\/\/|wss?:\/\/|[\d.]+:\d+)/)) {
+      if (data.match(/^(https?:\/\/|wss?:\/\/|[\d.]+[:\d]*)/)) {
         finishPairing('OpenClaw Gateway', data);
         return;
       }
 
-      setError('Unrecognized QR code. Expected an OpenClaw gateway QR.');
-      setTimeout(() => setScanned(false), 2000);
+      setError('Unrecognized QR code');
+      setTimeout(() => setScanned(false), 2500);
     } catch {
       setError('Could not read QR code');
-      setTimeout(() => setScanned(false), 2000);
+      setTimeout(() => setScanned(false), 2500);
     }
   }, [scanned, finishPairing]);
 
   const handleCodeLookup = useCallback(async () => {
     const code = pairCode.trim().toUpperCase();
-    if (code.length < 4) return;
+    const baseUrl = gatewayBaseUrl.trim();
+    if (code.length < 4 || !baseUrl) return;
     setLookingUp(true);
     setError(null);
     try {
-      const apiBase = Platform.OS === 'web'
-        ? ''
-        : `http://${process.env.EXPO_PUBLIC_DOMAIN || 'localhost:5000'}`;
-      const resp = await fetch(`${apiBase}/api/pair/lookup/${code}`);
+      const httpBase = buildHttpUrl(baseUrl);
+      const hasPort = /:\d+(\/|$)/.test(httpBase.replace(/^https?:\/\//, ''));
+      const apiUrl = hasPort ? `${httpBase}/api/pair/${code}` : `${httpBase}:18789/api/pair/${code}`;
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const resp = await fetch(apiUrl, { signal: controller.signal });
+      clearTimeout(timer);
+
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        setError(err.error || 'Invalid pairing code');
+        setError(err.error || err.message || 'Invalid or expired pairing code');
         setLookingUp(false);
         return;
       }
-      const { url, token, name } = await resp.json();
-      await finishPairing(name || 'OpenClaw Gateway', url, token);
-    } catch {
-      setError('Could not reach pairing service');
+      const data = await resp.json();
+      const gwUrl = data.url || baseUrl;
+      const token = data.token || '';
+      const name = data.name || data.agentName || 'OpenClaw Gateway';
+      setLookingUp(false);
+      await finishPairing(name, gwUrl, token);
+    } catch (e: any) {
+      if (e?.name === 'AbortError') {
+        setError('Timed out trying to reach your gateway');
+      } else {
+        setError('Cannot reach gateway — check the address');
+      }
+      setLookingUp(false);
     }
-    setLookingUp(false);
-  }, [pairCode, finishPairing]);
+  }, [pairCode, gatewayBaseUrl, finishPairing]);
 
   const handleManualConnect = useCallback(async () => {
     if (!manualUrl.trim()) return;
@@ -143,30 +214,108 @@ export default function PairScreen() {
   }, [manualUrl, manualToken, manualName, finishPairing]);
 
   const goBack = useCallback(() => {
+    if (connectPhase !== 'idle' && connectPhase !== 'success') {
+      setConnectPhase('idle');
+      setError(null);
+      setPendingConnection(null);
+      return;
+    }
     if (method) {
       setMethod(null);
       setError(null);
       setScanned(false);
+      setConnectPhase('idle');
+      setPendingConnection(null);
     } else if (params.from === 'settings') {
       router.back();
     } else {
       router.replace('/onboarding');
     }
-  }, [method, params.from]);
+  }, [method, params.from, connectPhase]);
 
-  if (connectingResult) {
+  if (connectPhase === 'testing') {
     return (
       <View style={[styles.container, { paddingTop: insets.top + webTopPad, backgroundColor: C.background }]}>
-        <View style={styles.successContent}>
+        <View style={styles.phaseContent}>
+          <ActivityIndicator size="large" color={C.accent} />
+          <Text style={styles.phaseTitle}>Testing connection...</Text>
+          <Text style={styles.phaseSub}>{pendingConnection?.url || ''}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (connectPhase === 'success') {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top + webTopPad, backgroundColor: C.background }]}>
+        <View style={styles.phaseContent}>
           <Animated.View style={{ opacity: pulseAnim }}>
             <LinearGradient colors={[C.success, '#00B88A']} style={styles.successIcon}>
               <Ionicons name="checkmark" size={48} color="#FFF" />
             </LinearGradient>
           </Animated.View>
-          <Text style={styles.successTitle}>Connected!</Text>
-          <Text style={styles.successSub}>{connectingResult.name}</Text>
-          <Text style={styles.successUrl}>{connectingResult.url}</Text>
+          <Text style={[styles.phaseTitle, { color: C.success }]}>Connected!</Text>
+          <Text style={styles.phaseSub}>{pendingConnection?.name}</Text>
+          <Text style={styles.phaseUrl}>{pendingConnection?.url}</Text>
         </View>
+      </View>
+    );
+  }
+
+  if (connectPhase === 'unreachable') {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top + webTopPad, backgroundColor: C.background }]}>
+        <View style={styles.topBar}>
+          <Pressable onPress={goBack} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={28} color={C.text} />
+          </Pressable>
+          <Text style={styles.topBarTitle}>Connection Issue</Text>
+          <View style={{ width: 28 }} />
+        </View>
+        <ScrollView contentContainerStyle={styles.phaseContent}>
+          <View style={styles.unreachableIcon}>
+            <Ionicons name="cloud-offline" size={48} color={C.error} />
+          </View>
+          <Text style={styles.phaseTitle}>Can't reach your gateway</Text>
+          <Text style={[styles.phaseSub, { paddingHorizontal: 24 }]}>{error}</Text>
+          <Text style={[styles.phaseUrl, { marginTop: 4 }]}>{pendingConnection?.url}</Text>
+
+          <View style={styles.unreachableTips}>
+            <Text style={styles.tipHeader}>Things to check:</Text>
+            <View style={styles.tipRow}>
+              <Ionicons name="wifi" size={14} color={C.textSecondary} />
+              <Text style={styles.tipText}>Is the gateway running?</Text>
+            </View>
+            <View style={styles.tipRow}>
+              <Ionicons name="globe-outline" size={14} color={C.textSecondary} />
+              <Text style={styles.tipText}>Is it exposed via tunnel (Cloudflare, Tailscale)?</Text>
+            </View>
+            <View style={styles.tipRow}>
+              <Ionicons name="phone-portrait-outline" size={14} color={C.textSecondary} />
+              <Text style={styles.tipText}>Are you on the same network as the gateway?</Text>
+            </View>
+          </View>
+
+          <View style={styles.unreachableActions}>
+            <Pressable
+              onPress={() => {
+                if (pendingConnection) finishPairing(pendingConnection.name, pendingConnection.url, pendingConnection.token);
+              }}
+              style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.8 }]}
+            >
+              <Ionicons name="refresh" size={18} color={C.accent} />
+              <Text style={[styles.retryBtnText, { color: C.accent }]}>Try again</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                if (pendingConnection) saveAndFinish(pendingConnection.name, pendingConnection.url, pendingConnection.token);
+              }}
+              style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.saveAnywayText}>Save anyway for later</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -187,10 +336,10 @@ export default function PairScreen() {
               <Ionicons name="camera-outline" size={48} color={C.textTertiary} />
             </View>
             <Text style={styles.fallbackTitle}>Camera not available on web</Text>
-            <Text style={styles.fallbackSub}>Use the Expo Go app on your phone to scan QR codes, or try the pairing code method instead.</Text>
-            <Pressable onPress={() => setMethod('code')} style={({ pressed }) => [styles.fallbackBtn, pressed && { opacity: 0.8 }]}>
-              <Ionicons name="keypad-outline" size={18} color={C.secondary} />
-              <Text style={[styles.fallbackBtnText, { color: C.secondary }]}>Use Pairing Code</Text>
+            <Text style={styles.fallbackSub}>Use ClawBase on your phone to scan QR codes, or try manual setup.</Text>
+            <Pressable onPress={() => setMethod('manual')} style={({ pressed }) => [styles.fallbackBtn, pressed && { opacity: 0.8 }]}>
+              <Ionicons name="code-slash-outline" size={18} color={C.secondary} />
+              <Text style={[styles.fallbackBtnText, { color: C.secondary }]}>Manual Setup</Text>
             </Pressable>
           </View>
         </View>
@@ -212,7 +361,7 @@ export default function PairScreen() {
               <Ionicons name="camera" size={40} color={C.accent} />
             </View>
             <Text style={styles.permissionTitle}>Camera Access Required</Text>
-            <Text style={styles.permissionSub}>We need camera access to scan your gateway's QR code for instant pairing.</Text>
+            <Text style={styles.permissionSub}>We need camera access to scan your gateway's QR code.</Text>
             <Pressable
               onPress={requestCameraPermission}
               style={({ pressed }) => [styles.permissionBtn, pressed && { opacity: 0.8 }]}
@@ -258,7 +407,7 @@ export default function PairScreen() {
                 <Text style={styles.scanErrorText}>{error}</Text>
               </View>
             )}
-            <Text style={styles.scanHint}>Point your camera at the QR code shown on your OpenClaw gateway</Text>
+            <Text style={styles.scanHint}>Point at the QR code on your OpenClaw gateway</Text>
           </View>
         </View>
       </View>
@@ -272,16 +421,27 @@ export default function PairScreen() {
           <Pressable onPress={goBack} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={28} color={C.text} />
           </Pressable>
-          <Text style={styles.topBarTitle}>Enter Pairing Code</Text>
+          <Text style={styles.topBarTitle}>Pairing Code</Text>
           <View style={{ width: 28 }} />
         </View>
 
-        <View style={styles.codeContent}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.codeContent} keyboardShouldPersistTaps="handled">
           <View style={styles.codeIconWrap}>
             <Ionicons name="keypad" size={36} color={C.coral} />
           </View>
-          <Text style={styles.codeTitle}>Enter the 6-character code</Text>
-          <Text style={styles.codeSub}>Your OpenClaw gateway displays a pairing code. Enter it below to connect instantly.</Text>
+          <Text style={styles.codeTitle}>Pair with your gateway</Text>
+          <Text style={styles.codeSub}>Enter your gateway address and the pairing code it displays. The app connects directly to your gateway.</Text>
+
+          <TextInput
+            style={styles.manualInput}
+            placeholder="Gateway address (e.g. my-server.example.com)"
+            placeholderTextColor={C.textTertiary}
+            value={gatewayBaseUrl}
+            onChangeText={(t) => { setGatewayBaseUrl(t); setError(null); }}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
 
           <TextInput
             style={styles.codeInput}
@@ -292,7 +452,6 @@ export default function PairScreen() {
             autoCapitalize="characters"
             autoCorrect={false}
             maxLength={6}
-            autoFocus
           />
 
           {error && (
@@ -304,10 +463,10 @@ export default function PairScreen() {
 
           <Pressable
             onPress={handleCodeLookup}
-            disabled={pairCode.length < 4 || lookingUp}
+            disabled={pairCode.length < 4 || !gatewayBaseUrl.trim() || lookingUp}
             style={({ pressed }) => [
               styles.codeBtn,
-              (pairCode.length < 4 || lookingUp) && { opacity: 0.4 },
+              (pairCode.length < 4 || !gatewayBaseUrl.trim() || lookingUp) && { opacity: 0.4 },
               pressed && { opacity: 0.8 },
             ]}
           >
@@ -325,9 +484,9 @@ export default function PairScreen() {
 
           <View style={styles.codeHintRow}>
             <Ionicons name="information-circle-outline" size={14} color={C.textTertiary} />
-            <Text style={styles.codeHint}>Codes expire after 10 minutes for security</Text>
+            <Text style={styles.codeHint}>The code is generated by your gateway and expires after 10 minutes</Text>
           </View>
-        </View>
+        </ScrollView>
       </View>
     );
   }
@@ -343,7 +502,7 @@ export default function PairScreen() {
           <View style={{ width: 28 }} />
         </View>
 
-        <View style={styles.manualContent}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.manualContent} keyboardShouldPersistTaps="handled">
           <TextInput
             style={styles.manualInput}
             placeholder="Name (e.g. Home Server)"
@@ -353,7 +512,7 @@ export default function PairScreen() {
           />
           <TextInput
             style={styles.manualInput}
-            placeholder="Gateway URL (e.g. 192.168.1.100:18789)"
+            placeholder="Gateway URL (e.g. gateway.example.com)"
             placeholderTextColor={C.textTertiary}
             value={manualUrl}
             onChangeText={(t) => { setManualUrl(t); setError(null); }}
@@ -371,6 +530,8 @@ export default function PairScreen() {
             autoCorrect={false}
             secureTextEntry
           />
+
+          <Text style={styles.helperText}>Default port is :18789 — added automatically if not specified</Text>
 
           {error && (
             <View style={styles.errorRow}>
@@ -393,7 +554,7 @@ export default function PairScreen() {
               <Text style={styles.codeBtnText}>Connect</Text>
             </LinearGradient>
           </Pressable>
-        </View>
+        </ScrollView>
       </View>
     );
   }
@@ -418,7 +579,7 @@ export default function PairScreen() {
             </View>
             <View style={styles.pairMethodInfo}>
               <Text style={styles.pairMethodTitle}>Scan QR Code</Text>
-              <Text style={styles.pairMethodDesc}>Point your camera at the QR code on your gateway. Fastest method.</Text>
+              <Text style={styles.pairMethodDesc}>Scan the QR code your gateway displays. Instant setup.</Text>
             </View>
             <View style={[styles.pairMethodBadge, { backgroundColor: C.success + '18' }]}>
               <Text style={[styles.pairMethodBadgeText, { color: C.success }]}>Recommended</Text>
@@ -432,8 +593,8 @@ export default function PairScreen() {
               <Ionicons name="keypad" size={28} color={C.coral} />
             </View>
             <View style={styles.pairMethodInfo}>
-              <Text style={styles.pairMethodTitle}>Enter Pairing Code</Text>
-              <Text style={styles.pairMethodDesc}>Type the 6-character code shown on your gateway console.</Text>
+              <Text style={styles.pairMethodTitle}>Pairing Code</Text>
+              <Text style={styles.pairMethodDesc}>Enter your gateway address and the code it shows.</Text>
             </View>
           </LinearGradient>
         </Pressable>
@@ -445,7 +606,7 @@ export default function PairScreen() {
             </View>
             <View style={styles.pairMethodInfo}>
               <Text style={styles.pairMethodTitle}>Manual Setup</Text>
-              <Text style={styles.pairMethodDesc}>Enter your gateway URL and token directly.</Text>
+              <Text style={styles.pairMethodDesc}>Enter URL and token directly. For advanced users.</Text>
             </View>
           </LinearGradient>
         </Pressable>
@@ -453,7 +614,7 @@ export default function PairScreen() {
         <View style={styles.deepLinkHint}>
           <Ionicons name="link-outline" size={14} color={C.textTertiary} />
           <Text style={styles.deepLinkHintText}>
-            You can also open a clawbase:// link from your gateway to connect automatically.
+            You can also tap a clawbase:// link from your gateway to connect automatically.
           </Text>
         </View>
       </View>
@@ -468,11 +629,20 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
   backBtn: { padding: 4 },
   topBarTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 18, color: C.text },
-  successContent: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  phaseContent: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: 14, paddingHorizontal: 32, paddingBottom: 40 },
+  phaseTitle: { fontFamily: 'Inter_700Bold', fontSize: 24, color: C.text },
+  phaseSub: { fontFamily: 'Inter_500Medium', fontSize: 15, color: C.textSecondary, textAlign: 'center' },
+  phaseUrl: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary },
   successIcon: { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center' },
-  successTitle: { fontFamily: 'Inter_700Bold', fontSize: 28, color: C.success },
-  successSub: { fontFamily: 'Inter_500Medium', fontSize: 16, color: C.text },
-  successUrl: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textSecondary },
+  unreachableIcon: { width: 88, height: 88, borderRadius: 28, backgroundColor: C.error + '15', alignItems: 'center', justifyContent: 'center' },
+  unreachableTips: { marginTop: 20, gap: 10, width: '100%', backgroundColor: C.card, padding: 16, borderRadius: 14, borderWidth: 1, borderColor: C.border },
+  tipHeader: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.text, marginBottom: 4 },
+  tipRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  tipText: { fontFamily: 'Inter_400Regular', fontSize: 14, color: C.textSecondary },
+  unreachableActions: { marginTop: 20, gap: 16, alignItems: 'center', width: '100%' },
+  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 14, paddingHorizontal: 24, borderRadius: 14, backgroundColor: C.accent + '15', borderWidth: 1, borderColor: C.accent + '30', width: '100%', justifyContent: 'center' },
+  retryBtnText: { fontFamily: 'Inter_600SemiBold', fontSize: 15 },
+  saveAnywayText: { fontFamily: 'Inter_500Medium', fontSize: 14, color: C.textTertiary, textDecorationLine: 'underline' },
   scanOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between' },
   scanFrameContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scanFrame: { width: SCAN_SIZE, height: SCAN_SIZE, position: 'relative' },
@@ -498,20 +668,21 @@ const styles = StyleSheet.create({
   fallbackSub: { fontFamily: 'Inter_400Regular', fontSize: 14, color: C.textSecondary, textAlign: 'center', lineHeight: 20 },
   fallbackBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, backgroundColor: C.secondary + '15', borderWidth: 1, borderColor: C.secondary + '30' },
   fallbackBtnText: { fontFamily: 'Inter_500Medium', fontSize: 15 },
-  codeContent: { flex: 1, paddingHorizontal: 24, paddingTop: 40, alignItems: 'center', gap: 14 },
+  codeContent: { paddingHorizontal: 24, paddingTop: 30, alignItems: 'center', gap: 14, paddingBottom: 40 },
   codeIconWrap: { width: 72, height: 72, borderRadius: 22, backgroundColor: C.coral + '15', alignItems: 'center', justifyContent: 'center' },
   codeTitle: { fontFamily: 'Inter_700Bold', fontSize: 22, color: C.text },
-  codeSub: { fontFamily: 'Inter_400Regular', fontSize: 14, color: C.textSecondary, textAlign: 'center', lineHeight: 20, paddingHorizontal: 16 },
-  codeInput: { fontFamily: 'Inter_700Bold', fontSize: 32, color: C.text, textAlign: 'center', letterSpacing: 8, backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: C.border, paddingVertical: 20, paddingHorizontal: 24, width: '100%', marginTop: 8 },
+  codeSub: { fontFamily: 'Inter_400Regular', fontSize: 14, color: C.textSecondary, textAlign: 'center', lineHeight: 20, paddingHorizontal: 12 },
+  codeInput: { fontFamily: 'Inter_700Bold', fontSize: 32, color: C.text, textAlign: 'center', letterSpacing: 8, backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: C.border, paddingVertical: 20, paddingHorizontal: 24, width: '100%' },
   codeBtn: { borderRadius: 14, overflow: 'hidden', width: '100%' },
   codeBtnInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16 },
   codeBtnText: { fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#FFF' },
-  codeHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
-  codeHint: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary },
+  codeHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 8 },
+  codeHint: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary, flex: 1 },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.error + '10', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, width: '100%' },
   errorText: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.error, flex: 1 },
-  manualContent: { flex: 1, paddingHorizontal: 24, paddingTop: 24, gap: 14 },
-  manualInput: { backgroundColor: C.card, borderRadius: 12, padding: 14, fontFamily: 'Inter_400Regular', fontSize: 15, color: C.text, borderWidth: 1, borderColor: C.border },
+  manualContent: { paddingHorizontal: 24, paddingTop: 24, gap: 14, paddingBottom: 40 },
+  manualInput: { backgroundColor: C.card, borderRadius: 12, padding: 14, fontFamily: 'Inter_400Regular', fontSize: 15, color: C.text, borderWidth: 1, borderColor: C.border, width: '100%' },
+  helperText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary, alignSelf: 'flex-start', marginTop: -6 },
   methodList: { flex: 1, paddingHorizontal: 20, paddingTop: 24, gap: 14 },
   methodListTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: C.textSecondary, marginBottom: 4 },
   pairMethodCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 16, gap: 14, borderWidth: 1, borderColor: C.borderLight },
