@@ -188,7 +188,8 @@ export class OpenClawGateway {
       const wsUrl = this.url
         .replace(/^http:\/\//, 'ws://')
         .replace(/^https:\/\//, 'wss://');
-      const fullUrl = wsUrl.includes('18789') ? wsUrl : `${wsUrl}:18789`;
+      const hasPort = /:\d+$/.test(wsUrl) || /:\d+\//.test(wsUrl);
+      const fullUrl = hasPort ? wsUrl : `${wsUrl}:18789`;
 
       this.ws = new WebSocket(fullUrl);
 
@@ -630,7 +631,8 @@ export class OpenClawGateway {
       const httpUrl = this.url
         .replace(/^ws:\/\//, 'http://')
         .replace(/^wss:\/\//, 'https://');
-      const healthUrl = httpUrl.includes('18789') ? `${httpUrl}/healthz` : `${httpUrl}:18789/healthz`;
+      const hasPort = /:\d+$/.test(httpUrl) || /:\d+\//.test(httpUrl);
+      const healthUrl = hasPort ? `${httpUrl}/healthz` : `${httpUrl}:18789/healthz`;
 
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 5000);

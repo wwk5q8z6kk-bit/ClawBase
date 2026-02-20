@@ -78,12 +78,13 @@ function SettingsRow({
 }
 
 function AgentHealthMonitor() {
-  const { activeConnection } = useApp();
-  const connected = !!activeConnection;
+  const { activeConnection, gatewayStatus, gatewayInfo, gateway } = useApp();
+  const isConnected = gatewayStatus === 'connected';
+  const isConnecting = gatewayStatus === 'connecting' || gatewayStatus === 'authenticating';
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (!connected) return;
+    if (!isConnecting && !isConnected) return;
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 0.4, duration: 1200, useNativeDriver: Platform.OS !== 'web' }),
@@ -92,35 +93,46 @@ function AgentHealthMonitor() {
     );
     pulse.start();
     return () => pulse.stop();
-  }, [connected, pulseAnim]);
+  }, [isConnected, isConnecting, pulseAnim]);
+
+  const statusLabel = isConnected ? 'Gateway Connected' : isConnecting ? 'Connecting...' : gatewayStatus === 'pairing' ? 'Awaiting Approval' : gatewayStatus === 'error' ? 'Connection Error' : 'Disconnected';
+  const statusColor = isConnected ? C.success : isConnecting || gatewayStatus === 'pairing' ? C.amber : gatewayStatus === 'error' ? C.error : C.textTertiary;
 
   return (
     <LinearGradient
-      colors={connected ? ['#0F2020', '#0E1A1A'] : ['#201510', '#1A1210']}
+      colors={isConnected ? ['#0F2020', '#0E1A1A'] : isConnecting ? ['#201A10', '#1A1510'] : ['#201510', '#1A1210']}
       style={styles.healthCard}
     >
       <View style={styles.healthHeader}>
-        <Animated.View style={[styles.healthDot, { backgroundColor: connected ? C.success : C.error, opacity: connected ? pulseAnim : 1 }]} />
-        <Text style={[styles.healthStatus, { color: connected ? C.success : C.error }]}>
-          {connected ? 'Agent Healthy' : 'No Connection'}
-        </Text>
+        <Animated.View style={[styles.healthDot, { backgroundColor: statusColor, opacity: isConnecting ? pulseAnim : 1 }]} />
+        <Text style={[styles.healthStatus, { color: statusColor }]}>{statusLabel}</Text>
       </View>
       <View style={styles.healthMetrics}>
         <View style={styles.healthMetric}>
-          <Text style={styles.healthMetricValue}>{connected ? '24ms' : '--'}</Text>
-          <Text style={styles.healthMetricLabel}>Latency</Text>
+          <Text style={styles.healthMetricValue}>{isConnected ? gatewayInfo.channels.filter(c => c.status === 'active').length.toString() : '--'}</Text>
+          <Text style={styles.healthMetricLabel}>Channels</Text>
         </View>
         <View style={styles.healthMetricDivider} />
         <View style={styles.healthMetric}>
-          <Text style={styles.healthMetricValue}>{connected ? '99.9%' : '--'}</Text>
-          <Text style={styles.healthMetricLabel}>Uptime</Text>
+          <Text style={styles.healthMetricValue}>{isConnected ? gatewayInfo.totalSessions.toString() : '--'}</Text>
+          <Text style={styles.healthMetricLabel}>Sessions</Text>
         </View>
         <View style={styles.healthMetricDivider} />
         <View style={styles.healthMetric}>
-          <Text style={styles.healthMetricValue}>{connected ? '4' : '0'}</Text>
-          <Text style={styles.healthMetricLabel}>Skills</Text>
+          <Text style={styles.healthMetricValue}>{isConnected && gatewayInfo.model ? '1' : isConnected ? '0' : '--'}</Text>
+          <Text style={styles.healthMetricLabel}>Model</Text>
         </View>
       </View>
+      {isConnected && gatewayInfo.model && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+          <Ionicons name="sparkles" size={12} color={C.coral} />
+          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary }}>{gatewayInfo.model}</Text>
+          {gatewayInfo.agentName && <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary }}>· {gatewayInfo.agentName}</Text>}
+        </View>
+      )}
+      {gatewayStatus === 'error' && (
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: C.error, marginTop: 4 }}>Check your gateway URL and token</Text>
+      )}
     </LinearGradient>
   );
 }
@@ -141,11 +153,20 @@ export default function SettingsScreen() {
     crmContacts,
     calendarEvents,
     refreshAll,
+    gatewayStatus,
+    gatewayInfo,
+    gateway,
+    connectGateway,
+    disconnectGateway,
   } = useApp();
 
   const [showConnModal, setShowConnModal] = useState(false);
   const [connName, setConnName] = useState('');
   const [connUrl, setConnUrl] = useState('');
+  const [connToken, setConnToken] = useState('');
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const [storageStats, setStorageStats] = useState<{
     tasks: number;
@@ -173,6 +194,57 @@ export default function SettingsScreen() {
   useEffect(() => {
     loadStorageStats();
   }, [loadStorageStats]);
+
+  useEffect(() => {
+    const unsub = gateway.on('error', (event) => {
+      setConnectionError(event.data?.message || 'Connection failed');
+    });
+    const unsub2 = gateway.on('status_change', (event) => {
+      if (event.data?.status === 'connected') {
+        setConnectionError(null);
+      }
+    });
+    return () => { unsub(); unsub2(); };
+  }, [gateway]);
+
+  const handleTestConnection = useCallback(async () => {
+    if (!connUrl.trim()) return;
+    setTestingConnection(true);
+    setTestResult(null);
+    try {
+      let url = connUrl.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('ws://') && !url.startsWith('wss://')) {
+        url = 'http://' + url;
+      }
+      const testGw = new (gateway.constructor as any)();
+      const ok = await testGw.healthCheck.call({ url: url.replace(/^ws/, 'http') });
+      if (ok) {
+        setTestResult({ ok: true, msg: 'Gateway is reachable!' });
+      } else {
+        setTestResult({ ok: false, msg: 'Gateway not responding. Check URL.' });
+      }
+    } catch {
+      setTestResult({ ok: false, msg: 'Could not reach gateway.' });
+    }
+    setTestingConnection(false);
+  }, [connUrl, gateway]);
+
+  const handleManualConnect = useCallback(async () => {
+    if (!activeConnection) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setConnectionError(null);
+    try {
+      await connectGateway(activeConnection.url, activeConnection.token || '');
+    } catch {
+      setConnectionError('Failed to connect');
+    }
+  }, [activeConnection, connectGateway]);
+
+  const handleManualDisconnect = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    disconnectGateway();
+    setConnectionError(null);
+  }, [disconnectGateway]);
 
   const handleClearAllData = useCallback(() => {
     const doClear = async () => {
@@ -229,14 +301,16 @@ export default function SettingsScreen() {
     if (!connName.trim() || !connUrl.trim()) return;
     let url = connUrl.trim();
     if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('ws://') && !url.startsWith('wss://')) {
-      url = 'https://' + url;
+      url = 'http://' + url;
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await addConnection(connName.trim(), url);
+    await addConnection(connName.trim(), url, connToken.trim() || undefined);
     setConnName('');
     setConnUrl('');
+    setConnToken('');
+    setTestResult(null);
     setShowConnModal(false);
-  }, [connName, connUrl, addConnection]);
+  }, [connName, connUrl, connToken, addConnection]);
 
   const openWithTemplate = useCallback((name: string, url: string) => {
     setConnName(name);
@@ -326,7 +400,7 @@ export default function SettingsScreen() {
                   {
                     backgroundColor:
                       activeConnection?.id === conn.id
-                        ? C.success + '30'
+                        ? (gatewayStatus === 'connected' ? C.success : gatewayStatus === 'connecting' || gatewayStatus === 'authenticating' ? C.amber : gatewayStatus === 'error' ? C.error : C.textTertiary) + '30'
                         : C.textTertiary + '20',
                   },
                 ]}
@@ -337,7 +411,7 @@ export default function SettingsScreen() {
                     {
                       backgroundColor:
                         activeConnection?.id === conn.id
-                          ? C.success
+                          ? (gatewayStatus === 'connected' ? C.success : gatewayStatus === 'connecting' || gatewayStatus === 'authenticating' ? C.amber : gatewayStatus === 'error' ? C.error : C.textTertiary)
                           : C.textTertiary,
                     },
                   ]}
@@ -354,6 +428,38 @@ export default function SettingsScreen() {
               )}
             </Pressable>
           ))}
+          {activeConnection && (
+            <View style={styles.connActions}>
+              {connectionError && (
+                <View style={styles.connError}>
+                  <Ionicons name="alert-circle" size={14} color={C.error} />
+                  <Text style={styles.connErrorText}>{connectionError}</Text>
+                </View>
+              )}
+              <View style={styles.connBtns}>
+                {gatewayStatus === 'connected' ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.connActionBtn, styles.connDisconnectBtn, pressed && { opacity: 0.7 }]}
+                    onPress={handleManualDisconnect}
+                  >
+                    <Ionicons name="power" size={16} color={C.error} />
+                    <Text style={[styles.connActionText, { color: C.error }]}>Disconnect</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    style={({ pressed }) => [styles.connActionBtn, styles.connConnectBtn, pressed && { opacity: 0.7 }]}
+                    onPress={handleManualConnect}
+                    disabled={gatewayStatus === 'connecting' || gatewayStatus === 'authenticating'}
+                  >
+                    <Ionicons name="flash" size={16} color={C.secondary} />
+                    <Text style={[styles.connActionText, { color: C.secondary }]}>
+                      {gatewayStatus === 'connecting' || gatewayStatus === 'authenticating' ? 'Connecting...' : 'Connect'}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            </View>
+          )}
           <Pressable
             style={({ pressed }) => [
               styles.addConnBtn,
@@ -501,7 +607,7 @@ export default function SettingsScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Gateway</Text>
-              <Pressable onPress={() => setShowConnModal(false)}>
+              <Pressable onPress={() => { setShowConnModal(false); setTestResult(null); }}>
                 <Ionicons name="close" size={24} color={C.textSecondary} />
               </Pressable>
             </View>
@@ -519,16 +625,33 @@ export default function SettingsScreen() {
               placeholder="URL (e.g. 192.168.1.100:18789)"
               placeholderTextColor={C.textTertiary}
               value={connUrl}
-              onChangeText={setConnUrl}
+              onChangeText={(t) => { setConnUrl(t); setTestResult(null); }}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="url"
             />
+            <TextInput
+              style={styles.input}
+              placeholder="Auth token (optional)"
+              placeholderTextColor={C.textTertiary}
+              value={connToken}
+              onChangeText={setConnToken}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+            />
+
+            {testResult && (
+              <View style={[styles.testResultRow, { borderColor: testResult.ok ? C.success + '30' : C.error + '30', backgroundColor: testResult.ok ? C.success + '08' : C.error + '08' }]}>
+                <Ionicons name={testResult.ok ? 'checkmark-circle' : 'alert-circle'} size={16} color={testResult.ok ? C.success : C.error} />
+                <Text style={[styles.testResultText, { color: testResult.ok ? C.success : C.error }]}>{testResult.msg}</Text>
+              </View>
+            )}
 
             <View style={styles.hintRow}>
               <Ionicons name="information-circle-outline" size={16} color={C.textTertiary} />
               <Text style={styles.hintText}>
-                Enter your OpenClaw Gateway address. Supports local IP, Tailscale, or Cloudflare Tunnel URLs.
+                Enter your OpenClaw Gateway address and optional auth token. Supports local IP, Tailscale, or Cloudflare Tunnel URLs.
               </Text>
             </View>
 
@@ -541,7 +664,7 @@ export default function SettingsScreen() {
               ]}
               disabled={!connName.trim() || !connUrl.trim()}
             >
-              <Text style={styles.saveBtnText}>Save Connection</Text>
+              <Text style={styles.saveBtnText}>Save & Connect</Text>
             </Pressable>
           </View>
         </View>
@@ -842,4 +965,14 @@ const styles = StyleSheet.create({
   storageItemIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
   storageItemCount: { fontFamily: 'Inter_700Bold', fontSize: 16, color: C.text },
   storageItemLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary },
+  connActions: { padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: C.borderLight },
+  connError: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, backgroundColor: C.error + '10', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8 },
+  connErrorText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.error, flex: 1 },
+  connBtns: { flexDirection: 'row' as const, gap: 8 },
+  connActionBtn: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 10, borderRadius: 10 },
+  connConnectBtn: { backgroundColor: C.secondary + '15', borderWidth: 1, borderColor: C.secondary + '30' },
+  connDisconnectBtn: { backgroundColor: C.error + '10', borderWidth: 1, borderColor: C.error + '20' },
+  connActionText: { fontFamily: 'Inter_500Medium', fontSize: 14 },
+  testResultRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
+  testResultText: { fontFamily: 'Inter_500Medium', fontSize: 13, flex: 1 },
 });

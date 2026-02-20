@@ -42,7 +42,7 @@ import { getGateway, OpenClawGateway, GatewayStatus, GatewayInfo, GatewaySession
 interface AppContextValue {
   connections: GatewayConnection[];
   activeConnection: GatewayConnection | null;
-  addConnection: (name: string, url: string) => Promise<void>;
+  addConnection: (name: string, url: string, token?: string) => Promise<void>;
   removeConnection: (id: string) => Promise<void>;
   setActiveConnection: (id: string) => Promise<void>;
 
@@ -261,17 +261,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (activeConnection && activeConnection.url && gatewayStatus === 'disconnected') {
-      const token = '';
-      gateway.connect(activeConnection.url, token).catch(() => {});
+      gateway.connect(activeConnection.url, activeConnection.token || '').catch(() => {});
     }
   }, [activeConnection, gateway, gatewayStatus]);
 
   const addConnection = useCallback(
-    async (name: string, url: string) => {
+    async (name: string, url: string, token?: string) => {
       const conn: GatewayConnection = {
         id: Crypto.randomUUID(),
         name,
         url,
+        token,
         isActive: true,
         status: 'disconnected',
         lastConnected: Date.now(),

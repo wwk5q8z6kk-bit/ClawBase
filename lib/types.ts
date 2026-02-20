@@ -2,6 +2,7 @@ export interface GatewayConnection {
   id: string;
   name: string;
   url: string;
+  token?: string;
   isActive: boolean;
   lastConnected?: number;
   status: 'connected' | 'disconnected' | 'connecting' | 'error';
