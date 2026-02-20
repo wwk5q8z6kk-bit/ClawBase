@@ -568,6 +568,7 @@ export default function MemoryScreen() {
               <Ionicons name="swap-vertical-outline" size={18} color={sortOption !== 'newest' ? C.coral : C.textSecondary} />
             </Pressable>
             <Pressable
+              testID="create-memory-btn"
               style={styles.headerBtn}
               onPress={() => {
                 setShowCreateModal(true);
