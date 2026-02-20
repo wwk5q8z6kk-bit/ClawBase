@@ -22,6 +22,64 @@ import type { TaskStatus, Task } from '@/lib/types';
 
 const C = Colors.dark;
 
+function AnimatedCounter({ target, delay = 0, style }: { target: number; delay?: number; style?: any }) {
+  const countAnim = useRef(new Animated.Value(0)).current;
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    countAnim.reset();
+    const animation = Animated.timing(countAnim, {
+      toValue: target,
+      duration: 600,
+      delay,
+      useNativeDriver: false,
+      easing: undefined,
+    });
+
+    const listener = countAnim.addListener(({ value }) => {
+      setDisplayValue(Math.round(value));
+    });
+
+    animation.start();
+
+    return () => {
+      countAnim.removeListener(listener);
+      animation.stop();
+    };
+  }, [target, delay, countAnim]);
+
+  return <Text style={style}>{displayValue}</Text>;
+}
+
+function AnimatedPercentage({ target, delay = 0 }: { target: number; delay?: number }) {
+  const countAnim = useRef(new Animated.Value(0)).current;
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    countAnim.reset();
+    const animation = Animated.timing(countAnim, {
+      toValue: target,
+      duration: 600,
+      delay,
+      useNativeDriver: false,
+      easing: undefined,
+    });
+
+    const listener = countAnim.addListener(({ value }) => {
+      setDisplayValue(Math.round(value));
+    });
+
+    animation.start();
+
+    return () => {
+      countAnim.removeListener(listener);
+      animation.stop();
+    };
+  }, [target, delay, countAnim]);
+
+  return <Text style={styles.kanbanPctText}>{displayValue}%</Text>;
+}
+
 function PulsingDot({ color, size = 8 }: { color: string; size?: number }) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -235,28 +293,28 @@ const KanbanProgressWidget = React.memo(function KanbanProgressWidget() {
             <Text style={styles.widgetTitle}>Task Pipeline</Text>
           </View>
           <View style={styles.kanbanPct}>
-            <Text style={styles.kanbanPctText}>{pctDone}%</Text>
+            <AnimatedPercentage target={pctDone} delay={500} />
           </View>
         </View>
 
         <View style={styles.kanbanStats}>
           <View style={styles.kanbanStat}>
-            <Text style={[styles.kanbanStatNum, { color: C.textSecondary }]}>{todo}</Text>
+            <AnimatedCounter target={todo} delay={0} style={[styles.kanbanStatNum, { color: C.textSecondary }]} />
             <Text style={styles.kanbanStatLabel}>To Do</Text>
           </View>
           <View style={styles.kanbanStatDiv} />
           <View style={styles.kanbanStat}>
-            <Text style={[styles.kanbanStatNum, { color: C.amber }]}>{inProg}</Text>
+            <AnimatedCounter target={inProg} delay={100} style={[styles.kanbanStatNum, { color: C.amber }]} />
             <Text style={styles.kanbanStatLabel}>Active</Text>
           </View>
           <View style={styles.kanbanStatDiv} />
           <View style={styles.kanbanStat}>
-            <Text style={[styles.kanbanStatNum, { color: C.success }]}>{done}</Text>
+            <AnimatedCounter target={done} delay={200} style={[styles.kanbanStatNum, { color: C.success }]} />
             <Text style={styles.kanbanStatLabel}>Done</Text>
           </View>
           <View style={styles.kanbanStatDiv} />
           <View style={styles.kanbanStat}>
-            <Text style={[styles.kanbanStatNum, { color: C.purple }]}>{deferred}</Text>
+            <AnimatedCounter target={deferred} delay={300} style={[styles.kanbanStatNum, { color: C.purple }]} />
             <Text style={styles.kanbanStatLabel}>Deferred</Text>
           </View>
         </View>

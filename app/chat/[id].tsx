@@ -354,6 +354,28 @@ function MessageActionSheet({
   );
 }
 
+function AnimatedMessageWrapper({ children, shouldAnimate }: { children: React.ReactNode; shouldAnimate: boolean }) {
+  const translateY = useRef(new Animated.Value(shouldAnimate ? 20 : 0)).current;
+  const opacity = useRef(new Animated.Value(shouldAnimate ? 0 : 1)).current;
+
+  useEffect(() => {
+    if (shouldAnimate) {
+      Animated.parallel([
+        Animated.timing(translateY, { toValue: 0, duration: 300, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: Platform.OS !== 'web' }),
+      ]).start();
+    }
+  }, []);
+
+  if (!shouldAnimate) return <>{children}</>;
+
+  return (
+    <Animated.View style={{ transform: [{ translateY }], opacity }}>
+      {children}
+    </Animated.View>
+  );
+}
+
 function StreamingBubble({ text }: { text: string }) {
   const cursorOpacity = useRef(new Animated.Value(1)).current;
 
@@ -396,6 +418,7 @@ export default function ChatDetailScreen() {
   const [actionMenuMsg, setActionMenuMsg] = useState<ChatMessage | null>(null);
   const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
+  const prevMessageCountRef = useRef(0);
 
   const conversation = conversations.find((c) => c.id === id);
   const connected = gatewayStatus === 'connected';
@@ -523,6 +546,12 @@ export default function ChatDetailScreen() {
     return !isSameDay(messages[index - 1].timestamp, messages[index].timestamp);
   };
 
+  const newMessageStartIndex = prevMessageCountRef.current;
+
+  useEffect(() => {
+    prevMessageCountRef.current = messages.length;
+  }, [messages.length]);
+
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   return (
@@ -566,18 +595,20 @@ export default function ChatDetailScreen() {
             data={messages}
             keyExtractor={(item) => item.id}
             renderItem={({ item, index }) => (
-              <View>
-                {shouldShowDateSeparator(index) && (
-                  <DateSeparator label={getDateLabel(item.timestamp)} />
-                )}
-                <MessageBubble
-                  message={item}
-                  showAvatar={shouldShowAvatar(index)}
-                  tightTop={isTightTop(index)}
-                  onLongPress={openActionMenu}
-                  copiedId={copiedId}
-                />
-              </View>
+              <AnimatedMessageWrapper shouldAnimate={index >= newMessageStartIndex && newMessageStartIndex > 0}>
+                <View>
+                  {shouldShowDateSeparator(index) && (
+                    <DateSeparator label={getDateLabel(item.timestamp)} />
+                  )}
+                  <MessageBubble
+                    message={item}
+                    showAvatar={shouldShowAvatar(index)}
+                    tightTop={isTightTop(index)}
+                    onLongPress={openActionMenu}
+                    copiedId={copiedId}
+                  />
+                </View>
+              </AnimatedMessageWrapper>
             )}
             contentContainerStyle={[
               styles.messageList,

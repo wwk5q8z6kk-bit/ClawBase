@@ -11,11 +11,13 @@ import {
   Alert,
   ScrollView,
   Animated,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { Swipeable } from 'react-native-gesture-handler';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { Task, TaskStatus, MemoryEntry } from '@/lib/types';
@@ -286,6 +288,79 @@ const TaskCard = React.memo(function TaskCard({
     </Pressable>
   );
 });
+
+function SwipeableTaskCard({
+  task,
+  onPress,
+  onLongPress,
+  onStatusChange,
+  onDelete,
+}: {
+  task: Task;
+  onPress: () => void;
+  onLongPress: () => void;
+  onStatusChange: (id: string, status: TaskStatus) => void;
+  onDelete: (task: Task) => void;
+}) {
+  const swipeableRef = useRef<Swipeable>(null);
+
+  const renderRightActions = useCallback(() => (
+    <Pressable
+      style={styles.swipeActionDelete}
+      onPress={() => {
+        swipeableRef.current?.close();
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        onDelete(task);
+      }}
+    >
+      <Ionicons name="trash" size={22} color="#fff" />
+      <Text style={styles.swipeActionText}>Delete</Text>
+    </Pressable>
+  ), [task, onDelete]);
+
+  const renderLeftActions = useCallback(() => (
+    <Pressable
+      style={styles.swipeActionComplete}
+      onPress={() => {
+        swipeableRef.current?.close();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        onStatusChange(task.id, 'done');
+      }}
+    >
+      <Ionicons name="checkmark-circle" size={22} color="#fff" />
+      <Text style={styles.swipeActionText}>Complete</Text>
+    </Pressable>
+  ), [task, onStatusChange]);
+
+  if (Platform.OS === 'web') {
+    return (
+      <TaskCard
+        task={task}
+        onPress={onPress}
+        onLongPress={onLongPress}
+        onStatusChange={onStatusChange}
+      />
+    );
+  }
+
+  return (
+    <Swipeable
+      ref={swipeableRef}
+      renderRightActions={renderRightActions}
+      renderLeftActions={renderLeftActions}
+      overshootRight={false}
+      overshootLeft={false}
+      friction={2}
+    >
+      <TaskCard
+        task={task}
+        onPress={onPress}
+        onLongPress={onLongPress}
+        onStatusChange={onStatusChange}
+      />
+    </Swipeable>
+  );
+}
 
 function StatsBar({ tasks }: { tasks: Task[] }) {
   const todo = tasks.filter((t) => t.status === 'todo').length;
@@ -1101,6 +1176,12 @@ export default function VaultScreen() {
   const [newMemType, setNewMemType] = useState<MemoryEntry['type']>('note');
 
   const [syncingMemory, setSyncingMemory] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 500);
+  }, []);
 
   const handleSyncMemory = useCallback(async () => {
     setSyncingMemory(true);
@@ -1461,11 +1542,12 @@ export default function VaultScreen() {
                 data={filteredTasks}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => (
-                  <TaskCard
+                  <SwipeableTaskCard
                     task={item}
                     onPress={() => handleOpenTaskDetail(item)}
                     onLongPress={() => handleMoveTask(item)}
                     onStatusChange={handleTaskStatusChange}
+                    onDelete={handleTaskDelete}
                   />
                 )}
                 contentContainerStyle={[
@@ -1473,6 +1555,7 @@ export default function VaultScreen() {
                   { paddingBottom: insets.bottom + 100 },
                   filteredTasks.length === 0 && styles.emptyContainer,
                 ]}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.coral} colors={[C.coral]} />}
                 ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
                 scrollEnabled={!!filteredTasks.length}
                 ListEmptyComponent={
@@ -1895,6 +1978,7 @@ export default function VaultScreen() {
               { paddingBottom: insets.bottom + 100 },
               flatData.length === 0 && styles.emptyContainer,
             ]}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.coral} colors={[C.coral]} />}
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 {!memSearch && !selectedTag ? (
@@ -2632,4 +2716,26 @@ const styles = StyleSheet.create({
   syncFilesBtnText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.secondary },
   filesListContent: { paddingHorizontal: 20 },
   filesEmptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 8 },
+  swipeActionDelete: {
+    backgroundColor: C.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    borderRadius: 8,
+    marginLeft: 4,
+  },
+  swipeActionComplete: {
+    backgroundColor: C.success,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    borderRadius: 8,
+    marginRight: 4,
+  },
+  swipeActionText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: '#fff',
+    marginTop: 4,
+  },
 });
