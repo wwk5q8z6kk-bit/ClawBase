@@ -186,15 +186,27 @@ export class OpenClawGateway {
     this.setStatus('connecting');
 
     try {
-      const wsUrl = this.url
-        .replace(/^http:\/\//, 'ws://')
-        .replace(/^https:\/\//, 'wss://');
+      let wsUrl = this.url;
+      if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
+        const isLocal = /^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(
+          wsUrl.replace(/^https?:\/\//, '').replace(/:\d+.*$/, '')
+        ) || wsUrl.includes('.local');
+        wsUrl = wsUrl
+          .replace(/^http:\/\//, 'ws://')
+          .replace(/^https:\/\//, 'wss://');
+        if (!wsUrl.startsWith('ws')) {
+          wsUrl = (isLocal ? 'ws://' : 'wss://') + wsUrl;
+        }
+      }
       const hasPort = /:\d+$/.test(wsUrl) || /:\d+\//.test(wsUrl);
       const fullUrl = hasPort ? wsUrl : `${wsUrl}:18789`;
+
+      console.log('[Gateway] Connecting to:', fullUrl);
 
       this.ws = new WebSocket(fullUrl);
 
       this.ws.onopen = () => {
+        console.log('[Gateway] WebSocket opened, authenticating...');
         this.setStatus('authenticating');
         this.reconnectAttempts = 0;
         this.startPing();
@@ -205,18 +217,23 @@ export class OpenClawGateway {
       };
 
       this.ws.onerror = (_event) => {
-        this.setStatus('error');
+        console.log('[Gateway] WebSocket error');
         this.emit('error', { message: 'WebSocket connection error' });
       };
 
-      this.ws.onclose = (_event) => {
+      this.ws.onclose = (event) => {
+        console.log('[Gateway] WebSocket closed, code:', event.code, 'reason:', event.reason);
         this.stopPing();
+        const wasConnected = this.status === 'connected' || this.status === 'authenticating' || this.status === 'pairing';
         if (this.status !== 'disconnected') {
           this.setStatus('disconnected');
+        }
+        if (wasConnected || this.reconnectAttempts === 0) {
           this.scheduleReconnect();
         }
       };
     } catch (err) {
+      console.log('[Gateway] Connection failed:', err);
       this.setStatus('error');
       this.emit('error', { message: `Connection failed: ${err}` });
       this.scheduleReconnect();
@@ -226,6 +243,7 @@ export class OpenClawGateway {
   private handleMessage(raw: string) {
     try {
       const msg = JSON.parse(raw);
+      console.log('[Gateway] Message received:', msg.type || msg.event || 'unknown');
 
       if (msg.event === 'connect.challenge' || msg.type === 'connect.challenge') {
         this.handleChallenge(msg.payload || msg);
@@ -464,7 +482,7 @@ export class OpenClawGateway {
     this.reconnectAttempts++;
 
     this.reconnectTimer = setTimeout(() => {
-      if (this.status === 'disconnected') {
+      if (this.status === 'disconnected' || this.status === 'error') {
         this.doConnect();
       }
     }, delay);

@@ -243,6 +243,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setStreamingText(null);
       setIsStreaming(false);
     });
+    const unsub7 = gateway.on('error', (event) => {
+      console.log('[AppContext] Gateway error:', event.data?.message || event.data);
+    });
 
     return () => {
       unsub1();
@@ -251,6 +254,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unsub4();
       unsub5();
       unsub6();
+      unsub7();
     };
   }, [gateway]);
 
@@ -260,10 +264,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (activeConnection && activeConnection.url && gatewayStatus === 'disconnected') {
-      gateway.connect(activeConnection.url, activeConnection.token || '').catch(() => {});
+    if (activeConnection && activeConnection.url && (gatewayStatus === 'disconnected' || gatewayStatus === 'error')) {
+      console.log('[AppContext] Auto-connecting to:', activeConnection.url, 'status:', gatewayStatus);
+      gateway.connect(activeConnection.url, activeConnection.token || '').catch((e) => {
+        console.log('[AppContext] Auto-connect failed:', e);
+      });
     }
-  }, [activeConnection, gateway, gatewayStatus]);
+  }, [activeConnection?.id]);
 
   const addConnection = useCallback(
     async (name: string, url: string, token?: string) => {

@@ -152,14 +152,14 @@ export default function PairScreen() {
     setConnectPhase('testing');
     setPendingConnection({ name, url, token });
 
-    const result = await testReachability(url);
-
-    if (result.reachable) {
-      const gwName = result.info?.name || result.info?.agentName || name;
+    try {
+      const result = await testReachability(url);
+      const gwName = result.reachable
+        ? (result.info?.name || result.info?.agentName || name)
+        : name;
       await saveAndFinish(gwName, url, token);
-    } else {
-      setConnectPhase('unreachable');
-      setError(result.error || 'Cannot reach gateway');
+    } catch {
+      await saveAndFinish(name, url, token);
     }
   }, [saveAndFinish]);
 
