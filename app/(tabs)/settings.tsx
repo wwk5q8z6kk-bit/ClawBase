@@ -238,9 +238,9 @@ export default function SettingsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
-      <View style={styles.header}>
+      <LinearGradient colors={C.gradient.ocean} style={styles.header}>
         <Text style={styles.headerTitle}>Settings</Text>
-      </View>
+      </LinearGradient>
 
       <ScrollView
         contentContainerStyle={[
@@ -463,6 +463,8 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.borderLight,
   },
   headerTitle: {
     fontFamily: 'Inter_700Bold',

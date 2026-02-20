@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef, useMemo, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Animated,
   FlatList,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -512,6 +513,54 @@ function RecentActivityWidget() {
   );
 }
 
+const COMMAND_CHIPS = ['Inbox summary', "Today's brief", 'Check GitHub', 'System status', 'Upcoming meetings'];
+
+function CommandBar() {
+  const [commandText, setCommandText] = useState('');
+
+  const handleSend = (text: string) => {
+    if (!text.trim()) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setCommandText('');
+    router.push('/(tabs)/chat');
+  };
+
+  return (
+    <View style={styles.commandBarWrapper}>
+      <View style={styles.commandBarInput}>
+        <Ionicons name="sparkles" size={18} color={C.coral} />
+        <TextInput
+          style={styles.commandBarTextInput}
+          placeholder="Ask your agent anything..."
+          placeholderTextColor={C.textTertiary}
+          value={commandText}
+          onChangeText={setCommandText}
+          onSubmitEditing={() => handleSend(commandText)}
+          returnKeyType="send"
+        />
+        {commandText.length > 0 && (
+          <Pressable onPress={() => handleSend(commandText)}>
+            <LinearGradient colors={C.gradient.lobster} style={styles.commandBarSendBtn}>
+              <Ionicons name="arrow-up" size={16} color="#fff" />
+            </LinearGradient>
+          </Pressable>
+        )}
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.commandChipsScroll}>
+        {COMMAND_CHIPS.map((chip) => (
+          <Pressable
+            key={chip}
+            style={({ pressed }) => [styles.commandChip, pressed && { opacity: 0.7 }]}
+            onPress={() => handleSend(chip)}
+          >
+            <Text style={styles.commandChipText}>{chip}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { refreshAll, activeConnection, tasks, memoryEntries } = useApp();
@@ -543,6 +592,8 @@ export default function DashboardScreen() {
         }
       >
         <HeroHeader />
+
+        <CommandBar />
 
         {!activeConnection && (
           <ProactiveAlert
@@ -674,4 +725,12 @@ const styles = StyleSheet.create({
   recentIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   recentTitle: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.text, flex: 1 },
   recentTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary },
+
+  commandBarWrapper: { gap: 10 },
+  commandBarInput: { backgroundColor: C.card, borderWidth: 1, borderColor: C.borderLight, borderRadius: 14, paddingHorizontal: 14, height: 48, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  commandBarTextInput: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 14, color: C.text, height: 48 },
+  commandBarSendBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  commandChipsScroll: { gap: 0 },
+  commandChip: { backgroundColor: C.card, borderWidth: 1, borderColor: C.borderLight, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, marginRight: 8 },
+  commandChipText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary },
 });
