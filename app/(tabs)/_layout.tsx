@@ -13,19 +13,27 @@ function NativeTabLayout() {
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: 'gauge.open.with.lines.needle.33percent', selected: 'gauge.open.with.lines.needle.33percent' }} />
-        <Label>Cockpit</Label>
+        <Label>Mission</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="chat">
         <Icon sf={{ default: 'bubble.left.and.bubble.right', selected: 'bubble.left.and.bubble.right.fill' }} />
         <Label>Chat</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="tasks">
-        <Icon sf={{ default: 'rectangle.stack', selected: 'rectangle.stack.fill' }} />
-        <Label>Tasks</Label>
+      <NativeTabs.Trigger name="automations">
+        <Icon sf={{ default: 'bolt.circle', selected: 'bolt.circle.fill' }} />
+        <Label>Auto</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="timeline">
+        <Icon sf={{ default: 'clock.arrow.circlepath', selected: 'clock.arrow.circlepath' }} />
+        <Label>Timeline</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="memory">
         <Icon sf={{ default: 'brain.head.profile', selected: 'brain.head.profile.fill' }} />
         <Label>Memory</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="tasks">
+        <Icon sf={{ default: 'rectangle.stack', selected: 'rectangle.stack.fill' }} />
+        <Label>Tasks</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <Icon sf={{ default: 'gearshape', selected: 'gearshape.fill' }} />
@@ -40,7 +48,6 @@ function ClassicTabLayout() {
   const isIOS = Platform.OS === 'ios';
   const { tasks, memoryEntries } = useApp();
 
-  // Calculate badge counts
   const activeTasks = tasks.filter((t) => t.status === 'in_progress').length;
   const unreadMemories = memoryEntries.filter((m) => m.reviewStatus === 'unread').length;
 
@@ -70,7 +77,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Cockpit',
+          title: 'Mission',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="speedometer-outline" size={size} color={color} />
           ),
@@ -86,14 +93,21 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="tasks"
+        name="automations"
         options={{
-          title: 'Tasks',
+          title: 'Auto',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="albums-outline" size={size} color={color} />
+            <Ionicons name="flash-outline" size={size} color={color} />
           ),
-          tabBarBadge: activeTasks > 0 ? activeTasks : undefined,
-          tabBarBadgeStyle: { backgroundColor: Colors.dark.coral, fontSize: 10, fontFamily: 'Inter_600SemiBold' },
+        }}
+      />
+      <Tabs.Screen
+        name="timeline"
+        options={{
+          title: 'Timeline',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="time-outline" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
@@ -108,12 +122,15 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="tasks"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings-outline" size={size} color={color} />
-          ),
+          href: null,
         }}
       />
     </Tabs>
