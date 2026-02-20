@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   Modal,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -214,6 +215,7 @@ function MemoryDetailModal({
   onPin,
   onReview,
   onDefer,
+  onDelete,
 }: {
   item: MemoryEntry | null;
   visible: boolean;
@@ -221,6 +223,7 @@ function MemoryDetailModal({
   onPin: () => void;
   onReview: () => void;
   onDefer: () => void;
+  onDelete: () => void;
 }) {
   if (!item) return null;
   const config = TYPE_CONFIG[item.type] || TYPE_CONFIG.note;
@@ -348,6 +351,14 @@ function MemoryDetailModal({
               <Text style={modalStyles.timestampText}>{formatFullTimestamp(item.timestamp)}</Text>
             </View>
 
+            <Pressable
+              style={modalStyles.deleteBtn}
+              onPress={() => { Haptics.selectionAsync(); onDelete(); }}
+            >
+              <Ionicons name="trash-outline" size={16} color={C.error} />
+              <Text style={modalStyles.deleteBtnText}>Delete Entry</Text>
+            </Pressable>
+
             <View style={{ height: 80 }} />
           </ScrollView>
 
@@ -392,7 +403,7 @@ type ReviewFilter = typeof REVIEW_FILTERS[number]['key'];
 
 export default function MemoryScreen() {
   const insets = useSafeAreaInsets();
-  const { memoryEntries, updateMemoryEntry } = useApp();
+  const { memoryEntries, updateMemoryEntry, createMemoryEntry, deleteMemoryEntry } = useApp();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>('all');
@@ -402,6 +413,11 @@ export default function MemoryScreen() {
   const [showSortModal, setShowSortModal] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<MemoryEntry | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newContent, setNewContent] = useState('');
+  const [newTags, setNewTags] = useState('');
+  const [newType, setNewType] = useState<MemoryEntry['type']>('note');
 
   const TAG_CLOUD_COLORS = [C.coral, C.accent, C.secondary, C.amber, C.purple, C.primary, C.success];
 
@@ -550,6 +566,15 @@ export default function MemoryScreen() {
               }}
             >
               <Ionicons name="swap-vertical-outline" size={18} color={sortOption !== 'newest' ? C.coral : C.textSecondary} />
+            </Pressable>
+            <Pressable
+              style={styles.headerBtn}
+              onPress={() => {
+                setShowCreateModal(true);
+                Haptics.selectionAsync();
+              }}
+            >
+              <Ionicons name="add" size={20} color={C.textSecondary} />
             </Pressable>
             <Pressable
               style={styles.headerBtn}
@@ -804,7 +829,127 @@ export default function MemoryScreen() {
         onDefer={() => {
           if (currentSelectedMemory) handleDefer(currentSelectedMemory.id, currentSelectedMemory.reviewStatus);
         }}
+        onDelete={() => {
+          if (!currentSelectedMemory) return;
+          const doDelete = () => {
+            deleteMemoryEntry(currentSelectedMemory.id);
+            setShowDetailModal(false);
+            setSelectedMemory(null);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          };
+          if (Platform.OS === 'web') {
+            doDelete();
+          } else {
+            Alert.alert('Delete Entry', 'Are you sure you want to delete this memory entry?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Delete', style: 'destructive', onPress: doDelete },
+            ]);
+          }
+        }}
       />
+
+      <Modal
+        visible={showCreateModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowCreateModal(false)}
+      >
+        <View style={modalStyles.overlay}>
+          <View style={modalStyles.container}>
+            <View style={modalStyles.handle} />
+            <ScrollView style={modalStyles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <View style={createStyles.headerRow}>
+                <Text style={modalStyles.title}>New Memory Entry</Text>
+                <Pressable onPress={() => setShowCreateModal(false)}>
+                  <Ionicons name="close" size={22} color={C.textSecondary} />
+                </Pressable>
+              </View>
+
+              <Text style={createStyles.label}>Title</Text>
+              <TextInput
+                style={createStyles.input}
+                placeholder="Entry title..."
+                placeholderTextColor={C.textTertiary}
+                value={newTitle}
+                onChangeText={setNewTitle}
+              />
+
+              <Text style={createStyles.label}>Content</Text>
+              <TextInput
+                style={[createStyles.input, createStyles.inputMultiline]}
+                placeholder="Write your note, thought, or content..."
+                placeholderTextColor={C.textTertiary}
+                value={newContent}
+                onChangeText={setNewContent}
+                multiline
+                textAlignVertical="top"
+              />
+
+              <Text style={createStyles.label}>Tags</Text>
+              <TextInput
+                style={createStyles.input}
+                placeholder="strategy, design, notes"
+                placeholderTextColor={C.textTertiary}
+                value={newTags}
+                onChangeText={setNewTags}
+              />
+
+              <Text style={createStyles.label}>Type</Text>
+              <View style={createStyles.typeRow}>
+                {Object.entries(TYPE_CONFIG).map(([key, cfg]) => (
+                  <Pressable
+                    key={key}
+                    style={[
+                      createStyles.typePill,
+                      newType === key && { backgroundColor: cfg.color + '25', borderColor: cfg.color + '50' },
+                    ]}
+                    onPress={() => setNewType(key as MemoryEntry['type'])}
+                  >
+                    <Ionicons name={cfg.icon as any} size={14} color={newType === key ? cfg.color : C.textTertiary} />
+                    <Text style={[createStyles.typePillText, newType === key && { color: cfg.color }]}>{cfg.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Pressable
+                onPress={async () => {
+                  if (!newTitle.trim() || !newContent.trim()) return;
+                  const parsedTags = newTags
+                    .split(',')
+                    .map((t) => t.trim())
+                    .filter((t) => t.length > 0);
+                  await createMemoryEntry({
+                    title: newTitle.trim(),
+                    content: newContent.trim(),
+                    type: newType,
+                    tags: parsedTags.length > 0 ? parsedTags : undefined,
+                    source: 'manual',
+                    reviewStatus: 'unread',
+                  });
+                  setNewTitle('');
+                  setNewContent('');
+                  setNewTags('');
+                  setNewType('note');
+                  setShowCreateModal(false);
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                }}
+              >
+                <LinearGradient
+                  colors={C.gradient.lobster}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[createStyles.createBtn, (!newTitle.trim() || !newContent.trim()) && { opacity: 0.5 }]}
+                >
+                  <Ionicons name="add-circle-outline" size={18} color="#fff" />
+                  <Text style={createStyles.createBtnText}>Create Entry</Text>
+                </LinearGradient>
+              </Pressable>
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1003,6 +1148,19 @@ const modalStyles = StyleSheet.create({
     fontSize: 10,
     color: C.textSecondary,
   },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  deleteBtnText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    color: C.error,
+  },
 });
 
 const styles = StyleSheet.create({
@@ -1090,4 +1248,16 @@ const styles = StyleSheet.create({
   sortOptionActive: { backgroundColor: C.coral + '12' },
   sortOptionText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.textSecondary, flex: 1 },
   sortOptionTextActive: { color: C.coral },
+});
+
+const createStyles = StyleSheet.create({
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  label: { fontFamily: 'Inter_600SemiBold', fontSize: 11, color: C.textTertiary, textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 6, marginTop: 12 },
+  input: { backgroundColor: C.card, borderRadius: 10, borderWidth: 1, borderColor: C.borderLight, paddingHorizontal: 14, paddingVertical: 12, fontFamily: 'Inter_400Regular', fontSize: 14, color: C.text },
+  inputMultiline: { minHeight: 100, textAlignVertical: 'top' as const },
+  typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },
+  typePill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: C.card, borderWidth: 1, borderColor: C.borderLight },
+  typePillText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textTertiary },
+  createBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, marginTop: 20 },
+  createBtnText: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' },
 });

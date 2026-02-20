@@ -64,6 +64,8 @@ interface AppContextValue {
   deleteTask: (id: string) => Promise<void>;
 
   memoryEntries: MemoryEntry[];
+  createMemoryEntry: (entry: Omit<MemoryEntry, 'id' | 'timestamp'>) => Promise<void>;
+  deleteMemoryEntry: (id: string) => Promise<void>;
   searchMemory: (query: string) => Promise<MemoryEntry[]>;
   updateMemoryEntry: (id: string, updates: Partial<MemoryEntry>) => Promise<void>;
 
@@ -354,6 +356,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTasks((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const createMemoryEntry = useCallback(async (entry: Omit<MemoryEntry, 'id' | 'timestamp'>) => {
+    const created = await memoryStorage.add(entry);
+    setMemoryEntries((prev) => [created, ...prev]);
+  }, []);
+
+  const deleteMemoryEntry = useCallback(async (id: string) => {
+    await memoryStorage.remove(id);
+    setMemoryEntries((prev) => prev.filter((m) => m.id !== id));
+  }, []);
+
   const searchMemory = useCallback(async (query: string) => {
     if (!query.trim()) return memoryStorage.getAll();
     return memoryStorage.search(query);
@@ -439,6 +451,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateTask,
       deleteTask,
       memoryEntries,
+      createMemoryEntry,
+      deleteMemoryEntry,
       searchMemory,
       updateMemoryEntry,
       calendarEvents,
@@ -461,7 +475,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       connections, activeConnection, addConnection, removeConnection,
       setActiveConnectionFn, conversations, createConversation, updateConversation,
       deleteConversation, getMessages, sendMessage, tasks, createTask,
-      updateTask, deleteTask, memoryEntries, searchMemory, updateMemoryEntry,
+      updateTask, deleteTask, memoryEntries, createMemoryEntry, deleteMemoryEntry, searchMemory, updateMemoryEntry,
       calendarEvents, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent,
       crmContacts, createCRMContact, updateCRMContact, deleteCRMContact, addCRMInteraction,
       biometricEnabled, setBiometricEnabledFn, hasOnboarded,

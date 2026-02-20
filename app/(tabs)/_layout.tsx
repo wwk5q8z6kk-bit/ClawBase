@@ -6,6 +6,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import Colors from '@/constants/colors';
+import { useApp } from '@/lib/AppContext';
 
 function NativeTabLayout() {
   return (
@@ -37,6 +38,11 @@ function NativeTabLayout() {
 function ClassicTabLayout() {
   const isWeb = Platform.OS === 'web';
   const isIOS = Platform.OS === 'ios';
+  const { tasks, memoryEntries } = useApp();
+
+  // Calculate badge counts
+  const activeTasks = tasks.filter((t) => t.status === 'in_progress').length;
+  const unreadMemories = memoryEntries.filter((m) => m.reviewStatus === 'unread').length;
 
   return (
     <Tabs
@@ -44,6 +50,7 @@ function ClassicTabLayout() {
         headerShown: false,
         tabBarActiveTintColor: Colors.dark.primary,
         tabBarInactiveTintColor: Colors.dark.tabIconDefault,
+        tabBarLabelStyle: { fontFamily: 'Inter_500Medium', fontSize: 11 },
         tabBarStyle: {
           position: 'absolute',
           backgroundColor: isIOS ? 'transparent' : Colors.dark.surface,
@@ -85,6 +92,8 @@ function ClassicTabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="albums-outline" size={size} color={color} />
           ),
+          tabBarBadge: activeTasks > 0 ? activeTasks : undefined,
+          tabBarBadgeStyle: { backgroundColor: Colors.dark.coral, fontSize: 10, fontFamily: 'Inter_600SemiBold' },
         }}
       />
       <Tabs.Screen
@@ -94,6 +103,8 @@ function ClassicTabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="globe-outline" size={size} color={color} />
           ),
+          tabBarBadge: unreadMemories > 0 ? unreadMemories : undefined,
+          tabBarBadgeStyle: { backgroundColor: Colors.dark.coral, fontSize: 10, fontFamily: 'Inter_600SemiBold' },
         }}
       />
       <Tabs.Screen
