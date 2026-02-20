@@ -1075,14 +1075,14 @@ function AnimatedSegmentSwitcher({
 
     Animated.spring(underlineLeftRef, {
       toValue: leftOffset,
-      useNativeDriver: Platform.OS !== 'web',
+      useNativeDriver: false,
       friction: 8,
       tension: 100,
     }).start();
 
     Animated.spring(underlineWidthRef, {
       toValue: width,
-      useNativeDriver: Platform.OS !== 'web',
+      useNativeDriver: false,
       friction: 8,
       tension: 100,
     }).start();

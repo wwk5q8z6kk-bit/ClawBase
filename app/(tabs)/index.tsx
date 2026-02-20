@@ -27,19 +27,17 @@ function AnimatedCounter({ target, delay = 0, style }: { target: number; delay?:
   const [displayValue, setDisplayValue] = useState(0);
 
   useEffect(() => {
-    countAnim.reset();
+    countAnim.setValue(0);
+    const listener = countAnim.addListener(({ value }) => {
+      setDisplayValue(Math.round(value));
+    });
+
     const animation = Animated.timing(countAnim, {
       toValue: target,
       duration: 600,
       delay,
       useNativeDriver: false,
-      easing: undefined,
     });
-
-    const listener = countAnim.addListener(({ value }) => {
-      setDisplayValue(Math.round(value));
-    });
-
     animation.start();
 
     return () => {
@@ -56,19 +54,17 @@ function AnimatedPercentage({ target, delay = 0 }: { target: number; delay?: num
   const [displayValue, setDisplayValue] = useState(0);
 
   useEffect(() => {
-    countAnim.reset();
+    countAnim.setValue(0);
+    const listener = countAnim.addListener(({ value }) => {
+      setDisplayValue(Math.round(value));
+    });
+
     const animation = Animated.timing(countAnim, {
       toValue: target,
       duration: 600,
       delay,
       useNativeDriver: false,
-      easing: undefined,
     });
-
-    const listener = countAnim.addListener(({ value }) => {
-      setDisplayValue(Math.round(value));
-    });
-
     animation.start();
 
     return () => {
