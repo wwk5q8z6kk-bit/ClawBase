@@ -8,12 +8,28 @@ import React from 'react';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 
-function NativeTabLayout() {
-  const { tasks, memoryEntries } = useApp();
-  const activeTasks = tasks.filter((t) => t.status === 'in_progress').length;
-  const unreadMemories = memoryEntries.filter((m) => m.reviewStatus === 'unread').length;
-  const vaultBadge = activeTasks + unreadMemories;
+const TabIcon = ({ name, color, size, focused }: { name: any; color: string; size: number; focused: boolean }) => (
+  <View style={{ alignItems: 'center', justifyContent: 'center', width: 44, height: 44, marginTop: 4 }}>
+    {focused && (
+      <View style={{
+        position: 'absolute',
+        top: 0,
+        width: 20,
+        height: 3,
+        borderRadius: 2,
+        backgroundColor: color,
+        shadowColor: color,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.6,
+        shadowRadius: 6,
+        elevation: 4
+      }} />
+    )}
+    <Ionicons name={name} size={size} color={color} />
+  </View>
+);
 
+function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
@@ -77,8 +93,8 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: 'Mission Control',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="speedometer-outline" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name={focused ? "speedometer" : "speedometer-outline"} size={size} color={color} focused={focused} />
           ),
         }}
       />
@@ -86,8 +102,8 @@ function ClassicTabLayout() {
         name="chat"
         options={{
           title: 'Chat',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubbles-outline" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name={focused ? "chatbubbles" : "chatbubbles-outline"} size={size} color={color} focused={focused} />
           ),
           tabBarBadge: recentChatCount > 0 ? recentChatCount : undefined,
           tabBarBadgeStyle: { backgroundColor: Colors.dark.coral, fontSize: 10, fontFamily: 'Inter_600SemiBold' },
@@ -97,8 +113,8 @@ function ClassicTabLayout() {
         name="vault"
         options={{
           title: 'Vault',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="shield-checkmark-outline" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name={focused ? "shield-checkmark" : "shield-checkmark-outline"} size={size} color={color} focused={focused} />
           ),
           tabBarBadge: vaultBadge > 0 ? vaultBadge : undefined,
           tabBarBadgeStyle: { backgroundColor: Colors.dark.coral, fontSize: 10, fontFamily: 'Inter_600SemiBold' },
@@ -108,8 +124,8 @@ function ClassicTabLayout() {
         name="calendar"
         options={{
           title: 'Calendar',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar-outline" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name={focused ? "calendar" : "calendar-outline"} size={size} color={color} focused={focused} />
           ),
         }}
       />
@@ -117,8 +133,8 @@ function ClassicTabLayout() {
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings-outline" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name={focused ? "settings" : "settings-outline"} size={size} color={color} focused={focused} />
           ),
         }}
       />

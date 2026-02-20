@@ -120,7 +120,7 @@ function SettingsRow({
 }
 
 function AgentHealthMonitor() {
-  const { activeConnection, gatewayStatus, gatewayInfo, gateway } = useApp();
+  const { gatewayStatus, gatewayInfo } = useApp();
   const isConnected = gatewayStatus === 'connected';
   const isConnecting = gatewayStatus === 'connecting' || gatewayStatus === 'authenticating';
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -196,7 +196,6 @@ export default function SettingsScreen() {
     calendarEvents,
     refreshAll,
     gatewayStatus,
-    gatewayInfo,
     gateway,
     connectGateway,
     disconnectGateway,
@@ -226,8 +225,7 @@ export default function SettingsScreen() {
 
   const loadStorageStats = useCallback(async () => {
     try {
-      const keys = await AsyncStorage.getAllKeys();
-      const clawKeys = keys.filter(k => k.startsWith('@clawbase:'));
+      await AsyncStorage.getAllKeys();
 
       setStorageStats({
         tasks: tasks.length,
@@ -418,7 +416,7 @@ export default function SettingsScreen() {
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e) {
+    } catch {
       if (Platform.OS !== 'web') {
         Alert.alert('Export Failed', 'Could not export data. Please try again.');
       }
@@ -1001,6 +999,25 @@ export default function SettingsScreen() {
               secureTextEntry
             />
 
+            <Pressable
+              onPress={handleTestConnection}
+              style={({ pressed }) => [
+                styles.testConnectionBtn,
+                (!connUrl.trim() || testingConnection) && { opacity: 0.5 },
+                pressed && { opacity: 0.8 },
+              ]}
+              disabled={!connUrl.trim() || testingConnection}
+            >
+              {testingConnection ? (
+                <ActivityIndicator size="small" color={C.accent} />
+              ) : (
+                <Ionicons name="pulse-outline" size={16} color={C.accent} />
+              )}
+              <Text style={styles.testConnectionBtnText}>
+                {testingConnection ? 'Testing...' : 'Test Connection'}
+              </Text>
+            </Pressable>
+
             {testResult && (
               <View style={[styles.testResultRow, { borderColor: testResult.ok ? C.success + '30' : C.error + '30', backgroundColor: testResult.ok ? C.success + '08' : C.error + '08' }]}>
                 <Ionicons name={testResult.ok ? 'checkmark-circle' : 'alert-circle'} size={16} color={testResult.ok ? C.success : C.error} />
@@ -1333,6 +1350,22 @@ const styles = StyleSheet.create({
   connConnectBtn: { backgroundColor: C.secondary + '15', borderWidth: 1, borderColor: C.secondary + '30' },
   connDisconnectBtn: { backgroundColor: C.error + '10', borderWidth: 1, borderColor: C.error + '20' },
   connActionText: { fontFamily: 'Inter_500Medium', fontSize: 14 },
+  testConnectionBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: C.accent + '30',
+    backgroundColor: C.accent + '10',
+    paddingVertical: 10,
+  },
+  testConnectionBtnText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: C.accent,
+  },
   testResultRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
   testResultText: { fontFamily: 'Inter_500Medium', fontSize: 13, flex: 1 },
   autoSummaryCard: { padding: 14, borderBottomWidth: 1, borderBottomColor: C.borderLight },

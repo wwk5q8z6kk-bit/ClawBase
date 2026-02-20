@@ -226,9 +226,7 @@ const MessageBubble = React.memo(function MessageBubble({
                 <Ionicons name="checkmark-done" size={14} color="rgba(255,255,255,0.5)" style={{ marginLeft: 4 }} />
               )}
               {isUser && message.status === 'sending' && (
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: 'rgba(255,255,255,0.7)', textAlign: 'center', marginTop: 8 }}>
-                  You&apos;re connected to OpenClaw. Say hi!
-                </Text>
+                <Ionicons name="checkmark" size={14} color="rgba(255,255,255,0.35)" style={{ marginLeft: 4 }} />
               )}
             </View>
           </View>
@@ -420,7 +418,6 @@ export default function ChatDetailScreen() {
   const prevMessageCountRef = useRef(0);
 
   const conversation = conversations.find((c) => c.id === id);
-  const connected = gatewayStatus === 'connected';
 
   const loadMessages = useCallback(async () => {
     if (!id) return;

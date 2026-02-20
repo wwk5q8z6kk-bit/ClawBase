@@ -14,6 +14,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { GlassCard } from '@/components/GlassCard';
+import { PressableCard } from '@/components/PressableCard';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -195,7 +197,7 @@ function ProactiveAlert({ type, message, icon, onPress, priority = 'P2' }: { typ
 }
 
 function HeroHeader() {
-  const { activeConnection, tasks, memoryEntries, gatewayStatus, gatewayInfo } = useApp();
+  const { tasks, memoryEntries, gatewayStatus } = useApp();
   const connected = gatewayStatus === 'connected';
   const now = new Date();
   const hour = now.getHours();
@@ -276,65 +278,62 @@ const KanbanProgressWidget = React.memo(function KanbanProgressWidget() {
   const urgentTasks = tasks.filter((t) => t.priority === 'urgent' && t.status !== 'done' && t.status !== 'archived');
 
   return (
-    <Pressable onPress={() => router.push('/(tabs)/vault')}>
-      <LinearGradient
-        colors={C.gradient.cardElevated}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.kanbanWidget}
-      >
-        <View style={styles.kanbanHeader}>
-          <View style={styles.kanbanTitleRow}>
-            <Ionicons name="albums" size={18} color={C.coral} />
-            <Text style={styles.widgetTitle}>Task Pipeline</Text>
-          </View>
-          <View style={styles.kanbanPct}>
-            <AnimatedPercentage target={pctDone} delay={500} />
-          </View>
+    <PressableCard
+      variant="cardElevated"
+      onPress={() => router.push('/(tabs)/vault')}
+      style={styles.kanbanWidget}
+    >
+      <View style={styles.kanbanHeader}>
+        <View style={styles.kanbanTitleRow}>
+          <Ionicons name="albums" size={18} color={C.coral} />
+          <Text style={styles.widgetTitle}>Task Pipeline</Text>
         </View>
-
-        <View style={styles.kanbanStats}>
-          <View style={styles.kanbanStat}>
-            <AnimatedCounter target={todo} delay={0} style={[styles.kanbanStatNum, { color: C.textSecondary }]} />
-            <Text style={styles.kanbanStatLabel}>To Do</Text>
-          </View>
-          <View style={styles.kanbanStatDiv} />
-          <View style={styles.kanbanStat}>
-            <AnimatedCounter target={inProg} delay={100} style={[styles.kanbanStatNum, { color: C.amber }]} />
-            <Text style={styles.kanbanStatLabel}>Active</Text>
-          </View>
-          <View style={styles.kanbanStatDiv} />
-          <View style={styles.kanbanStat}>
-            <AnimatedCounter target={done} delay={200} style={[styles.kanbanStatNum, { color: C.success }]} />
-            <Text style={styles.kanbanStatLabel}>Done</Text>
-          </View>
-          <View style={styles.kanbanStatDiv} />
-          <View style={styles.kanbanStat}>
-            <AnimatedCounter target={deferred} delay={300} style={[styles.kanbanStatNum, { color: C.purple }]} />
-            <Text style={styles.kanbanStatLabel}>Deferred</Text>
-          </View>
+        <View style={styles.kanbanPct}>
+          <AnimatedPercentage target={pctDone} delay={500} />
         </View>
+      </View>
 
-        <View style={styles.progressTrack}>
-          {done > 0 && <View style={[styles.progressSeg, { flex: done, backgroundColor: C.success }]} />}
-          {inProg > 0 && <View style={[styles.progressSeg, { flex: inProg, backgroundColor: C.amber }]} />}
-          {deferred > 0 && <View style={[styles.progressSeg, { flex: deferred, backgroundColor: C.purple }]} />}
-          {todo > 0 && <View style={[styles.progressSeg, { flex: todo, backgroundColor: C.textTertiary + '60' }]} />}
+      <View style={styles.kanbanStats}>
+        <View style={styles.kanbanStat}>
+          <AnimatedCounter target={todo} delay={0} style={[styles.kanbanStatNum, { color: C.textSecondary }]} />
+          <Text style={styles.kanbanStatLabel}>To Do</Text>
         </View>
+        <View style={styles.kanbanStatDiv} />
+        <View style={styles.kanbanStat}>
+          <AnimatedCounter target={inProg} delay={100} style={[styles.kanbanStatNum, { color: C.amber }]} />
+          <Text style={styles.kanbanStatLabel}>Active</Text>
+        </View>
+        <View style={styles.kanbanStatDiv} />
+        <View style={styles.kanbanStat}>
+          <AnimatedCounter target={done} delay={200} style={[styles.kanbanStatNum, { color: C.success }]} />
+          <Text style={styles.kanbanStatLabel}>Done</Text>
+        </View>
+        <View style={styles.kanbanStatDiv} />
+        <View style={styles.kanbanStat}>
+          <AnimatedCounter target={deferred} delay={300} style={[styles.kanbanStatNum, { color: C.purple }]} />
+          <Text style={styles.kanbanStatLabel}>Deferred</Text>
+        </View>
+      </View>
 
-        {urgentTasks.length > 0 && (
-          <View style={styles.urgentRow}>
-            <Ionicons name="flame" size={14} color={C.primary} />
-            <Text style={styles.urgentText} numberOfLines={1}>
-              {urgentTasks[0].title}
-            </Text>
-            {urgentTasks.length > 1 && (
-              <Text style={styles.urgentMore}>+{urgentTasks.length - 1}</Text>
-            )}
-          </View>
-        )}
-      </LinearGradient>
-    </Pressable>
+      <View style={styles.progressTrack}>
+        {done > 0 && <View style={[styles.progressSeg, { flex: done, backgroundColor: C.success }]} />}
+        {inProg > 0 && <View style={[styles.progressSeg, { flex: inProg, backgroundColor: C.amber }]} />}
+        {deferred > 0 && <View style={[styles.progressSeg, { flex: deferred, backgroundColor: C.purple }]} />}
+        {todo > 0 && <View style={[styles.progressSeg, { flex: todo, backgroundColor: C.textTertiary + '60' }]} />}
+      </View>
+
+      {urgentTasks.length > 0 && (
+        <View style={styles.urgentRow}>
+          <Ionicons name="flame" size={14} color={C.primary} />
+          <Text style={styles.urgentText} numberOfLines={1}>
+            {urgentTasks[0].title}
+          </Text>
+          {urgentTasks.length > 1 && (
+            <Text style={styles.urgentMore}>+{urgentTasks.length - 1}</Text>
+          )}
+        </View>
+      )}
+    </PressableCard>
   );
 });
 
@@ -360,9 +359,6 @@ const CalendarAgendaWidget = React.memo(function CalendarAgendaWidget() {
         .sort((a, b) => a.startTime - b.startTime),
     [calendarEvents, todayStart, todayEnd],
   );
-
-  const nextEvent = todayEvents.find((e) => e.endTime > now);
-  const pastCount = todayEvents.filter((e) => e.endTime <= now).length;
 
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -527,12 +523,7 @@ function GatewayStatusWidget() {
   const channelCount = gatewayInfo.channels.filter((c) => c.status === 'active').length;
 
   return (
-    <LinearGradient
-      colors={C.gradient.card}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.gatewayWidget}
-    >
+    <GlassCard variant="card" style={styles.gatewayWidget}>
       <View style={styles.gatewayHeader}>
         <View style={styles.gatewayTitleRow}>
           <Ionicons name="server" size={16} color={C.coral} />
@@ -607,7 +598,7 @@ function GatewayStatusWidget() {
           )}
         </View>
       )}
-    </LinearGradient>
+    </GlassCard>
   );
 }
 
@@ -628,7 +619,7 @@ function AutomationStatusWidget() {
             approvals: Array.isArray(approvals) ? approvals.length : 0,
           });
         }
-      } catch {}
+      } catch { }
     };
     load();
   }, [gateway, gatewayStatus]);
@@ -636,45 +627,42 @@ function AutomationStatusWidget() {
   if (gatewayStatus !== 'connected') return null;
 
   return (
-    <Pressable onPress={() => router.push('/(tabs)/settings')}>
-      <LinearGradient
-        colors={C.gradient.card}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.autoStatusWidget}
-      >
-        <View style={styles.autoStatusHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="flash" size={16} color={C.amber} />
-            <Text style={styles.widgetTitle}>Automations</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
+    <PressableCard
+      variant="card"
+      onPress={() => router.push('/(tabs)/settings')}
+      style={styles.autoStatusWidget}
+    >
+      <View style={styles.autoStatusHeader}>
+        <View style={styles.sectionTitleRow}>
+          <Ionicons name="flash" size={16} color={C.amber} />
+          <Text style={styles.widgetTitle}>Automations</Text>
         </View>
-        <View style={styles.autoStatusRow}>
-          <View style={styles.autoStatusItem}>
-            <View style={[styles.autoStatusDot, { backgroundColor: C.success }]} />
-            <Text style={styles.autoStatusNum}>{autoCount.enabled}</Text>
-            <Text style={styles.autoStatusLabel}>Running</Text>
-          </View>
-          <View style={styles.autoStatusDiv} />
-          <View style={styles.autoStatusItem}>
-            <View style={[styles.autoStatusDot, { backgroundColor: C.textTertiary }]} />
-            <Text style={styles.autoStatusNum}>{autoCount.paused}</Text>
-            <Text style={styles.autoStatusLabel}>Paused</Text>
-          </View>
-          {autoCount.approvals > 0 && (
-            <>
-              <View style={styles.autoStatusDiv} />
-              <View style={styles.autoStatusItem}>
-                <View style={[styles.autoStatusDot, { backgroundColor: C.primary }]} />
-                <Text style={[styles.autoStatusNum, { color: C.primary }]}>{autoCount.approvals}</Text>
-                <Text style={[styles.autoStatusLabel, { color: C.primary }]}>Pending</Text>
-              </View>
-            </>
-          )}
+        <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
+      </View>
+      <View style={styles.autoStatusRow}>
+        <View style={styles.autoStatusItem}>
+          <View style={[styles.autoStatusDot, { backgroundColor: C.success }]} />
+          <Text style={styles.autoStatusNum}>{autoCount.enabled}</Text>
+          <Text style={styles.autoStatusLabel}>Running</Text>
         </View>
-      </LinearGradient>
-    </Pressable>
+        <View style={styles.autoStatusDiv} />
+        <View style={styles.autoStatusItem}>
+          <View style={[styles.autoStatusDot, { backgroundColor: C.textTertiary }]} />
+          <Text style={styles.autoStatusNum}>{autoCount.paused}</Text>
+          <Text style={styles.autoStatusLabel}>Paused</Text>
+        </View>
+        {autoCount.approvals > 0 && (
+          <>
+            <View style={styles.autoStatusDiv} />
+            <View style={styles.autoStatusItem}>
+              <View style={[styles.autoStatusDot, { backgroundColor: C.primary }]} />
+              <Text style={[styles.autoStatusNum, { color: C.primary }]}>{autoCount.approvals}</Text>
+              <Text style={[styles.autoStatusLabel, { color: C.primary }]}>Pending</Text>
+            </View>
+          </>
+        )}
+      </View>
+    </PressableCard>
   );
 }
 
@@ -736,7 +724,7 @@ function CircularRing({ percent, size, color, trackColor }: { percent: number; s
 }
 
 const SystemHealthWidget = React.memo(function SystemHealthWidget() {
-  const { gatewayStatus, activeConnection } = useApp();
+  const { gatewayStatus } = useApp();
   const connected = gatewayStatus === 'connected';
 
   if (gatewayStatus === 'connecting') return <SkeletonLoader height={140} />;
@@ -1005,34 +993,6 @@ function parsePriority(text: string): Task['priority'] {
   return 'medium';
 }
 
-function getNextDayOfWeek(dayName: string): Date {
-  const days: Record<string, number> = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
-  const target = days[dayName.toLowerCase()];
-  if (target === undefined) return new Date();
-  const now = new Date();
-  const current = now.getDay();
-  let diff = target - current;
-  if (diff <= 0) diff += 7;
-  const result = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff, 9, 0, 0, 0);
-  return result;
-}
-
-function parseDueDate(text: string): number | undefined {
-  const lower = text.toLowerCase();
-  const now = new Date();
-  if (lower.includes('by tomorrow') || lower.includes('tomorrow')) {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0, 0, 0);
-    return d.getTime();
-  }
-  if (lower.includes('by today') || lower.includes('today')) {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0, 0);
-    return d.getTime();
-  }
-  const dayMatch = lower.match(/by\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/);
-  if (dayMatch) return getNextDayOfWeek(dayMatch[1]).getTime();
-  return undefined;
-}
-
 function parseEventDate(text: string): Date {
   const lower = text.toLowerCase();
   const now = new Date();
@@ -1188,13 +1148,13 @@ function CommandBar() {
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
-  const { refreshAll, activeConnection, tasks, memoryEntries, gatewayStatus, gatewayInfo, gatewaySessions, fetchGatewaySessions } = useApp();
+  const { refreshAll, activeConnection, tasks, fetchGatewaySessions } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refreshAll();
-    fetchGatewaySessions().catch(() => {});
+    fetchGatewaySessions().catch(() => { });
     setRefreshing(false);
   }, [refreshAll, fetchGatewaySessions]);
 

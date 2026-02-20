@@ -144,7 +144,7 @@ function EmptyState() {
         <Ionicons name="pulse-outline" size={48} color={C.textTertiary} />
       </View>
       <Text style={styles.emptyTitle}>No Activity Yet</Text>
-      <Text style={styles.emptySubtitle}>Your agent's activity will appear here</Text>
+      <Text style={styles.emptySubtitle}>Your agent&apos;s activity will appear here</Text>
     </View>
   );
 }

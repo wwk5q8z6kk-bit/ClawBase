@@ -572,7 +572,7 @@ export default function ChatListScreen() {
               </View>
               <Text style={styles.emptyTitle}>No matches found</Text>
               <Text style={styles.emptySubtitle}>
-                No conversations matching "{searchQuery}"
+                No conversations matching &quot;{searchQuery}&quot;
               </Text>
             </View>
           ) : (
