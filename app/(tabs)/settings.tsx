@@ -18,6 +18,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -366,6 +368,62 @@ export default function SettingsScreen() {
     disconnectGateway();
     setConnectionError(null);
   }, [disconnectGateway]);
+
+  const handleExportData = useCallback(async () => {
+    try {
+      const exportData = {
+        meta: {
+          exportDate: new Date().toISOString(),
+          app: 'ClawBase',
+          version: '1.0',
+          counts: {
+            tasks: tasks.length,
+            conversations: conversations.length,
+            memoryEntries: memoryEntries.length,
+            calendarEvents: calendarEvents.length,
+            crmContacts: crmContacts.length,
+            connections: connections.length,
+          },
+        },
+        tasks,
+        conversations,
+        memoryEntries,
+        calendarEvents,
+        crmContacts,
+        connections,
+      };
+
+      const jsonString = JSON.stringify(exportData, null, 2);
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'clawbase-backup.json';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(url);
+      } else {
+        const fileUri = FileSystem.documentDirectory + 'clawbase-backup.json';
+        await FileSystem.writeAsStringAsync(fileUri, jsonString, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/json',
+          dialogTitle: 'Export ClawBase Data',
+          UTI: 'public.json',
+        });
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      if (Platform.OS !== 'web') {
+        Alert.alert('Export Failed', 'Could not export data. Please try again.');
+      }
+    }
+  }, [tasks, conversations, memoryEntries, calendarEvents, crmContacts, connections]);
 
   const handleClearAllData = useCallback(() => {
     const doClear = async () => {
@@ -818,9 +876,7 @@ export default function SettingsScreen() {
             iconColor={C.accent}
             label="Export Data"
             value="JSON"
-            onPress={() => {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            }}
+            onPress={handleExportData}
           />
           <SettingsRow
             icon="trash-outline"
