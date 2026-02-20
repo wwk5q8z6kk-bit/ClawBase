@@ -53,6 +53,30 @@ function formatTimeAgo(ts: number) {
   return `${Math.floor(days / 7)}w ago`;
 }
 
+function getContactHealth(contact: CRMContact): { score: number; label: string; color: string; icon: string } {
+  const daysSinceLastInteraction = contact.lastInteraction
+    ? Math.floor((Date.now() - contact.lastInteraction) / 86400000)
+    : 999;
+  const interactionCount = contact.interactions.length;
+  
+  let score = 100;
+  if (daysSinceLastInteraction > 30) score -= 40;
+  else if (daysSinceLastInteraction > 14) score -= 25;
+  else if (daysSinceLastInteraction > 7) score -= 10;
+  
+  if (interactionCount < 2) score -= 20;
+  else if (interactionCount < 5) score -= 10;
+  
+  if (contact.stage === 'active' || contact.stage === 'customer') score = Math.min(100, score + 10);
+  
+  score = Math.max(0, Math.min(100, score));
+  
+  if (score >= 80) return { score, label: 'Strong', color: C.success, icon: 'heart' };
+  if (score >= 50) return { score, label: 'Good', color: C.amber, icon: 'heart-half' };
+  if (score >= 30) return { score, label: 'Cooling', color: '#FF9F5A', icon: 'heart-dislike' };
+  return { score, label: 'At Risk', color: C.primary, icon: 'alert-circle' };
+}
+
 function getInitials(name: string) {
   return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
 }
@@ -216,6 +240,17 @@ export default function CRMScreen() {
           {contact.lastInteraction && (
             <Text style={styles.contactTime}>Last: {formatTimeAgo(contact.lastInteraction)}</Text>
           )}
+          {(() => {
+            const health = getContactHealth(contact);
+            return (
+              <View style={styles.healthRow}>
+                <Ionicons name={health.icon as any} size={12} color={health.color} />
+                <View style={styles.healthBar}>
+                  <View style={[styles.healthBarFill, { width: `${health.score}%`, backgroundColor: health.color }]} />
+                </View>
+              </View>
+            );
+          })()}
         </View>
         <View style={[styles.stageBadge, { backgroundColor: (stage?.color || C.coral) + '20' }]}>
           <Text style={[styles.stageText, { color: stage?.color || C.coral }]}>{stage?.label || contact.stage}</Text>
@@ -255,6 +290,7 @@ export default function CRMScreen() {
                     </Text>
                   </View>
                   <Text style={styles.pipelineCardInteractions}>{contact.interactions.length}</Text>
+                  <View style={[styles.pipelineHealthDot, { backgroundColor: getContactHealth(contact).color }]} />
                 </Pressable>
               ))}
               {stageContacts.length === 0 && (
@@ -402,6 +438,24 @@ export default function CRMScreen() {
                     <Text style={styles.detailStatLabel}>Meetings</Text>
                   </View>
                 </View>
+
+                {(() => {
+                  const health = getContactHealth(selectedContact);
+                  return (
+                    <View style={styles.healthSection}>
+                      <View style={styles.healthScoreRow}>
+                        <Ionicons name={health.icon as any} size={18} color={health.color} />
+                        <Text style={[styles.healthScoreLabel, { color: health.color }]}>
+                          {health.label} Relationship
+                        </Text>
+                        <Text style={[styles.healthScoreValue, { color: health.color }]}>{health.score}%</Text>
+                      </View>
+                      <View style={styles.healthBarLarge}>
+                        <View style={[styles.healthBarLargeFill, { width: `${health.score}%`, backgroundColor: health.color }]} />
+                      </View>
+                    </View>
+                  );
+                })()}
 
                 <Text style={styles.timelineTitle}>Interaction Timeline</Text>
 
@@ -785,4 +839,14 @@ const styles = StyleSheet.create({
   createBtnText: { fontFamily: 'Inter_700Bold', fontSize: 15, color: '#fff' },
   deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, marginTop: 8 },
   deleteBtnText: { fontFamily: 'Inter_500Medium', fontSize: 14, color: C.error },
+  healthRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginTop: 3 },
+  healthBar: { flex: 1, height: 3, borderRadius: 2, backgroundColor: C.border, maxWidth: 60 },
+  healthBarFill: { height: 3, borderRadius: 2 },
+  healthSection: { backgroundColor: C.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: C.borderLight, gap: 8, marginBottom: 8 },
+  healthScoreRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  healthScoreLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 14, flex: 1 },
+  healthScoreValue: { fontFamily: 'Inter_700Bold', fontSize: 16 },
+  healthBarLarge: { height: 6, borderRadius: 3, backgroundColor: C.border },
+  healthBarLargeFill: { height: 6, borderRadius: 3 },
+  pipelineHealthDot: { width: 8, height: 8, borderRadius: 4 },
 });

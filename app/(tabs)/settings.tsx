@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as LocalAuthentication from 'expo-local-authentication';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 
@@ -134,11 +135,68 @@ export default function SettingsScreen() {
     setActiveConnection,
     biometricEnabled,
     setBiometricEnabled,
+    tasks,
+    conversations,
+    memoryEntries,
+    crmContacts,
+    calendarEvents,
+    refreshAll,
   } = useApp();
 
   const [showConnModal, setShowConnModal] = useState(false);
   const [connName, setConnName] = useState('');
   const [connUrl, setConnUrl] = useState('');
+
+  const [storageStats, setStorageStats] = useState<{
+    tasks: number;
+    conversations: number;
+    memories: number;
+    contacts: number;
+    events: number;
+  } | null>(null);
+
+  const loadStorageStats = useCallback(async () => {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const clawKeys = keys.filter(k => k.startsWith('@clawcockpit:'));
+
+      setStorageStats({
+        tasks: tasks.length,
+        conversations: conversations.length,
+        memories: memoryEntries.length,
+        contacts: crmContacts.length,
+        events: calendarEvents.length,
+      });
+    } catch {}
+  }, [tasks, conversations, memoryEntries, crmContacts, calendarEvents]);
+
+  useEffect(() => {
+    loadStorageStats();
+  }, [loadStorageStats]);
+
+  const handleClearAllData = useCallback(() => {
+    const doClear = async () => {
+      try {
+        const keys = await AsyncStorage.getAllKeys();
+        const clawKeys = keys.filter(k => k.startsWith('@clawcockpit:'));
+        await AsyncStorage.multiRemove(clawKeys);
+        await refreshAll();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch {}
+    };
+    if (Platform.OS === 'web') {
+      doClear();
+    } else {
+      Alert.alert(
+        'Clear All Data',
+        'This will delete all your local data including tasks, conversations, memories, contacts, and calendar events. This cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Clear All', style: 'destructive', onPress: doClear },
+        ]
+      );
+    }
+  }, [refreshAll]);
 
   const handleBiometricToggle = useCallback(
     async (val: boolean) => {
@@ -382,6 +440,43 @@ export default function SettingsScreen() {
             iconColor={C.coral}
             label="Theme"
             value="Lobster Dark"
+          />
+        </SettingsSection>
+
+        <SettingsSection title="Data & Storage">
+          {storageStats && (
+            <View style={styles.storageGrid}>
+              {[
+                { label: 'Tasks', count: storageStats.tasks, icon: 'checkbox-outline', color: C.amber },
+                { label: 'Chats', count: storageStats.conversations, icon: 'chatbubble-outline', color: C.coral },
+                { label: 'Memories', count: storageStats.memories, icon: 'document-text-outline', color: C.accent },
+                { label: 'Contacts', count: storageStats.contacts, icon: 'people-outline', color: C.secondary },
+                { label: 'Events', count: storageStats.events, icon: 'calendar-outline', color: '#8B7FFF' },
+              ].map((item) => (
+                <View key={item.label} style={styles.storageItem}>
+                  <View style={[styles.storageItemIcon, { backgroundColor: item.color + '15' }]}>
+                    <Ionicons name={item.icon as any} size={16} color={item.color} />
+                  </View>
+                  <Text style={styles.storageItemCount}>{item.count}</Text>
+                  <Text style={styles.storageItemLabel}>{item.label}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+          <SettingsRow
+            icon="cloud-download-outline"
+            iconColor={C.accent}
+            label="Export Data"
+            value="JSON"
+            onPress={() => {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }}
+          />
+          <SettingsRow
+            icon="trash-outline"
+            iconColor={C.error}
+            label="Clear All Data"
+            onPress={handleClearAllData}
           />
         </SettingsSection>
 
@@ -742,4 +837,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: C.text,
   },
+  storageGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
+  storageItem: { alignItems: 'center' as const, width: 60, gap: 4, paddingVertical: 8 },
+  storageItemIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  storageItemCount: { fontFamily: 'Inter_700Bold', fontSize: 16, color: C.text },
+  storageItemLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary },
 });

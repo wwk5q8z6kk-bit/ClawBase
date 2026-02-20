@@ -185,6 +185,54 @@ function SuggestionChip({ text, onPress }: { text: string; onPress: () => void }
   );
 }
 
+function MessageActionSheet({
+  message,
+  onClose,
+  onCopy,
+  onReply,
+}: {
+  message: ChatMessage | null;
+  onClose: () => void;
+  onCopy: () => void;
+  onReply: (text: string) => void;
+}) {
+  if (!message) return null;
+  const isUser = message.role === 'user';
+  
+  const actions = [
+    { icon: 'copy-outline', label: 'Copy Text', onPress: onCopy, color: C.accent },
+    { icon: 'arrow-undo-outline', label: 'Reply', onPress: () => { onReply(message.content); onClose(); }, color: C.secondary },
+    { icon: 'bookmark-outline', label: 'Bookmark', onPress: () => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); onClose(); }, color: C.amber },
+    { icon: 'share-outline', label: 'Share', onPress: () => { onClose(); }, color: C.coral },
+  ];
+
+  return (
+    <Modal visible={!!message} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.actionOverlay} onPress={onClose}>
+        <View style={styles.actionSheet}>
+          <View style={styles.actionPreview}>
+            <Text style={styles.actionPreviewLabel}>{isUser ? 'You' : 'Agent'}</Text>
+            <Text style={styles.actionPreviewText} numberOfLines={3}>{message.content}</Text>
+          </View>
+          <View style={styles.actionDivider} />
+          {actions.map((action, i) => (
+            <Pressable
+              key={i}
+              style={({ pressed }) => [styles.actionItem, pressed && { backgroundColor: C.cardElevated }]}
+              onPress={action.onPress}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: action.color + '15' }]}>
+                <Ionicons name={action.icon as any} size={18} color={action.color} />
+              </View>
+              <Text style={styles.actionLabel}>{action.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function ChatDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -195,6 +243,7 @@ export default function ChatDetailScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [infoVisible, setInfoVisible] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [actionMenuMsg, setActionMenuMsg] = useState<ChatMessage | null>(null);
   const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
 
@@ -259,15 +308,23 @@ export default function ChatDetailScreen() {
     }
   }, []);
 
-  const handleCopyMessage = useCallback((messageId: string) => {
+  const openActionMenu = useCallback((messageId: string) => {
     const msg = messages.find((m) => m.id === messageId);
-    if (!msg) return;
-    if (Platform.OS === 'web') {
-      try { navigator.clipboard.writeText(msg.content); } catch {}
+    if (msg) {
+      setActionMenuMsg(msg);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    setCopiedId(messageId);
-    setTimeout(() => setCopiedId(null), 1500);
   }, [messages]);
+
+  const handleCopyAction = useCallback(() => {
+    if (!actionMenuMsg) return;
+    if (Platform.OS === 'web') {
+      try { navigator.clipboard.writeText(actionMenuMsg.content); } catch {}
+    }
+    setCopiedId(actionMenuMsg.id);
+    setTimeout(() => setCopiedId(null), 1500);
+    setActionMenuMsg(null);
+  }, [actionMenuMsg]);
 
   const suggestions = messages.length === 0
     ? ['Summarize my inbox', 'What tasks are pending?', 'System health check']
@@ -342,7 +399,7 @@ export default function ChatDetailScreen() {
                   message={item}
                   showAvatar={shouldShowAvatar(index)}
                   tightTop={isTightTop(index)}
-                  onLongPress={handleCopyMessage}
+                  onLongPress={openActionMenu}
                   copiedId={copiedId}
                 />
               </View>
@@ -473,6 +530,16 @@ export default function ChatDetailScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <MessageActionSheet
+        message={actionMenuMsg}
+        onClose={() => setActionMenuMsg(null)}
+        onCopy={handleCopyAction}
+        onReply={(text) => {
+          setInputText(`Re: ${text.slice(0, 50)}... `);
+          inputRef.current?.focus();
+        }}
+      />
 
       <Modal
         visible={infoVisible}
@@ -890,4 +957,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#fff',
   },
+  actionOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  actionSheet: { backgroundColor: C.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 8, paddingBottom: 34 },
+  actionPreview: { paddingHorizontal: 20, paddingVertical: 12 },
+  actionPreviewLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.textTertiary, marginBottom: 4 },
+  actionPreviewText: { fontFamily: 'Inter_400Regular', fontSize: 14, color: C.text, lineHeight: 20 },
+  actionDivider: { height: 1, backgroundColor: C.borderLight, marginHorizontal: 16 },
+  actionItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 20, paddingVertical: 14 },
+  actionIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  actionLabel: { fontFamily: 'Inter_500Medium', fontSize: 15, color: C.text },
 });
