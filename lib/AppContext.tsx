@@ -37,6 +37,7 @@ import type {
   CRMInteraction,
 } from './types';
 import * as Crypto from 'expo-crypto';
+import { getGateway, OpenClawGateway, GatewayStatus, GatewayInfo, GatewaySession, GatewayMemoryFile, StreamChunk } from './gateway';
 
 interface AppContextValue {
   connections: GatewayConnection[];
@@ -87,6 +88,20 @@ interface AppContextValue {
 
   isLoading: boolean;
   refreshAll: () => Promise<void>;
+
+  gateway: OpenClawGateway;
+  gatewayStatus: GatewayStatus;
+  gatewayInfo: GatewayInfo;
+  gatewaySessions: GatewaySession[];
+  gatewayMemoryFiles: GatewayMemoryFile[];
+  connectGateway: (url: string, token: string) => Promise<void>;
+  disconnectGateway: () => void;
+  sendGatewayChat: (message: string, sessionKey?: string) => Promise<void>;
+  fetchGatewaySessions: () => Promise<GatewaySession[]>;
+  fetchGatewaySessionHistory: (sessionKey: string) => Promise<any[]>;
+  fetchGatewayMemory: () => Promise<GatewayMemoryFile[]>;
+  streamingText: string | null;
+  isStreaming: boolean;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -102,6 +117,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [biometricEnabled, setBiometricEnabledState] = useState(false);
   const [hasOnboarded, setHasOnboardedState] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [gateway] = useState<OpenClawGateway>(() => getGateway());
+  const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus>('disconnected');
+  const [gatewayInfo, setGatewayInfo] = useState<GatewayInfo>({
+    channels: [],
+    activeSessionCount: 0,
+    totalSessions: 0,
+    skills: [],
+  });
+  const [gatewaySessions, setGatewaySessions] = useState<GatewaySession[]>([]);
+  const [gatewayMemoryFiles, setGatewayMemoryFiles] = useState<GatewayMemoryFile[]>([]);
+  const [streamingText, setStreamingText] = useState<string | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const seedIfNeeded = useCallback(async () => {
     const seeded = await AsyncStorage.getItem('@clawcockpit:seeded');
@@ -194,10 +222,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadAll();
   }, [loadAll]);
 
+  useEffect(() => {
+    const unsub1 = gateway.on('status_change', (event) => {
+      setGatewayStatus(event.data.status);
+    });
+    const unsub2 = gateway.on('gateway_info', (event) => {
+      setGatewayInfo(event.data);
+    });
+    const unsub3 = gateway.on('sessions_list', (event) => {
+      setGatewaySessions(event.data);
+    });
+    const unsub4 = gateway.on('memory_data', (event) => {
+      setGatewayMemoryFiles(event.data);
+    });
+    const unsub5 = gateway.on('message_chunk', (event) => {
+      setStreamingText(event.data.text);
+      setIsStreaming(true);
+    });
+    const unsub6 = gateway.on('message_complete', (event) => {
+      setStreamingText(null);
+      setIsStreaming(false);
+    });
+
+    return () => {
+      unsub1();
+      unsub2();
+      unsub3();
+      unsub4();
+      unsub5();
+      unsub6();
+    };
+  }, [gateway]);
+
   const activeConnection = useMemo(
     () => connections.find((c) => c.id === activeConnectionId) || null,
     [connections, activeConnectionId],
   );
+
+  useEffect(() => {
+    if (activeConnection && activeConnection.url && gatewayStatus === 'disconnected') {
+      const token = '';
+      gateway.connect(activeConnection.url, token).catch(() => {});
+    }
+  }, [activeConnection, gateway, gatewayStatus]);
 
   const addConnection = useCallback(
     async (name: string, url: string) => {
@@ -326,9 +393,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ),
       );
 
-      await simulateResponse(conversationId, content);
+      if (gateway.isConnected()) {
+        try {
+          await gateway.sendChat(content);
+        } catch {
+          await simulateResponse(conversationId, content);
+        }
+      } else {
+        await simulateResponse(conversationId, content);
+      }
     },
-    [conversations, simulateResponse],
+    [conversations, simulateResponse, gateway],
   );
 
   const createTask = useCallback(
@@ -433,6 +508,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setHasOnboardedState(val);
   }, []);
 
+  const connectGateway = useCallback(async (url: string, token: string) => {
+    await gateway.connect(url, token);
+  }, [gateway]);
+
+  const disconnectGateway = useCallback(() => {
+    gateway.disconnect();
+  }, [gateway]);
+
+  const sendGatewayChat = useCallback(async (message: string, sessionKey = 'agent:main:main') => {
+    await gateway.sendChat(message, sessionKey);
+  }, [gateway]);
+
+  const fetchGatewaySessions = useCallback(async () => {
+    return gateway.fetchSessions();
+  }, [gateway]);
+
+  const fetchGatewaySessionHistory = useCallback(async (sessionKey: string) => {
+    return gateway.fetchSessionHistory(sessionKey);
+  }, [gateway]);
+
+  const fetchGatewayMemory = useCallback(async () => {
+    return gateway.fetchMemory();
+  }, [gateway]);
+
   const value = useMemo(
     () => ({
       connections,
@@ -470,6 +569,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setHasOnboarded: setHasOnboardedFn,
       isLoading,
       refreshAll: loadAll,
+      gateway,
+      gatewayStatus,
+      gatewayInfo,
+      gatewaySessions,
+      gatewayMemoryFiles,
+      connectGateway,
+      disconnectGateway,
+      sendGatewayChat,
+      fetchGatewaySessions,
+      fetchGatewaySessionHistory,
+      fetchGatewayMemory,
+      streamingText,
+      isStreaming,
     }),
     [
       connections, activeConnection, addConnection, removeConnection,
@@ -480,6 +592,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       crmContacts, createCRMContact, updateCRMContact, deleteCRMContact, addCRMInteraction,
       biometricEnabled, setBiometricEnabledFn, hasOnboarded,
       setHasOnboardedFn, isLoading, loadAll,
+      gateway, gatewayStatus, gatewayInfo, gatewaySessions, gatewayMemoryFiles,
+      connectGateway, disconnectGateway, sendGatewayChat,
+      fetchGatewaySessions, fetchGatewaySessionHistory, fetchGatewayMemory,
+      streamingText, isStreaming,
     ],
   );
 
