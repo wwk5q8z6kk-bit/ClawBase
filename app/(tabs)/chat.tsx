@@ -20,6 +20,8 @@ import { router } from 'expo-router';
 import { Swipeable } from 'react-native-gesture-handler';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
+import { PulsingDot } from '@/components/PulsingDot';
+import { GlassCard } from '@/components/GlassCard';
 import type { Conversation } from '@/lib/types';
 
 const C = Colors.dark;
@@ -58,24 +60,7 @@ function ActionChip({ icon, label, color }: { icon: keyof typeof Ionicons.glyphM
   );
 }
 
-function PulsingDot({ color }: { color: string }) {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 0.4, duration: 800, useNativeDriver: Platform.OS !== 'web' }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: Platform.OS !== 'web' }),
-      ])
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [pulseAnim]);
-
-  return (
-    <Animated.View style={[styles.pulsingDot, { backgroundColor: color, opacity: pulseAnim }]} />
-  );
-}
 
 const ConversationItem = React.memo(function ConversationItem({
   item,
