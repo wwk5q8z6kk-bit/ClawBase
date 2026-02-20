@@ -729,6 +729,15 @@ export class OpenClawGateway {
     }
   }
 
+  async rebindGateway(bind = '0.0.0.0', port = 18789): Promise<{ success: boolean; error?: string }> {
+    try {
+      const result = await this.rpc('config.set', { bind, port }, 10000);
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to rebind gateway' };
+    }
+  }
+
   async invokeCommand(command: string, params?: Record<string, any>): Promise<any> {
     try {
       return await this.rpc('tools.invoke', {

@@ -25,7 +25,7 @@ import { discoverGateways, type DiscoveredGateway } from '@/lib/discovery';
 const C = Colors.dark;
 const { width: SCREEN_W } = Dimensions.get('window');
 
-type PairMethod = 'qr' | 'code' | 'manual';
+type PairMethod = 'qr' | 'code' | 'manual' | 'tailscale';
 type ConnectPhase = 'idle' | 'testing' | 'success' | 'unreachable' | 'pairing';
 
 function isLocalAddress(host: string): boolean {
@@ -324,6 +324,9 @@ export default function PairScreen() {
   }
 
   if (connectPhase === 'unreachable') {
+    const urlStr = pendingConnection?.url || '';
+    const isLocal = /^(ws|http)s?:\/\/(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(urlStr);
+
     return (
       <View style={[styles.container, { paddingTop: insets.top + webTopPad, backgroundColor: C.background }]}>
         <View style={styles.topBar}>
@@ -343,18 +346,42 @@ export default function PairScreen() {
 
           <View style={styles.unreachableTips}>
             <Text style={styles.tipHeader}>Things to check:</Text>
-            <View style={styles.tipRow}>
-              <Ionicons name="wifi" size={14} color={C.textSecondary} />
-              <Text style={styles.tipText}>Is the gateway running?</Text>
-            </View>
-            <View style={styles.tipRow}>
-              <Ionicons name="globe-outline" size={14} color={C.textSecondary} />
-              <Text style={styles.tipText}>Is it exposed via tunnel (Cloudflare, Tailscale)?</Text>
-            </View>
-            <View style={styles.tipRow}>
-              <Ionicons name="phone-portrait-outline" size={14} color={C.textSecondary} />
-              <Text style={styles.tipText}>Are you on the same network as the gateway?</Text>
-            </View>
+            {isLocal ? (
+              <>
+                <View style={styles.tipRow}>
+                  <Ionicons name="swap-horizontal" size={14} color={C.textSecondary} />
+                  <Text style={styles.tipText}>Make sure your gateway is bound to your LAN IP, not just localhost (127.0.0.1)</Text>
+                </View>
+                <View style={styles.tipRow}>
+                  <Ionicons name="wifi" size={14} color={C.textSecondary} />
+                  <Text style={styles.tipText}>Both devices need to be on the same WiFi network</Text>
+                </View>
+                <View style={styles.tipRow}>
+                  <Ionicons name="server-outline" size={14} color={C.textSecondary} />
+                  <Text style={styles.tipText}>Your gateway runs on port 18789 by default</Text>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.tipRow}>
+                  <Ionicons name="globe-outline" size={14} color={C.textSecondary} />
+                  <Text style={styles.tipText}>Check that your Tailscale is connected on both devices</Text>
+                </View>
+                <View style={styles.tipRow}>
+                  <Ionicons name="power-outline" size={14} color={C.textSecondary} />
+                  <Text style={styles.tipText}>Make sure the gateway is running</Text>
+                </View>
+                <View style={styles.tipRow}>
+                  <Ionicons name="shield-outline" size={14} color={C.textSecondary} />
+                  <Text style={styles.tipText}>Firewall may be blocking port 18789</Text>
+                </View>
+              </>
+            )}
+          </View>
+
+          <View style={styles.helpCmdCard}>
+            <Ionicons name="terminal-outline" size={14} color={C.textTertiary} />
+            <Text style={styles.helpCmdText}>Need help? Run{'\n'}openclaw gateway --bind 0.0.0.0 --port 18789{'\n'}to make your gateway accessible on your network</Text>
           </View>
 
           <View style={styles.unreachableActions}>
@@ -552,6 +579,87 @@ export default function PairScreen() {
     );
   }
 
+  if (method === 'tailscale') {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top + webTopPad, backgroundColor: C.background }]}>
+        <View style={styles.topBar}>
+          <Pressable onPress={goBack} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={28} color={C.text} />
+          </Pressable>
+          <Text style={styles.topBarTitle}>Remote Connection</Text>
+          <View style={{ width: 28 }} />
+        </View>
+
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.manualContent} keyboardShouldPersistTaps="handled">
+          <View style={styles.codeIconWrap}>
+            <Ionicons name="globe" size={36} color={C.secondary} />
+          </View>
+          <Text style={styles.codeTitle}>Connect Remotely</Text>
+          <Text style={styles.codeSub}>Connect to your gateway from anywhere. Enter your Tailscale hostname or public tunnel URL.</Text>
+
+          <TextInput
+            style={styles.manualInput}
+            placeholder="e.g. my-server.tail1234.ts.net"
+            placeholderTextColor={C.textTertiary}
+            value={manualUrl}
+            onChangeText={(t) => { setManualUrl(t); setError(null); }}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+          <TextInput
+            style={styles.manualInput}
+            placeholder="Auth token (optional)"
+            placeholderTextColor={C.textTertiary}
+            value={manualToken}
+            onChangeText={setManualToken}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+          />
+
+          {error && (
+            <View style={styles.errorRow}>
+              <Ionicons name="alert-circle" size={14} color={C.error} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          <Pressable
+            onPress={() => finishPairing(manualName.trim() || 'Remote Gateway', manualUrl.trim(), manualToken.trim() || undefined)}
+            disabled={!manualUrl.trim()}
+            style={({ pressed }) => [
+              styles.codeBtn,
+              !manualUrl.trim() && { opacity: 0.4 },
+              pressed && { opacity: 0.8 },
+            ]}
+          >
+            <LinearGradient colors={[C.primary, '#D43D3D']} style={styles.codeBtnInner}>
+              <Ionicons name="flash" size={18} color="#FFF" />
+              <Text style={styles.codeBtnText}>Connect</Text>
+            </LinearGradient>
+          </Pressable>
+
+          <View style={styles.setupGuideCard}>
+            <Text style={styles.setupGuideTitle}>Setup Guide</Text>
+            <View style={styles.setupGuideStep}>
+              <View style={styles.setupGuideStepNum}><Text style={styles.setupGuideStepNumText}>1</Text></View>
+              <Text style={styles.setupGuideStepText}>Install Tailscale on your gateway machine and this device</Text>
+            </View>
+            <View style={styles.setupGuideStep}>
+              <View style={styles.setupGuideStepNum}><Text style={styles.setupGuideStepNumText}>2</Text></View>
+              <Text style={styles.setupGuideStepText}>Your gateway's Tailscale address will look like: my-machine.tail1234.ts.net</Text>
+            </View>
+            <View style={styles.setupGuideStep}>
+              <View style={styles.setupGuideStepNum}><Text style={styles.setupGuideStepNumText}>3</Text></View>
+              <Text style={styles.setupGuideStepText}>Enter the address above — no port needed, we add :18789 automatically</Text>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
   if (method === 'manual') {
     return (
       <View style={[styles.container, { paddingTop: insets.top + webTopPad, backgroundColor: C.background }]}>
@@ -700,6 +808,18 @@ export default function PairScreen() {
           </LinearGradient>
         </Pressable>
 
+        <Pressable onPress={() => { setMethod('tailscale'); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }} style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
+          <LinearGradient colors={['#151820', '#101518']} style={styles.pairMethodCard}>
+            <View style={[styles.pairMethodIcon, { backgroundColor: C.secondary + '18' }]}>
+              <Ionicons name="globe" size={28} color={C.secondary} />
+            </View>
+            <View style={styles.pairMethodInfo}>
+              <Text style={styles.pairMethodTitle}>Tailscale / Remote</Text>
+              <Text style={styles.pairMethodDesc}>Connect from anywhere via Tailscale or public URL</Text>
+            </View>
+          </LinearGradient>
+        </Pressable>
+
         <Pressable onPress={() => { setMethod('code'); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }} style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
           <LinearGradient colors={['#1A1815', '#151310']} style={styles.pairMethodCard}>
             <View style={[styles.pairMethodIcon, { backgroundColor: C.coral + '18' }]}>
@@ -809,4 +929,12 @@ const styles = StyleSheet.create({
   pairMethodBadgeText: { fontFamily: 'Inter_600SemiBold', fontSize: 10 },
   deepLinkHint: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, marginTop: 12 },
   deepLinkHintText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary, flex: 1, lineHeight: 17 },
+  helpCmdCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, width: '100%', backgroundColor: C.card, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: C.border, marginTop: 8 },
+  helpCmdText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary, flex: 1, lineHeight: 18 },
+  setupGuideCard: { width: '100%', backgroundColor: C.card, padding: 18, borderRadius: 14, borderWidth: 1, borderColor: C.border, gap: 14, marginTop: 8 },
+  setupGuideTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: C.text },
+  setupGuideStep: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  setupGuideStepNum: { width: 24, height: 24, borderRadius: 12, backgroundColor: C.secondary + '20', alignItems: 'center', justifyContent: 'center' },
+  setupGuideStepNumText: { fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.secondary },
+  setupGuideStepText: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textSecondary, flex: 1, lineHeight: 19 },
 });
