@@ -84,6 +84,11 @@ Preferred communication style: Simple, everyday language.
 - **Onboarding flow**: First-launch experience guides users through connecting to a gateway, with option to skip
 - **Error boundaries**: Class-based ErrorBoundary component wraps the app for graceful error handling
 - **Platform-aware components**: Components like `KeyboardAwareScrollViewCompat` provide platform-specific implementations (web vs native)
+- **Connection status banner**: Floating animated banner (`components/ConnectionBanner.tsx`) shown across all screens when gateway is disconnected/errored, with reconnect and settings buttons
+- **Toast notification system**: Reusable toast provider (`components/Toast.tsx`) with success/error/info/warning types, animated slide-in/out, accessible via `useToast()` hook
+- **Swipe actions**: Conversation list items support swipe-to-delete (left) and swipe-to-pin (right) via react-native-gesture-handler Swipeable, with long-press fallback on web
+- **Data export**: Settings > Data & Storage > Export Data creates a full JSON backup of all app data (tasks, conversations, memory, events, contacts, connections) with metadata. Uses expo-sharing on native, Blob download on web
+- **Performance optimizations**: Heavy list item components (ConversationItem, MessageBubble, TaskCard, MemoryItem) and dashboard widgets (KanbanProgressWidget, CalendarAgendaWidget, SystemHealthWidget, WorkstreamCards, RecentActivityWidget) wrapped in React.memo to reduce unnecessary re-renders
 
 ### Build & Deployment
 - **Development**: Two parallel processes — `expo:dev` for the Expo Metro bundler, `server:dev` for the Express server (via tsx)
