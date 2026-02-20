@@ -123,7 +123,7 @@ function ConversationItem({
 
 export default function ChatListScreen() {
   const insets = useSafeAreaInsets();
-  const { conversations, createConversation, updateConversation, deleteConversation } = useApp();
+  const { conversations, createConversation, updateConversation, deleteConversation, gatewayStatus, gatewaySessions } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [actionSheetVisible, setActionSheetVisible] = useState(false);
@@ -256,6 +256,24 @@ export default function ChatListScreen() {
             <Text style={styles.statText}>{stats.pinned}</Text>
           </View>
         </View>
+      )}
+
+      {gatewayStatus === 'connected' && gatewaySessions.length > 0 && (
+        <Pressable
+          style={styles.gatewaySessionsBanner}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push('/sessions' as any);
+          }}
+        >
+          <View style={styles.gatewaySessionsLeft}>
+            <Ionicons name="radio" size={16} color={C.secondary} />
+            <Text style={styles.gatewaySessionsText}>
+              {gatewaySessions.length} gateway session{gatewaySessions.length !== 1 ? 's' : ''}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
+        </Pressable>
       )}
 
       <FlatList
@@ -738,4 +756,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#fff',
   },
+  gatewaySessionsBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 20, marginTop: 8, marginBottom: 4, backgroundColor: C.secondaryMuted, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: C.secondary + '20' },
+  gatewaySessionsLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  gatewaySessionsText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.secondary },
 });

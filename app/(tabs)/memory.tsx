@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { MemoryEntry } from '@/lib/types';
+import type { GatewayMemoryFile } from '@/lib/gateway';
 
 const C = Colors.dark;
 
@@ -403,7 +404,7 @@ type ReviewFilter = typeof REVIEW_FILTERS[number]['key'];
 
 export default function MemoryScreen() {
   const insets = useSafeAreaInsets();
-  const { memoryEntries, updateMemoryEntry, createMemoryEntry, deleteMemoryEntry } = useApp();
+  const { memoryEntries, updateMemoryEntry, createMemoryEntry, deleteMemoryEntry, gatewayStatus, gatewayMemoryFiles, fetchGatewayMemory } = useApp();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>('all');
@@ -418,6 +419,17 @@ export default function MemoryScreen() {
   const [newContent, setNewContent] = useState('');
   const [newTags, setNewTags] = useState('');
   const [newType, setNewType] = useState<MemoryEntry['type']>('note');
+
+  const [syncingMemory, setSyncingMemory] = useState(false);
+
+  const handleSyncMemory = useCallback(async () => {
+    setSyncingMemory(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await fetchGatewayMemory();
+    } catch {}
+    setSyncingMemory(false);
+  }, [fetchGatewayMemory]);
 
   const TAG_CLOUD_COLORS = [C.coral, C.accent, C.secondary, C.amber, C.purple, C.primary, C.success];
 
@@ -567,6 +579,14 @@ export default function MemoryScreen() {
             >
               <Ionicons name="swap-vertical-outline" size={18} color={sortOption !== 'newest' ? C.coral : C.textSecondary} />
             </Pressable>
+            {gatewayStatus === 'connected' && (
+              <Pressable
+                style={styles.headerBtn}
+                onPress={handleSyncMemory}
+              >
+                <Ionicons name="cloud-download-outline" size={18} color={syncingMemory ? C.coral : C.textSecondary} />
+              </Pressable>
+            )}
             <Pressable
               testID="create-memory-btn"
               style={styles.headerBtn}
@@ -740,6 +760,65 @@ export default function MemoryScreen() {
           <Text style={styles.activeTagText}>Filtered by: {selectedTag}</Text>
           <Ionicons name="close" size={14} color={C.textSecondary} />
         </Pressable>
+      )}
+
+      {gatewayStatus === 'connected' && (
+        <Pressable
+          style={styles.syncBanner}
+          onPress={handleSyncMemory}
+          disabled={syncingMemory}
+        >
+          <Ionicons name={syncingMemory ? 'sync' : 'cloud-download-outline'} size={16} color={C.secondary} />
+          <Text style={styles.syncBannerText}>
+            {syncingMemory ? 'Syncing from gateway...' : `Sync from gateway${gatewayMemoryFiles.length > 0 ? ` (${gatewayMemoryFiles.length} files)` : ''}`}
+          </Text>
+          {gatewayMemoryFiles.length > 0 && !syncingMemory && (
+            <View style={styles.syncBadge}>
+              <Text style={styles.syncBadgeText}>{gatewayMemoryFiles.length}</Text>
+            </View>
+          )}
+        </Pressable>
+      )}
+
+      {gatewayMemoryFiles.length > 0 && (
+        <View style={styles.gatewayMemorySection}>
+          <Text style={styles.gatewayMemoryTitle}>Gateway Memory Files</Text>
+          {gatewayMemoryFiles.map((file) => (
+            <Pressable
+              key={file.path}
+              style={styles.gatewayMemoryCard}
+              onPress={() => {
+                Haptics.selectionAsync();
+                const entry: MemoryEntry = {
+                  id: `gw-${file.path}`,
+                  type: file.type === 'memory' ? 'document' : file.type === 'session-state' ? 'summary' : 'note',
+                  title: file.name,
+                  content: file.content,
+                  timestamp: file.lastModified,
+                  source: 'agent',
+                  tags: [file.type],
+                  pinned: file.type === 'memory',
+                  reviewStatus: 'unread',
+                };
+                setSelectedMemory(entry);
+                setShowDetailModal(true);
+              }}
+            >
+              <View style={styles.gatewayMemoryIcon}>
+                <Ionicons
+                  name={file.type === 'memory' ? 'hardware-chip' : file.type === 'session-state' ? 'flash' : 'document-text'}
+                  size={18}
+                  color={file.type === 'memory' ? C.purple : file.type === 'session-state' ? C.amber : C.coral}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.gatewayMemoryName}>{file.name}</Text>
+                <Text style={styles.gatewayMemoryPreview} numberOfLines={2}>{file.content.slice(0, 120)}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={14} color={C.textTertiary} />
+            </Pressable>
+          ))}
+        </View>
       )}
 
       <FlatList
@@ -1249,6 +1328,16 @@ const styles = StyleSheet.create({
   sortOptionActive: { backgroundColor: C.coral + '12' },
   sortOptionText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.textSecondary, flex: 1 },
   sortOptionTextActive: { color: C.coral },
+  syncBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 20, marginBottom: 8, backgroundColor: C.secondaryMuted, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: C.secondary + '20' },
+  syncBannerText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.secondary, flex: 1 },
+  syncBadge: { backgroundColor: C.secondary, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, minWidth: 20, alignItems: 'center' },
+  syncBadgeText: { fontFamily: 'Inter_600SemiBold', fontSize: 10, color: '#fff' },
+  gatewayMemorySection: { paddingHorizontal: 20, marginBottom: 12 },
+  gatewayMemoryTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  gatewayMemoryCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 12, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: C.borderLight },
+  gatewayMemoryIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center' },
+  gatewayMemoryName: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.text },
+  gatewayMemoryPreview: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textSecondary, marginTop: 2, lineHeight: 16 },
 });
 
 const createStyles = StyleSheet.create({
