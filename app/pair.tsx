@@ -26,10 +26,16 @@ const { width: SCREEN_W } = Dimensions.get('window');
 type PairMethod = 'qr' | 'code' | 'manual';
 type ConnectPhase = 'idle' | 'testing' | 'success' | 'unreachable';
 
+function isLocalAddress(host: string): boolean {
+  const h = host.replace(/:\d+$/, '');
+  return /^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(h) || h.endsWith('.local');
+}
+
 function buildHttpUrl(rawUrl: string): string {
   let url = rawUrl.trim();
   if (!url.startsWith('http') && !url.startsWith('ws')) {
-    url = 'https://' + url;
+    const scheme = isLocalAddress(url) ? 'http://' : 'https://';
+    url = scheme + url;
   }
   url = url.replace(/^ws:\/\//, 'http://').replace(/^wss:\/\//, 'https://');
   return url.replace(/\/$/, '');
@@ -38,7 +44,8 @@ function buildHttpUrl(rawUrl: string): string {
 function buildWsUrl(rawUrl: string): string {
   let url = rawUrl.trim();
   if (!url.startsWith('http') && !url.startsWith('ws')) {
-    url = 'wss://' + url;
+    const scheme = isLocalAddress(url) ? 'ws://' : 'wss://';
+    url = scheme + url;
   }
   url = url.replace(/^http:\/\//, 'ws://').replace(/^https:\/\//, 'wss://');
   const hasPort = /:\d+(\/|$)/.test(url.replace(/^wss?:\/\//, ''));
