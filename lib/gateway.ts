@@ -626,6 +626,60 @@ export class OpenClawGateway {
     }
   }
 
+  async requestTunnel(provider: 'cloudflare' | 'tailscale' | 'auto' = 'auto'): Promise<{ url?: string; status: string; error?: string }> {
+    try {
+      const result = await this.rpc('config.tunnel.start', { provider }, 30000);
+      return {
+        url: result?.url || result?.publicUrl,
+        status: result?.status || 'started',
+      };
+    } catch (e: any) {
+      return { status: 'error', error: e?.message || 'Failed to start tunnel' };
+    }
+  }
+
+  async getTunnelStatus(): Promise<{ active: boolean; url?: string; provider?: string }> {
+    try {
+      const result = await this.rpc('config.tunnel.status');
+      return {
+        active: !!result?.active,
+        url: result?.url || result?.publicUrl,
+        provider: result?.provider,
+      };
+    } catch {
+      return { active: false };
+    }
+  }
+
+  async stopTunnel(): Promise<void> {
+    try {
+      await this.rpc('config.tunnel.stop');
+    } catch {}
+  }
+
+  async generatePairCode(): Promise<{ code: string; expiresAt: number } | null> {
+    try {
+      const result = await this.rpc('config.pair.generate');
+      return {
+        code: result?.code || '',
+        expiresAt: result?.expiresAt || Date.now() + 600000,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async invokeCommand(command: string, params?: Record<string, any>): Promise<any> {
+    try {
+      return await this.rpc('tools.invoke', {
+        tool: 'command',
+        parameters: { command, ...params },
+      });
+    } catch (e: any) {
+      return { error: e?.message || 'Command failed' };
+    }
+  }
+
   async healthCheck(): Promise<boolean> {
     try {
       const httpUrl = this.url
