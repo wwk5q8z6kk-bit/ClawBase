@@ -152,13 +152,13 @@ function HeroHeader() {
       {(activeTasks > 0 || unreadMemories > 0) && (
         <View style={styles.heroBadgeRow}>
           {activeTasks > 0 && (
-            <Pressable style={styles.heroBadge} onPress={() => router.push('/(tabs)/tasks')}>
+            <Pressable style={styles.heroBadge} onPress={() => router.push('/(tabs)/vault')}>
               <View style={[styles.heroBadgeDot, { backgroundColor: C.amber }]} />
               <Text style={styles.heroBadgeText}>{activeTasks} active</Text>
             </Pressable>
           )}
           {unreadMemories > 0 && (
-            <Pressable style={styles.heroBadge} onPress={() => router.push('/(tabs)/memory')}>
+            <Pressable style={styles.heroBadge} onPress={() => router.push('/(tabs)/vault')}>
               <View style={[styles.heroBadgeDot, { backgroundColor: C.coral }]} />
               <Text style={styles.heroBadgeText}>{unreadMemories} unread</Text>
             </Pressable>
@@ -181,7 +181,7 @@ function KanbanProgressWidget() {
   const urgentTasks = tasks.filter((t) => t.priority === 'urgent' && t.status !== 'done' && t.status !== 'archived');
 
   return (
-    <Pressable onPress={() => router.push('/(tabs)/tasks')}>
+    <Pressable onPress={() => router.push('/(tabs)/vault')}>
       <LinearGradient
         colors={C.gradient.cardElevated}
         start={{ x: 0, y: 0 }}
@@ -273,7 +273,7 @@ function CalendarAgendaWidget() {
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   return (
-    <Pressable onPress={() => router.push('/calendar' as any)}>
+    <Pressable onPress={() => router.push('/(tabs)/calendar')}>
       <View style={styles.calendarWidget}>
         <View style={styles.calendarWidgetLeft}>
           <View style={styles.calDateBox}>
@@ -382,7 +382,7 @@ function DeferredPKMWidget() {
           <MaterialCommunityIcons name="brain" size={16} color={C.purple} />
           <Text style={styles.sectionTitle}>Knowledge</Text>
         </View>
-        <Pressable onPress={() => router.push('/(tabs)/memory')}>
+        <Pressable onPress={() => router.push('/(tabs)/vault')}>
           <Text style={styles.seeAll}>Review</Text>
         </Pressable>
       </View>
@@ -390,7 +390,7 @@ function DeferredPKMWidget() {
       {unread > 0 && (
         <Pressable
           style={styles.pkmUnreadBanner}
-          onPress={() => router.push('/(tabs)/memory')}
+          onPress={() => router.push('/(tabs)/vault')}
         >
           <Ionicons name="sparkles" size={16} color={C.coral} />
           <Text style={styles.pkmUnreadText}>{unread} new item{unread !== 1 ? 's' : ''} to review</Text>
@@ -401,7 +401,7 @@ function DeferredPKMWidget() {
       {deferred.length > 0 && (
         <View style={styles.pkmDeferredList}>
           {deferred.map((mem) => (
-            <Pressable key={mem.id} style={styles.pkmDeferredItem} onPress={() => router.push('/(tabs)/memory')}>
+            <Pressable key={mem.id} style={styles.pkmDeferredItem} onPress={() => router.push('/(tabs)/vault')}>
               <View style={[styles.pkmDeferredDot, { backgroundColor: C.purple }]} />
               <Text style={styles.pkmDeferredTitle} numberOfLines={1}>{mem.title}</Text>
               <Ionicons name="time" size={12} color={C.purple} />
@@ -943,11 +943,11 @@ function CommandBar() {
       return;
     }
 
-    if (lower.includes('tasks')) { router.push('/(tabs)/tasks'); return; }
-    if (lower.includes('calendar')) { router.push('/calendar' as any); return; }
+    if (lower.includes('tasks') || lower.includes('vault')) { router.push('/(tabs)/vault'); return; }
+    if (lower.includes('calendar')) { router.push('/(tabs)/calendar'); return; }
     if (lower.includes('contacts')) { router.push('/crm' as any); return; }
-    if (lower.includes('memory')) { router.push('/(tabs)/memory'); return; }
-    if (lower.includes('settings')) { router.push('/(tabs)/settings'); return; }
+    if (lower.includes('memory') || lower.includes('knowledge')) { router.push('/(tabs)/vault'); return; }
+    if (lower.includes('settings') || lower.includes('automations')) { router.push('/(tabs)/settings'); return; }
 
     router.push('/(tabs)/chat');
   };
@@ -1052,7 +1052,7 @@ export default function DashboardScreen() {
             type="info"
             icon="flame"
             message={`${dueToday.length} task${dueToday.length !== 1 ? 's' : ''} due today`}
-            onPress={() => router.push('/(tabs)/tasks')}
+            onPress={() => router.push('/(tabs)/vault')}
             priority={dueToday.length >= 3 ? 'P1' : 'P2'}
           />
         )}
