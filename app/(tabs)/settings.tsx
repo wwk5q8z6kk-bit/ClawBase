@@ -180,7 +180,7 @@ export default function SettingsScreen() {
   const loadStorageStats = useCallback(async () => {
     try {
       const keys = await AsyncStorage.getAllKeys();
-      const clawKeys = keys.filter(k => k.startsWith('@clawcockpit:'));
+      const clawKeys = keys.filter(k => k.startsWith('@clawbase:'));
 
       setStorageStats({
         tasks: tasks.length,
@@ -251,7 +251,7 @@ export default function SettingsScreen() {
     const doClear = async () => {
       try {
         const keys = await AsyncStorage.getAllKeys();
-        const clawKeys = keys.filter(k => k.startsWith('@clawcockpit:'));
+        const clawKeys = keys.filter(k => k.startsWith('@clawbase:'));
         await AsyncStorage.multiRemove(clawKeys);
         await refreshAll();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -601,7 +601,7 @@ export default function SettingsScreen() {
           <LinearGradient colors={C.gradient.lobster} style={styles.brandLogo}>
             <Ionicons name="sparkles" size={20} color="#fff" />
           </LinearGradient>
-          <Text style={styles.brandText}>ClawCockpit</Text>
+          <Text style={styles.brandText}>ClawBase</Text>
           <Text style={styles.brandSub}>
             Mission control for your self-hosted agent
           </Text>

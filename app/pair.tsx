@@ -79,7 +79,7 @@ export default function PairScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     try {
-      if (data.startsWith('clawcockpit://') || data.startsWith('openclaw://')) {
+      if (data.startsWith('clawbase://') || data.startsWith('openclaw://')) {
         const url = new URL(data);
         const gwUrl = url.searchParams.get('url') || url.searchParams.get('gateway') || '';
         const token = url.searchParams.get('token') || '';
@@ -453,7 +453,7 @@ export default function PairScreen() {
         <View style={styles.deepLinkHint}>
           <Ionicons name="link-outline" size={14} color={C.textTertiary} />
           <Text style={styles.deepLinkHintText}>
-            You can also open a clawcockpit:// link from your gateway to connect automatically.
+            You can also open a clawbase:// link from your gateway to connect automatically.
           </Text>
         </View>
       </View>

@@ -86,7 +86,7 @@ export default function OnboardingScreen() {
               <Ionicons name="sparkles" size={40} color="#FFF" />
             </LinearGradient>
           </View>
-          <Text style={styles.title}>ClawCockpit</Text>
+          <Text style={styles.title}>ClawBase</Text>
           <Text style={styles.tagline}>
             The mission control your self-hosted agent deserves
           </Text>

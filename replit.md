@@ -1,8 +1,8 @@
-# ClawCockpit
+# ClawBase
 
 ## Overview
 
-ClawCockpit is a React Native (Expo) mobile companion app for self-hosted OpenClaw AI gateways. It provides a secure, beautiful "cockpit" interface for managing AI agent interactions — including real-time chat, task/Kanban boards, memory browsing, and gateway connection management. The app connects directly to the user's own OpenClaw Gateway via WebSocket, keeping all data private. It targets iOS, Android, and web platforms, with an Express backend server for API support and static serving.
+ClawBase is a React Native (Expo) mobile companion app for self-hosted OpenClaw AI gateways. It provides a secure, beautiful interface for managing AI agent interactions — including real-time chat, task/Kanban boards, memory browsing, and gateway connection management. The app connects directly to the user's own OpenClaw Gateway via WebSocket, keeping all data private. It targets iOS, Android, and web platforms, with an Express backend server for API support and static serving.
 
 The app follows a "lobster" dark theme with navy/black backgrounds and orange/red accents. It's designed to be built and deployed from Replit, with Expo cloud builds for native app store distribution.
 
@@ -16,7 +16,7 @@ Preferred communication style: Simple, everyday language.
 - **Framework**: React Native with Expo SDK 54, using Expo Router v6 for file-based routing
 - **Navigation**: Tab-based layout with 5 main tabs: Dashboard, Chat, Tasks, Memory, Settings. Uses `expo-router` with typed routes enabled
 - **State Management**: React Context (`AppContext`) provides global state for connections, conversations, tasks, and memory. React Query (`@tanstack/react-query`) handles server-state for API calls
-- **Local Storage**: AsyncStorage (`@react-native-async-storage/async-storage`) persists all local data (connections, conversations, messages, tasks, memory entries) with a key-prefixed storage pattern (`@clawcockpit:*`)
+- **Local Storage**: AsyncStorage (`@react-native-async-storage/async-storage`) persists all local data (connections, conversations, messages, tasks, memory entries) with a key-prefixed storage pattern (`@clawbase:*`)
 - **UI Libraries**: expo-linear-gradient for gradients, expo-blur for glass effects, expo-haptics for tactile feedback, react-native-reanimated for animations, react-native-gesture-handler for gestures, react-native-keyboard-controller for keyboard handling
 - **Fonts**: Inter font family (400, 500, 600, 700 weights) via `@expo-google-fonts/inter`
 - **Security**: expo-local-authentication for biometric/PIN lock, expo-secure-store for sensitive data

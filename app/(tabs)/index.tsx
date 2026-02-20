@@ -88,7 +88,7 @@ function HeroHeader() {
       <View style={styles.heroTopRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.greeting}>{greeting}</Text>
-          <Text style={styles.heroTitle}>ClawCockpit</Text>
+          <Text style={styles.heroTitle}>ClawBase</Text>
         </View>
         <View style={styles.heroRight}>
           <View style={[styles.heartbeatDot, connected ? styles.heartbeatActive : styles.heartbeatInactive]}>

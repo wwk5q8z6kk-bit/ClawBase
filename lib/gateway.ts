@@ -78,8 +78,8 @@ export interface GatewayEvent {
 
 type EventHandler = (event: GatewayEvent) => void;
 
-const DEVICE_TOKEN_KEY = '@clawcockpit:device_token';
-const DEVICE_ID_KEY = '@clawcockpit:device_id';
+const DEVICE_TOKEN_KEY = '@clawbase:device_token';
+const DEVICE_ID_KEY = '@clawbase:device_id';
 
 async function getOrCreateDeviceId(): Promise<string> {
   try {
@@ -304,7 +304,7 @@ export class OpenClawGateway {
         scopes: ['operator.chat', 'operator.sessions', 'operator.config'],
         device: {
           id: this.deviceId,
-          name: 'ClawCockpit Mobile',
+          name: 'ClawBase Mobile',
           type: 'mobile',
         },
         auth: {} as any,

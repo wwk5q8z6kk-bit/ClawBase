@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "ClawCockpit",
-    "slug": "clawcockpit",
+    "name": "ClawBase",
+    "slug": "clawbase",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "clawcockpit",
+    "scheme": "clawbase",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
@@ -15,10 +15,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.clawcockpit"
+      "bundleIdentifier": "com.clawbase"
     },
     "android": {
-      "package": "com.clawcockpit",
+      "package": "com.clawbase",
       "adaptiveIcon": {
         "backgroundColor": "#0A0E1A",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

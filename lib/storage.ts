@@ -13,16 +13,16 @@ import type {
 } from './types';
 
 const KEYS = {
-  CONNECTIONS: '@clawcockpit:connections',
-  ACTIVE_CONNECTION: '@clawcockpit:activeConnection',
-  CONVERSATIONS: '@clawcockpit:conversations',
-  MESSAGES: '@clawcockpit:messages',
-  TASKS: '@clawcockpit:tasks',
-  MEMORY: '@clawcockpit:memory',
-  CALENDAR: '@clawcockpit:calendar',
-  CRM_CONTACTS: '@clawcockpit:crm_contacts',
-  BIOMETRIC_ENABLED: '@clawcockpit:biometricEnabled',
-  HAS_ONBOARDED: '@clawcockpit:hasOnboarded',
+  CONNECTIONS: '@clawbase:connections',
+  ACTIVE_CONNECTION: '@clawbase:activeConnection',
+  CONVERSATIONS: '@clawbase:conversations',
+  MESSAGES: '@clawbase:messages',
+  TASKS: '@clawbase:tasks',
+  MEMORY: '@clawbase:memory',
+  CALENDAR: '@clawbase:calendar',
+  CRM_CONTACTS: '@clawbase:crm_contacts',
+  BIOMETRIC_ENABLED: '@clawbase:biometricEnabled',
+  HAS_ONBOARDED: '@clawbase:hasOnboarded',
 };
 
 async function getJSON<T>(key: string, fallback: T): Promise<T> {

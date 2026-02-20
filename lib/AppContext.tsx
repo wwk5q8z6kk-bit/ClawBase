@@ -132,7 +132,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isStreaming, setIsStreaming] = useState(false);
 
   const seedIfNeeded = useCallback(async () => {
-    const seeded = await AsyncStorage.getItem('@clawcockpit:seeded');
+    const seeded = await AsyncStorage.getItem('@clawbase:seeded');
     if (seeded) return;
 
     const seedTasks = generateSeedTasks();
@@ -184,7 +184,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    await AsyncStorage.setItem('@clawcockpit:seeded', 'true');
+    await AsyncStorage.setItem('@clawbase:seeded', 'true');
   }, []);
 
   const loadAll = useCallback(async () => {
