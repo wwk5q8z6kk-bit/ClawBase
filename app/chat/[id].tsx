@@ -163,7 +163,7 @@ function renderFormattedText(content: string, isUser: boolean): React.ReactNode[
   return parts;
 }
 
-function MessageBubble({
+const MessageBubble = React.memo(function MessageBubble({
   message,
   showAvatar,
   tightTop,
@@ -243,7 +243,17 @@ function MessageBubble({
       )}
     </View>
   );
-}
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.status === nextProps.message.status &&
+    prevProps.showAvatar === nextProps.showAvatar &&
+    prevProps.tightTop === nextProps.tightTop &&
+    prevProps.copiedId === nextProps.copiedId &&
+    prevProps.onLongPress === nextProps.onLongPress
+  );
+});
 
 function TypingIndicator() {
   const dot1 = useRef(new Animated.Value(0.3)).current;

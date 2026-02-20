@@ -210,7 +210,7 @@ function HeroHeader() {
   );
 }
 
-function KanbanProgressWidget() {
+const KanbanProgressWidget = React.memo(function KanbanProgressWidget() {
   const { tasks } = useApp();
   const todo = tasks.filter((t) => t.status === 'todo').length;
   const inProg = tasks.filter((t) => t.status === 'in_progress').length;
@@ -282,7 +282,7 @@ function KanbanProgressWidget() {
       </LinearGradient>
     </Pressable>
   );
-}
+});
 
 function formatEventTime(ts: number) {
   const d = new Date(ts);
@@ -292,7 +292,7 @@ function formatEventTime(ts: number) {
   return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${ampm}`;
 }
 
-function CalendarAgendaWidget() {
+const CalendarAgendaWidget = React.memo(function CalendarAgendaWidget() {
   const { calendarEvents } = useApp();
   const today = new Date();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
@@ -358,7 +358,7 @@ function CalendarAgendaWidget() {
       </View>
     </Pressable>
   );
-}
+});
 
 function CRMHighlightsWidget() {
   const { crmContacts } = useApp();
@@ -679,7 +679,7 @@ function CircularRing({ percent, size, color, trackColor }: { percent: number; s
   );
 }
 
-function SystemHealthWidget() {
+const SystemHealthWidget = React.memo(function SystemHealthWidget() {
   const { gatewayStatus, activeConnection } = useApp();
   const connected = gatewayStatus === 'connected';
 
@@ -740,7 +740,7 @@ function SystemHealthWidget() {
       )}
     </View>
   );
-}
+});
 
 const WORKSTREAMS = [
   { id: 'email', icon: 'mail', label: 'Email', color: C.amber, status: '3 unread', activity: [3, 5, 2, 7, 4, 6, 3] },
@@ -749,7 +749,7 @@ const WORKSTREAMS = [
   { id: 'social', icon: 'people', label: 'Social', color: C.secondary, status: '12 mentions', activity: [4, 2, 5, 3, 7, 4, 2] },
 ] as const;
 
-function WorkstreamCards() {
+const WorkstreamCards = React.memo(function WorkstreamCards() {
   return (
     <View>
       <View style={styles.sectionHeader}>
@@ -794,7 +794,7 @@ function WorkstreamCards() {
       </ScrollView>
     </View>
   );
-}
+});
 
 function AgentSkillsBar() {
   const { activeConnection } = useApp();
@@ -879,7 +879,7 @@ function formatTimeAgo(ts: number) {
   return `${Math.floor(hrs / 24)}d`;
 }
 
-function RecentActivityWidget() {
+const RecentActivityWidget = React.memo(function RecentActivityWidget() {
   const { conversations, tasks, memoryEntries } = useApp();
 
   const recentItems = useMemo(() => {
@@ -932,7 +932,7 @@ function RecentActivityWidget() {
       </View>
     </View>
   );
-}
+});
 
 const COMMAND_CHIPS = ['Add a task', 'Schedule event', 'Inbox summary', "Today's brief", 'Check GitHub'];
 

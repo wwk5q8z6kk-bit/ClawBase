@@ -192,7 +192,7 @@ function formatFullTimestamp(ts: number): string {
   });
 }
 
-function TaskCard({
+const TaskCard = React.memo(function TaskCard({
   task,
   onPress,
   onLongPress,
@@ -285,7 +285,7 @@ function TaskCard({
       </View>
     </Pressable>
   );
-}
+});
 
 function StatsBar({ tasks }: { tasks: Task[] }) {
   const todo = tasks.filter((t) => t.status === 'todo').length;
@@ -653,7 +653,7 @@ function DateHeader({ label }: { label: string }) {
   );
 }
 
-function MemoryItem({
+const MemoryItem = React.memo(function MemoryItem({
   item,
   onPin,
   onReview,
@@ -766,7 +766,7 @@ function MemoryItem({
       </Pressable>
     </View>
   );
-}
+});
 
 function MemoryDetailModal({
   item,

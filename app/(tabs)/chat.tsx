@@ -77,7 +77,7 @@ function PulsingDot({ color }: { color: string }) {
   );
 }
 
-function ConversationItem({
+const ConversationItem = React.memo(function ConversationItem({
   item,
   onPress,
   onLongPress,
@@ -185,7 +185,19 @@ function ConversationItem({
   }
 
   return cardInner;
-}
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.item.id === nextProps.item.id &&
+    prevProps.item.title === nextProps.item.title &&
+    prevProps.item.lastMessage === nextProps.item.lastMessage &&
+    prevProps.item.lastMessageTime === nextProps.item.lastMessageTime &&
+    prevProps.item.pinned === nextProps.item.pinned &&
+    prevProps.item.messageCount === nextProps.item.messageCount &&
+    prevProps.isFirstUnpinned === nextProps.isFirstUnpinned &&
+    prevProps.onPress === nextProps.onPress &&
+    prevProps.onLongPress === nextProps.onLongPress
+  );
+});
 
 function SwipeableConversationItem({
   item,
