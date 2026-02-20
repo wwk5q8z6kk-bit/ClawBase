@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
+import type { TaskStatus, Task } from '@/lib/types';
 
 const C = Colors.dark;
 
@@ -513,16 +514,142 @@ function RecentActivityWidget() {
   );
 }
 
-const COMMAND_CHIPS = ['Inbox summary', "Today's brief", 'Check GitHub', 'System status', 'Upcoming meetings'];
+const COMMAND_CHIPS = ['Add a task', 'Schedule event', 'Inbox summary', "Today's brief", 'Check GitHub'];
+
+const PREFILL_CHIPS: Record<string, string> = {
+  'Add a task': 'add task ',
+  'Schedule event': 'schedule ',
+};
+
+function parsePriority(text: string): Task['priority'] {
+  const lower = text.toLowerCase();
+  if (lower.includes('urgent')) return 'urgent';
+  if (lower.includes('high priority')) return 'high';
+  if (lower.includes('low priority')) return 'low';
+  return 'medium';
+}
+
+function getNextDayOfWeek(dayName: string): Date {
+  const days: Record<string, number> = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+  const target = days[dayName.toLowerCase()];
+  if (target === undefined) return new Date();
+  const now = new Date();
+  const current = now.getDay();
+  let diff = target - current;
+  if (diff <= 0) diff += 7;
+  const result = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff, 9, 0, 0, 0);
+  return result;
+}
+
+function parseDueDate(text: string): number | undefined {
+  const lower = text.toLowerCase();
+  const now = new Date();
+  if (lower.includes('by tomorrow') || lower.includes('tomorrow')) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0, 0, 0);
+    return d.getTime();
+  }
+  if (lower.includes('by today') || lower.includes('today')) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0, 0);
+    return d.getTime();
+  }
+  const dayMatch = lower.match(/by\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/);
+  if (dayMatch) return getNextDayOfWeek(dayMatch[1]).getTime();
+  return undefined;
+}
+
+function parseEventDate(text: string): Date {
+  const lower = text.toLowerCase();
+  const now = new Date();
+  if (lower.includes('tomorrow')) {
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  }
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function parseTime(text: string): { hour: number; minute: number } | null {
+  const match = text.match(/at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (!match) return null;
+  let hour = parseInt(match[1], 10);
+  const minute = match[2] ? parseInt(match[2], 10) : 0;
+  const period = match[3]?.toLowerCase();
+  if (period === 'pm' && hour < 12) hour += 12;
+  if (period === 'am' && hour === 12) hour = 0;
+  return { hour, minute };
+}
+
+function stripKeywords(text: string, keywords: string[]): string {
+  let result = text;
+  for (const kw of keywords) {
+    result = result.replace(new RegExp(kw, 'gi'), '');
+  }
+  return result.replace(/\s+/g, ' ').trim();
+}
 
 function CommandBar() {
   const [commandText, setCommandText] = useState('');
+  const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
+  const { createTask, createCalendarEvent } = useApp();
 
-  const handleSend = (text: string) => {
+  useEffect(() => {
+    if (feedbackMsg) {
+      const timer = setTimeout(() => setFeedbackMsg(null), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [feedbackMsg]);
+
+  const handleSend = async (text: string) => {
     if (!text.trim()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setCommandText('');
+
+    const lower = text.toLowerCase().trim();
+
+    if (/^(add task|create task|todo|new task)\b/i.test(lower)) {
+      const keyword = lower.match(/^(add task|create task|todo|new task)/i)?.[0] || '';
+      let title = text.trim().slice(keyword.length).trim();
+      const priority = parsePriority(title);
+      title = stripKeywords(title, ['urgent', 'high priority', 'low priority', 'by tomorrow', 'by today', 'by monday', 'by tuesday', 'by wednesday', 'by thursday', 'by friday', 'by saturday', 'by sunday']);
+      if (!title) title = 'New task';
+      await createTask(title, 'todo' as TaskStatus, priority, undefined);
+      setFeedbackMsg(`Task "${title}" created`);
+      return;
+    }
+
+    if (/^(add event|schedule|new event|meeting)\b/i.test(lower)) {
+      const keyword = lower.match(/^(add event|schedule|new event|meeting)/i)?.[0] || '';
+      let title = text.trim().slice(keyword.length).trim();
+      const eventDate = parseEventDate(title);
+      const timeParsed = parseTime(title);
+      title = stripKeywords(title, ['tomorrow', 'today']);
+      const timePattern = /at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?/i;
+      title = title.replace(timePattern, '').replace(/\s+/g, ' ').trim();
+      if (!title) title = 'New event';
+
+      const hour = timeParsed?.hour ?? 9;
+      const minute = timeParsed?.minute ?? 0;
+      const startTime = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate(), hour, minute, 0, 0).getTime();
+      const endTime = startTime + 3600000;
+
+      await createCalendarEvent({ title, startTime, endTime, color: C.coral, allDay: false });
+      setFeedbackMsg(`Event "${title}" scheduled`);
+      return;
+    }
+
+    if (lower.includes('tasks')) { router.push('/(tabs)/tasks'); return; }
+    if (lower.includes('calendar')) { router.push('/calendar' as any); return; }
+    if (lower.includes('contacts')) { router.push('/crm' as any); return; }
+    if (lower.includes('memory')) { router.push('/(tabs)/memory'); return; }
+    if (lower.includes('settings')) { router.push('/(tabs)/settings'); return; }
+
     router.push('/(tabs)/chat');
+  };
+
+  const handleChipPress = (chip: string) => {
+    if (PREFILL_CHIPS[chip]) {
+      setCommandText(PREFILL_CHIPS[chip]);
+    } else {
+      handleSend(chip);
+    }
   };
 
   return (
@@ -551,12 +678,18 @@ function CommandBar() {
           <Pressable
             key={chip}
             style={({ pressed }) => [styles.commandChip, pressed && { opacity: 0.7 }]}
-            onPress={() => handleSend(chip)}
+            onPress={() => handleChipPress(chip)}
           >
             <Text style={styles.commandChipText}>{chip}</Text>
           </Pressable>
         ))}
       </ScrollView>
+      {feedbackMsg && (
+        <View style={styles.feedbackToast}>
+          <Ionicons name="checkmark-circle" size={16} color={C.success} />
+          <Text style={styles.feedbackToastText}>{feedbackMsg}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -733,4 +866,6 @@ const styles = StyleSheet.create({
   commandChipsScroll: { gap: 0 },
   commandChip: { backgroundColor: C.card, borderWidth: 1, borderColor: C.borderLight, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, marginRight: 8 },
   commandChipText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary },
+  feedbackToast: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.successMuted, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8, alignSelf: 'flex-start' },
+  feedbackToastText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.success },
 });

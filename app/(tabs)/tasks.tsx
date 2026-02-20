@@ -130,14 +130,18 @@ function TaskCard({
   task,
   onPress,
   onLongPress,
+  onStatusChange,
 }: {
   task: Task;
   onPress: () => void;
   onLongPress: () => void;
+  onStatusChange: (id: string, status: TaskStatus) => void;
 }) {
   const status = STATUS_CONFIG[task.status];
   const priority = PRIORITY_CONFIG[task.priority];
   const ago = formatAge(task.updatedAt);
+
+  const statusCycle: TaskStatus[] = ['todo', 'in_progress', 'done', 'deferred', 'archived'];
 
   return (
     <Pressable
@@ -146,9 +150,17 @@ function TaskCard({
       onLongPress={onLongPress}
     >
       <View style={styles.taskCardTop}>
-        <View style={[styles.statusIconBg, { backgroundColor: status.color + '18' }]}>
+        <Pressable
+          onPress={() => {
+            const currentIdx = statusCycle.indexOf(task.status);
+            const nextStatus = statusCycle[(currentIdx + 1) % statusCycle.length];
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onStatusChange(task.id, nextStatus);
+          }}
+          style={[styles.statusIconBg, { backgroundColor: status.color + '18' }]}
+        >
           <Ionicons name={status.icon as any} size={22} color={status.color} />
-        </View>
+        </Pressable>
         <View style={styles.taskCardContent}>
           <Text
             style={[
@@ -310,6 +322,9 @@ function TaskDetailModal({
   const [editDesc, setEditDesc] = useState('');
   const [editStatus, setEditStatus] = useState<TaskStatus>('todo');
   const [editPriority, setEditPriority] = useState<Task['priority']>('medium');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editTags, setEditTags] = useState('');
+  const [editAssignee, setEditAssignee] = useState('');
 
   React.useEffect(() => {
     if (task) {
@@ -317,6 +332,14 @@ function TaskDetailModal({
       setEditDesc(task.description || '');
       setEditStatus(task.status);
       setEditPriority(task.priority);
+      if (task.dueDate) {
+        const d = new Date(task.dueDate);
+        setEditDueDate(`${MONTHS[d.getMonth()]} ${d.getDate()}`);
+      } else {
+        setEditDueDate('');
+      }
+      setEditTags(task.tags?.join(', ') || '');
+      setEditAssignee(task.assignee || '');
     }
   }, [task?.id]);
 
@@ -324,11 +347,18 @@ function TaskDetailModal({
 
   const handleSave = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const parsedDueDate = parseDueDateInput(editDueDate);
+    const parsedTags = editTags.trim()
+      ? editTags.split(',').map(t => t.trim()).filter(Boolean)
+      : undefined;
     onSave(task.id, {
       title: editTitle.trim() || task.title,
       description: editDesc.trim() || undefined,
       status: editStatus,
       priority: editPriority,
+      dueDate: parsedDueDate,
+      tags: parsedTags,
+      assignee: editAssignee.trim() || undefined,
     });
     onClose();
   };
@@ -402,40 +432,32 @@ function TaskDetailModal({
               textAlignVertical="top"
             />
 
-            {task.dueDate && (
-              <View style={styles.detailRow}>
-                <Ionicons name="calendar-outline" size={16} color={C.textSecondary} />
-                <Text style={styles.detailRowText}>{formatDueDate(task.dueDate).text}</Text>
-                <Pressable onPress={() => {
-                  onSave(task.id, { dueDate: undefined });
-                }}>
-                  <Ionicons name="close-circle" size={18} color={C.textTertiary} />
-                </Pressable>
-              </View>
-            )}
+            <Text style={styles.priorityLabel}>Due Date</Text>
+            <TextInput
+              style={styles.input}
+              value={editDueDate}
+              onChangeText={setEditDueDate}
+              placeholder="e.g. Mar 15, 2/20, tomorrow"
+              placeholderTextColor={C.textTertiary}
+            />
 
-            {task.tags && task.tags.length > 0 && (
-              <View style={styles.detailRow}>
-                <Ionicons name="pricetags-outline" size={16} color={C.textSecondary} />
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, flex: 1 }}>
-                  {task.tags.map((tag, i) => (
-                    <View key={i} style={styles.tagPill}>
-                      <Text style={styles.tagText}>{tag}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
+            <Text style={styles.priorityLabel}>Tags</Text>
+            <TextInput
+              style={styles.input}
+              value={editTags}
+              onChangeText={setEditTags}
+              placeholder="Comma-separated: design, frontend"
+              placeholderTextColor={C.textTertiary}
+            />
 
-            {task.assignee && (
-              <View style={styles.detailRow}>
-                <Ionicons name="person-outline" size={16} color={C.textSecondary} />
-                <View style={styles.assigneeAvatar}>
-                  <Text style={styles.assigneeInitials}>{getInitials(task.assignee)}</Text>
-                </View>
-                <Text style={styles.detailRowText}>{task.assignee}</Text>
-              </View>
-            )}
+            <Text style={styles.priorityLabel}>Assignee</Text>
+            <TextInput
+              style={styles.input}
+              value={editAssignee}
+              onChangeText={setEditAssignee}
+              placeholder="Assignee name"
+              placeholderTextColor={C.textTertiary}
+            />
 
             {task.source && (
               <View style={styles.detailRow}>
@@ -794,6 +816,7 @@ export default function TasksScreen() {
                 task={item}
                 onPress={() => handleOpenDetail(item)}
                 onLongPress={() => handleMoveTask(item)}
+                onStatusChange={handleStatusChange}
               />
             )}
             contentContainerStyle={[
