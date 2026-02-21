@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
+import { GlassCard } from '@/components/GlassCard';
 import type { MemoryEntry } from '@/lib/types';
 
 const C = Colors.dark;
@@ -266,12 +267,12 @@ function MemoryDetailModal({
                   <Ionicons
                     name={
                       item.reviewStatus === 'reviewed' ? 'checkmark-circle' :
-                      item.reviewStatus === 'deferred' ? 'time' : 'eye-off'
+                        item.reviewStatus === 'deferred' ? 'time' : 'eye-off'
                     }
                     size={12}
                     color={
                       item.reviewStatus === 'reviewed' ? C.success :
-                      item.reviewStatus === 'deferred' ? '#8B7FFF' : C.coral
+                        item.reviewStatus === 'deferred' ? '#8B7FFF' : C.coral
                     }
                   />
                   <Text style={[
@@ -426,7 +427,7 @@ export default function MemoryScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await fetchGatewayMemory();
-    } catch {}
+    } catch { }
     setSyncingMemory(false);
   }, [fetchGatewayMemory]);
 
@@ -617,18 +618,13 @@ export default function MemoryScreen() {
             Haptics.selectionAsync();
           }}
         >
-          <LinearGradient
-            colors={['#1A1530', '#151028']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.deferredBannerGrad}
-          >
+          <GlassCard variant="cardElevated" style={styles.deferredBannerGrad}>
             <Ionicons name="time" size={18} color="#8B7FFF" />
             <Text style={styles.deferredBannerText}>
               {deferredCount} deferred note{deferredCount !== 1 ? 's' : ''} to review
             </Text>
             <Ionicons name="chevron-forward" size={16} color="#8B7FFF" />
-          </LinearGradient>
+          </GlassCard>
         </Pressable>
       )}
 
@@ -650,10 +646,8 @@ export default function MemoryScreen() {
 
       {memoryEntries.length > 0 && (
         <View style={[styles.digestCard, C.shadow.elevated as any]}>
-          <LinearGradient
-            colors={C.gradient.cardElevated}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+          <GlassCard
+            variant="cardElevated"
             style={styles.digestGradient}
           >
             <View style={styles.digestHeader}>
@@ -678,7 +672,7 @@ export default function MemoryScreen() {
                 <Text style={styles.digestStatLabel}>Top Tag</Text>
               </View>
             </View>
-          </LinearGradient>
+          </GlassCard>
         </View>
       )}
 
@@ -860,8 +854,8 @@ export default function MemoryScreen() {
               {search
                 ? 'Try a different search term'
                 : selectedTag
-                ? `No memories tagged "${selectedTag}"`
-                : 'Your conversations and tasks will appear here'}
+                  ? `No memories tagged "${selectedTag}"`
+                  : 'Your conversations and tasks will appear here'}
             </Text>
           </View>
         }

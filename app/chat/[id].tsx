@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
+import { PulsingDot } from '@/components/PulsingDot';
 import type { ChatMessage } from '@/lib/types';
 import VoiceModeOverlay from '@/components/VoiceModeOverlay';
 
@@ -566,7 +567,11 @@ export default function ChatDetailScreen() {
             {conversation?.title || 'Chat'}
           </Text>
           <View style={styles.headerStatus}>
-            <View style={[styles.headerDot, { backgroundColor: gatewayStatus === 'connected' ? C.success : gatewayStatus === 'connecting' || gatewayStatus === 'authenticating' ? C.amber : C.textTertiary }]} />
+            {gatewayStatus === 'connected' ? (
+              <PulsingDot color={C.success} size={6} />
+            ) : (
+              <View style={[styles.headerDot, { backgroundColor: gatewayStatus === 'connecting' || gatewayStatus === 'authenticating' ? C.amber : C.textTertiary }]} />
+            )}
             <Text style={[styles.headerStatusText, { color: gatewayStatus === 'connected' ? C.success : gatewayStatus === 'connecting' || gatewayStatus === 'authenticating' ? C.amber : C.textTertiary }]}>
               {gatewayStatus === 'connected' ? 'Connected' : gatewayStatus === 'connecting' ? 'Connecting...' : gatewayStatus === 'authenticating' ? 'Authenticating...' : 'Offline'}
             </Text>
