@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
+import { PulsingDot } from '@/components/PulsingDot';
 import type { TaskStatus, Task } from '@/lib/types';
 
 const C = Colors.dark;
@@ -78,32 +79,7 @@ function AnimatedPercentage({ target, delay = 0 }: { target: number; delay?: num
   return <Text style={styles.kanbanPctText}>{displayValue}%</Text>;
 }
 
-function PulsingDot({ color, size = 8 }: { color: string; size?: number }) {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 0.3, duration: 1000, useNativeDriver: Platform.OS !== 'web' }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: Platform.OS !== 'web' }),
-      ]),
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, [pulseAnim]);
-
-  return (
-    <Animated.View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: color,
-        opacity: pulseAnim,
-      }}
-    />
-  );
-}
 
 function SkeletonLoader({ height = 120 }: { height?: number }) {
   const shimmerAnim = useRef(new Animated.Value(0.3)).current;
@@ -942,16 +918,50 @@ function AgentSkillsBar() {
   );
 }
 
-const QUICK_ACTIONS = [
+interface QuickAction {
+  id: string;
+  icon: string;
+  label: string;
+  color: string;
+  route?: string;
+  gatewayCommand?: string;
+}
+
+const QUICK_ACTIONS: QuickAction[] = [
   { id: '1', icon: 'calendar-outline', label: 'Calendar', color: C.amber, route: '/(tabs)/calendar' },
   { id: '2', icon: 'people-outline', label: 'Contacts', color: C.secondary, route: '/crm' },
-  { id: '3', icon: 'mail-outline', label: 'Summarize\nInbox', color: C.coral, route: '/(tabs)/chat' },
-  { id: '4', icon: 'git-branch-outline', label: 'Check\nGitHub', color: '#8B7FFF', route: '/(tabs)/chat' },
-  { id: '5', icon: 'analytics-outline', label: 'System\nStatus', color: C.accent, route: '/(tabs)/chat' },
-  { id: '6', icon: 'bulb-outline', label: 'Daily\nBrief', color: '#FF9F5A', route: '/(tabs)/chat' },
-] as const;
+  { id: '3', icon: 'mail-outline', label: 'Summarize\nInbox', color: C.coral, gatewayCommand: 'inbox-summary' },
+  { id: '4', icon: 'git-branch-outline', label: 'Check\nGitHub', color: '#8B7FFF', gatewayCommand: 'github-status' },
+  { id: '5', icon: 'analytics-outline', label: 'System\nStatus', color: C.accent, gatewayCommand: 'health-check' },
+  { id: '6', icon: 'bulb-outline', label: 'Daily\nBrief', color: '#FF9F5A', gatewayCommand: 'daily-brief' },
+];
 
 function QuickActionsRow() {
+  const { gateway, gatewayStatus } = useApp();
+  const connected = gatewayStatus === 'connected';
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+
+  const handleAction = useCallback(async (action: QuickAction) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    if (action.route && !action.gatewayCommand) {
+      router.push(action.route as any);
+      return;
+    }
+
+    if (action.gatewayCommand && connected) {
+      setLoadingId(action.id);
+      try {
+        await gateway.invokeCommand(action.gatewayCommand);
+      } catch { }
+      setLoadingId(null);
+      return;
+    }
+
+    // Fallback: navigate to chat
+    router.push('/(tabs)/chat');
+  }, [gateway, connected]);
+
   return (
     <View>
       <View style={styles.sectionHeader}>
@@ -965,23 +975,24 @@ function QuickActionsRow() {
         horizontal
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.push(item.route as any);
-            }}
-          >
-            {({ pressed }) => (
-              <View style={[styles.quickTile, pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] }]}>
-                <View style={[styles.quickTileIcon, { backgroundColor: pressed ? item.color + '40' : item.color + '15' }]}>
-                  <Ionicons name={item.icon as any} size={22} color={item.color} />
+        renderItem={({ item }) => {
+          const isLoading = loadingId === item.id;
+          return (
+            <Pressable
+              onPress={() => handleAction(item)}
+              disabled={isLoading}
+            >
+              {({ pressed }) => (
+                <View style={[styles.quickTile, pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] }]}>
+                  <View style={[styles.quickTileIcon, { backgroundColor: pressed ? item.color + '40' : item.color + '15' }, isLoading && { opacity: 0.5 }]}>
+                    <Ionicons name={item.icon as any} size={22} color={item.color} />
+                  </View>
+                  <Text style={styles.quickTileLabel} numberOfLines={2}>{item.label}</Text>
                 </View>
-                <Text style={styles.quickTileLabel} numberOfLines={2}>{item.label}</Text>
-              </View>
-            )}
-          </Pressable>
-        )}
+              )}
+            </Pressable>
+          );
+        }}
         contentContainerStyle={styles.quickActionsScroll}
         scrollEnabled={true}
       />
@@ -1100,8 +1111,10 @@ function stripKeywords(text: string, keywords: string[]): string {
 function CommandBar() {
   const [commandText, setCommandText] = useState('');
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
-  const { createTask, createCalendarEvent } = useApp();
+  const [isLoading, setIsLoading] = useState(false);
+  const { createTask, createCalendarEvent, gateway, gatewayStatus } = useApp();
   const borderAnim = useRef(new Animated.Value(0)).current;
+  const connected = gatewayStatus === 'connected';
 
   const onFocusInput = () => {
     Animated.timing(borderAnim, { toValue: 1, duration: 250, useNativeDriver: false }).start();
@@ -1118,18 +1131,31 @@ function CommandBar() {
 
   useEffect(() => {
     if (feedbackMsg) {
-      const timer = setTimeout(() => setFeedbackMsg(null), 2500);
+      const timer = setTimeout(() => setFeedbackMsg(null), 3500);
       return () => clearTimeout(timer);
     }
   }, [feedbackMsg]);
 
+  const GATEWAY_COMMANDS: Record<string, { command: string; label: string }> = {
+    'inbox summary': { command: 'inbox-summary', label: 'Inbox summary' },
+    'summarize inbox': { command: 'inbox-summary', label: 'Inbox summary' },
+    'check github': { command: 'github-status', label: 'GitHub status' },
+    'github status': { command: 'github-status', label: 'GitHub status' },
+    "today's brief": { command: 'daily-brief', label: 'Daily brief' },
+    'daily brief': { command: 'daily-brief', label: 'Daily brief' },
+    'system status': { command: 'health-check', label: 'Health check' },
+    'health check': { command: 'health-check', label: 'Health check' },
+    'sync memory': { command: 'sync-memory', label: 'Memory sync' },
+  };
+
   const handleSend = async (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || isLoading) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setCommandText('');
 
     const lower = text.toLowerCase().trim();
 
+    // Local: create task
     if (/^(add task|create task|todo|new task)\b/i.test(lower)) {
       const keyword = lower.match(/^(add task|create task|todo|new task)/i)?.[0] || '';
       let title = text.trim().slice(keyword.length).trim();
@@ -1137,10 +1163,11 @@ function CommandBar() {
       title = stripKeywords(title, ['urgent', 'high priority', 'low priority', 'by tomorrow', 'by today', 'by monday', 'by tuesday', 'by wednesday', 'by thursday', 'by friday', 'by saturday', 'by sunday']);
       if (!title) title = 'New task';
       await createTask(title, 'todo' as TaskStatus, priority, undefined);
-      setFeedbackMsg(`Task "${title}" created`);
+      setFeedbackMsg(`✓ Task "${title}" created`);
       return;
     }
 
+    // Local: create event
     if (/^(add event|schedule|new event|meeting)\b/i.test(lower)) {
       const keyword = lower.match(/^(add event|schedule|new event|meeting)/i)?.[0] || '';
       let title = text.trim().slice(keyword.length).trim();
@@ -1157,16 +1184,37 @@ function CommandBar() {
       const endTime = startTime + 3600000;
 
       await createCalendarEvent({ title, startTime, endTime, color: C.coral, allDay: false });
-      setFeedbackMsg(`Event "${title}" scheduled`);
+      setFeedbackMsg(`✓ Event "${title}" scheduled`);
       return;
     }
 
+    // Gateway command: match known patterns
+    const gwMatch = Object.entries(GATEWAY_COMMANDS).find(([pattern]) => lower.includes(pattern));
+    if (gwMatch && connected) {
+      const [, { command, label }] = gwMatch;
+      setIsLoading(true);
+      setFeedbackMsg(`⏳ Running ${label}...`);
+      try {
+        const result = await gateway.invokeCommand(command);
+        const summary = typeof result === 'string' ? result :
+          result?.message || result?.summary || result?.output || `${label} completed`;
+        setFeedbackMsg(`✓ ${typeof summary === 'string' ? summary.slice(0, 100) : label + ' done'}`);
+      } catch {
+        setFeedbackMsg(`✗ ${label} failed — check gateway connection`);
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // Navigation shortcuts
     if (lower.includes('tasks') || lower.includes('vault')) { router.push('/(tabs)/vault'); return; }
     if (lower.includes('calendar')) { router.push('/(tabs)/calendar'); return; }
     if (lower.includes('contacts')) { router.push('/crm' as any); return; }
     if (lower.includes('memory') || lower.includes('knowledge')) { router.push('/(tabs)/vault'); return; }
     if (lower.includes('settings') || lower.includes('automations')) { router.push('/(tabs)/settings'); return; }
 
+    // Fallback: open chat with the message as the prompt
     router.push('/(tabs)/chat');
   };
 
@@ -1184,7 +1232,7 @@ function CommandBar() {
         <Ionicons name="sparkles" size={18} color={C.coral} />
         <TextInput
           style={styles.commandBarTextInput}
-          placeholder="Ask your agent anything..."
+          placeholder={connected ? 'Ask your agent anything...' : 'Create tasks, events, or navigate...'}
           placeholderTextColor={C.textTertiary}
           value={commandText}
           onChangeText={setCommandText}
@@ -1192,6 +1240,7 @@ function CommandBar() {
           onFocus={onFocusInput}
           onBlur={onBlurInput}
           returnKeyType="send"
+          editable={!isLoading}
         />
         {commandText.length > 0 && (
           <Pressable onPress={() => handleSend(commandText)}>
@@ -1213,9 +1262,19 @@ function CommandBar() {
         ))}
       </ScrollView>
       {feedbackMsg && (
-        <View style={styles.feedbackToast}>
-          <Ionicons name="checkmark-circle" size={16} color={C.success} />
-          <Text style={styles.feedbackToastText}>{feedbackMsg}</Text>
+        <View style={[styles.feedbackToast, isLoading && { backgroundColor: C.card }]}>
+          {isLoading ? (
+            <Ionicons name="hourglass" size={16} color={C.amber} />
+          ) : feedbackMsg.startsWith('✗') ? (
+            <Ionicons name="close-circle" size={16} color={C.error} />
+          ) : (
+            <Ionicons name="checkmark-circle" size={16} color={C.success} />
+          )}
+          <Text style={[
+            styles.feedbackToastText,
+            isLoading && { color: C.amber },
+            feedbackMsg.startsWith('✗') && { color: C.error },
+          ]} numberOfLines={2}>{feedbackMsg}</Text>
         </View>
       )}
     </View>

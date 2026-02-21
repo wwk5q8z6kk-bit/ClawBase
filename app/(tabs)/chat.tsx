@@ -1067,12 +1067,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 10,
   },
-  pulsingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 2,
-  },
+
   pinnedBg: {
     borderRadius: 8,
   },

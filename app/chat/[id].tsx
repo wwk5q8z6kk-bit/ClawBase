@@ -21,6 +21,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { ChatMessage } from '@/lib/types';
+import VoiceModeOverlay from '@/components/VoiceModeOverlay';
 
 const C = Colors.dark;
 
@@ -413,6 +414,7 @@ export default function ChatDetailScreen() {
   const [infoVisible, setInfoVisible] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [actionMenuMsg, setActionMenuMsg] = useState<ChatMessage | null>(null);
+  const [voiceModeVisible, setVoiceModeVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
   const prevMessageCountRef = useRef(0);
@@ -678,7 +680,10 @@ export default function ChatDetailScreen() {
             />
             <Pressable
               style={styles.voiceBtn}
-              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setVoiceModeVisible(true);
+              }}
             >
               <Ionicons name="mic-outline" size={22} color={C.textSecondary} />
             </Pressable>
@@ -789,6 +794,17 @@ export default function ChatDetailScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <VoiceModeOverlay
+        visible={voiceModeVisible}
+        onClose={() => setVoiceModeVisible(false)}
+        onSend={async (text) => {
+          await handleSend(text);
+          const updated = await getMessages(id!);
+          const lastMsg = updated[updated.length - 1];
+          return lastMsg?.role === 'assistant' ? lastMsg.content : undefined;
+        }}
+      />
     </View>
   );
 }

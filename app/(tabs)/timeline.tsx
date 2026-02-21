@@ -10,10 +10,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
+import { GlassCard } from '@/components/GlassCard';
+import { EmptyState } from '@/components/EmptyState';
 
 const C = Colors.dark;
 
@@ -82,10 +83,8 @@ function TimelineItem({
           onToggle();
         }}
       >
-        <LinearGradient
-          colors={C.gradient.card}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+        <GlassCard
+          variant="card"
           style={[styles.eventCardInner, { borderLeftWidth: 3, borderLeftColor: config.color + '60' }]}
         >
           <View style={styles.eventHeader}>
@@ -118,7 +117,7 @@ function TimelineItem({
               <Text style={styles.rawText}>{item.raw}</Text>
             </View>
           )}
-        </LinearGradient>
+        </GlassCard>
       </Pressable>
     </View>
   );
@@ -137,17 +136,7 @@ function getSourceIcon(source: string): any {
   return map[source] || 'ellipse';
 }
 
-function EmptyState() {
-  return (
-    <View style={styles.emptyState}>
-      <View style={styles.emptyIconWrap}>
-        <Ionicons name="pulse-outline" size={48} color={C.textTertiary} />
-      </View>
-      <Text style={styles.emptyTitle}>No Activity Yet</Text>
-      <Text style={styles.emptySubtitle}>Your agent&apos;s activity will appear here</Text>
-    </View>
-  );
-}
+
 
 export default function TimelineScreen() {
   const insets = useSafeAreaInsets();
@@ -177,8 +166,8 @@ export default function TimelineScreen() {
     for (const t of tasks) {
       const type: EventType =
         t.status === 'done' ? 'action' :
-        t.priority === 'urgent' ? 'alert' :
-        t.status === 'in_progress' ? 'job' : 'info';
+          t.priority === 'urgent' ? 'alert' :
+            t.status === 'in_progress' ? 'job' : 'info';
       events.push({
         id: `task-${t.id}`,
         type,
@@ -218,7 +207,7 @@ export default function TimelineScreen() {
         }));
         setGatewayEvents(mapped);
       }
-    } catch {}
+    } catch { }
   }, [gateway, gatewayStatus]);
 
   const allEvents = useMemo(() => {
@@ -317,7 +306,14 @@ export default function TimelineScreen() {
           styles.listContent,
           allEvents.length === 0 && styles.listContentEmpty,
         ]}
-        ListEmptyComponent={<EmptyState />}
+        ListEmptyComponent={
+          <EmptyState
+            icon="pulse-outline"
+            iconColor={C.textTertiary}
+            title="No Activity Yet"
+            subtitle="Your agent's activity will appear here"
+          />
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

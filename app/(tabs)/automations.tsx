@@ -644,6 +644,65 @@ export default function AutomationsScreen() {
     fetchData();
   }, [fetchData]);
 
+  // Real-time event subscriptions — approvals appear instantly
+  useEffect(() => {
+    const gw = getGateway();
+
+    // New approval requested
+    const unsubTool = gw.on('tool_call', (event) => {
+      const data = event.data;
+      if (data?.type === 'exec.approval.requested' || data?.event === 'exec.approval.requested') {
+        const payload = data.data || data.payload || data;
+        const newApproval: PendingApproval = {
+          id: payload.id || 'approval-' + Date.now(),
+          action: payload.action || payload.title || 'Unknown action',
+          description: payload.description || '',
+          riskTier: payload.riskTier || payload.tier || 'P2',
+          expiresAt: payload.expiresAt || Date.now() + 300000,
+          source: payload.source,
+        };
+        setApprovals(prev => {
+          if (prev.some(a => a.id === newApproval.id)) return prev;
+          return [newApproval, ...prev];
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }
+
+      // Automation status update
+      if (data?.type === 'automation.status' || data?.event === 'automation.status') {
+        const payload = data.data || data.payload || data;
+        if (payload.id) {
+          setAutomations(prev =>
+            prev.map(a => a.id === payload.id ? {
+              ...a,
+              status: payload.status || a.status,
+              lastRun: payload.lastRun || a.lastRun,
+              lastOutput: payload.output || a.lastOutput,
+            } : a),
+          );
+        }
+      }
+    });
+
+    // Notification events (from push notification system)
+    const unsubNotif = gw.on('notification', (event) => {
+      const data = event.data;
+      if (data?.approvalId) {
+        // Re-fetch approvals to get the latest state
+        fetchData();
+      }
+    });
+
+    return () => { unsubTool(); unsubNotif(); };
+  }, [fetchData]);
+
+  // Auto-refresh every 30s when connected
+  useEffect(() => {
+    if (gatewayStatus !== 'connected') return;
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, [gatewayStatus, fetchData]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchData();

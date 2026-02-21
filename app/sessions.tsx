@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
+import { PulsingDot } from '@/components/PulsingDot';
 import type { GatewaySession, GatewaySessionMessage } from '@/lib/gateway';
 
 const C = Colors.dark;
@@ -77,7 +78,7 @@ function SessionItem({
           </View>
           {session.isActive && (
             <View style={styles.activeBadge}>
-              <View style={styles.activeDot} />
+              <PulsingDot color={C.success} size={6} />
               <Text style={styles.activeText}>Active</Text>
             </View>
           )}
@@ -194,13 +195,13 @@ export default function SessionsScreen() {
 
   useEffect(() => {
     if (gatewayStatus === 'connected') {
-      fetchGatewaySessions().catch(() => {});
+      fetchGatewaySessions().catch(() => { });
     }
   }, [gatewayStatus, fetchGatewaySessions]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchGatewaySessions().catch(() => {});
+    await fetchGatewaySessions().catch(() => { });
     setRefreshing(false);
   }, [fetchGatewaySessions]);
 
