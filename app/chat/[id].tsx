@@ -23,6 +23,7 @@ import { useApp } from '@/lib/AppContext';
 import { PulsingDot } from '@/components/PulsingDot';
 import type { ChatMessage } from '@/lib/types';
 import VoiceModeOverlay from '@/components/VoiceModeOverlay';
+import { enqueue } from '@/lib/offlineQueue';
 
 const C = Colors.dark;
 
@@ -601,7 +602,12 @@ export default function ChatDetailScreen() {
       const updated = await getMessages(id);
       setMessages(updated);
     } catch {
-      console.error('Failed to send');
+      // Queue the message for later delivery
+      await enqueue(id, content).catch(() => { });
+      setMessages((prev) =>
+        prev.map((m) => m.id === userMsg.id ? { ...m, status: 'queued' as any } : m),
+      );
+      console.warn('[Chat] Message queued for offline delivery');
     } finally {
       setIsSending(false);
       inputRef.current?.focus();

@@ -10,6 +10,9 @@ import {
   Animated,
   Switch,
   ActivityIndicator,
+  PanResponder,
+  type GestureResponderEvent,
+  type PanResponderGestureState,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +23,7 @@ import { useApp } from '@/lib/AppContext';
 import { getGateway } from '@/lib/gateway';
 import { PulsingDot } from '@/components/PulsingDot';
 import { GlassCard } from '@/components/GlassCard';
+import * as LocalAuthentication from 'expo-local-authentication';
 
 const C = Colors.dark;
 
@@ -327,6 +331,7 @@ function ApprovalCard({
 }) {
   const [countdown, setCountdown] = useState(formatCountdown(approval.expiresAt));
   const tierConfig = RISK_TIER_CONFIG[approval.riskTier] || RISK_TIER_CONFIG.P3;
+  const swipeX = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -338,77 +343,128 @@ function ApprovalCard({
   const isExpired = approval.expiresAt - Date.now() <= 0;
   const isUrgent = approval.expiresAt - Date.now() < 60000 && !isExpired;
 
+  const SWIPE_THRESHOLD = 100;
+
+  const panResponder = React.useMemo(() =>
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_: GestureResponderEvent, gs: PanResponderGestureState) => Math.abs(gs.dx) > 15 && Math.abs(gs.dx) > Math.abs(gs.dy),
+      onPanResponderMove: (_: GestureResponderEvent, gs: PanResponderGestureState) => {
+        swipeX.setValue(gs.dx);
+      },
+      onPanResponderRelease: (_: GestureResponderEvent, gs: PanResponderGestureState) => {
+        if (gs.dx > SWIPE_THRESHOLD) {
+          // Swipe right → Approve
+          Animated.timing(swipeX, { toValue: 400, duration: 200, useNativeDriver: Platform.OS !== 'web' }).start(() => {
+            onApprove(approval.id);
+          });
+        } else if (gs.dx < -SWIPE_THRESHOLD) {
+          // Swipe left → Deny
+          Animated.timing(swipeX, { toValue: -400, duration: 200, useNativeDriver: Platform.OS !== 'web' }).start(() => {
+            onDeny(approval.id);
+          });
+        } else {
+          // Spring back
+          Animated.spring(swipeX, { toValue: 0, useNativeDriver: Platform.OS !== 'web', tension: 60, friction: 8 }).start();
+        }
+      },
+    }),
+    [approval.id, onApprove, onDeny, swipeX]);
+
   return (
-    <Pressable
-      onLongPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-        onApprove(approval.id);
-      }}
-      delayLongPress={800}
-      style={({ pressed }) => [pressed && { opacity: 0.95 }]}
-    >
-      <LinearGradient
-        colors={C.gradient.cardElevated}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[
-          styles.approvalCard,
-          approval.riskTier === 'P1' && { borderColor: C.error + '40', ...C.shadow.glow },
-        ]}
+    <View style={styles.swipeContainer}>
+      {/* Background actions revealed on swipe */}
+      <View style={styles.swipeBehind}>
+        <View style={[styles.swipeAction, styles.swipeApproveAction]}>
+          <Ionicons name="checkmark-circle" size={24} color={C.success} />
+          <Text style={[styles.swipeActionText, { color: C.success }]}>Approve</Text>
+        </View>
+        <View style={[styles.swipeAction, styles.swipeDenyAction]}>
+          <Text style={[styles.swipeActionText, { color: C.error }]}>Deny</Text>
+          <Ionicons name="close-circle" size={24} color={C.error} />
+        </View>
+      </View>
+
+      <Animated.View
+        style={{ transform: [{ translateX: swipeX }] }}
+        {...panResponder?.panHandlers}
       >
-        <View style={styles.approvalTop}>
-          <View style={[styles.riskBadge, { backgroundColor: tierConfig.glowColor }]}>
-            <Text style={[styles.riskText, { color: tierConfig.color }]}>
-              {approval.riskTier} · {tierConfig.label}
-            </Text>
-          </View>
-          <View style={styles.approvalExpiry}>
-            <Ionicons
-              name="timer-outline"
-              size={12}
-              color={isUrgent ? C.error : C.textTertiary}
-            />
-            <Text style={[
-              styles.expiryText,
-              isUrgent && { color: C.error },
-              isExpired && { color: C.error },
-            ]}>
-              {countdown}
-            </Text>
-          </View>
-        </View>
-        <Text style={styles.approvalAction}>{approval.action}</Text>
-        {approval.description ? (
-          <Text style={styles.approvalDesc} numberOfLines={2}>{approval.description}</Text>
-        ) : null}
-        {approval.source ? (
-          <View style={styles.approvalSource}>
-            <Ionicons name="link-outline" size={11} color={C.textTertiary} />
-            <Text style={styles.approvalSourceText}>{approval.source}</Text>
-          </View>
-        ) : null}
-        <View style={styles.approvalActions}>
-          <Pressable
-            style={({ pressed }) => [styles.approvalBtn, styles.denyBtn, pressed && { opacity: 0.7 }]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              onDeny(approval.id);
-            }}
+        <Pressable
+          onLongPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            onApprove(approval.id);
+          }}
+          delayLongPress={800}
+          style={({ pressed }) => [pressed && { opacity: 0.95 }]}
+        >
+          <LinearGradient
+            colors={C.gradient.cardElevated}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[
+              styles.approvalCard,
+              approval.riskTier === 'P1' && { borderColor: C.error + '40', ...C.shadow.glow },
+            ]}
           >
-            <Ionicons name="close" size={20} color={C.error} />
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.approvalBtn, styles.approveBtn, pressed && { opacity: 0.7 }]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              onApprove(approval.id);
-            }}
-          >
-            <Ionicons name="checkmark" size={20} color={C.success} />
-          </Pressable>
-        </View>
-      </LinearGradient>
-    </Pressable>
+            <View style={styles.approvalTop}>
+              <View style={[styles.riskBadge, { backgroundColor: tierConfig.glowColor }]}>
+                <Text style={[styles.riskText, { color: tierConfig.color }]}>
+                  {approval.riskTier} · {tierConfig.label}
+                </Text>
+              </View>
+              <View style={styles.approvalExpiry}>
+                <Ionicons
+                  name="timer-outline"
+                  size={12}
+                  color={isUrgent ? C.error : C.textTertiary}
+                />
+                <Text style={[
+                  styles.expiryText,
+                  isUrgent && { color: C.error },
+                  isExpired && { color: C.error },
+                ]}>
+                  {countdown}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.approvalAction}>{approval.action}</Text>
+            {approval.description ? (
+              <Text style={styles.approvalDesc} numberOfLines={2}>{approval.description}</Text>
+            ) : null}
+            {approval.source ? (
+              <View style={styles.approvalSource}>
+                <Ionicons name="link-outline" size={11} color={C.textTertiary} />
+                <Text style={styles.approvalSourceText}>{approval.source}</Text>
+              </View>
+            ) : null}
+            <View style={styles.approvalActions}>
+              <Pressable
+                style={({ pressed }) => [styles.approvalBtn, styles.denyBtn, pressed && { opacity: 0.7 }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  onDeny(approval.id);
+                }}
+              >
+                <Ionicons name="close" size={20} color={C.error} />
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.approvalBtn, styles.approveBtn, pressed && { opacity: 0.7 }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  onApprove(approval.id);
+                }}
+              >
+                <Ionicons name="checkmark" size={20} color={C.success} />
+              </Pressable>
+            </View>
+            {/* Swipe hint */}
+            <View style={styles.swipeHint}>
+              <Ionicons name="swap-horizontal" size={10} color={C.textTertiary} />
+              <Text style={styles.swipeHintText}>Swipe to act</Text>
+            </View>
+          </LinearGradient>
+        </Pressable>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -722,6 +778,23 @@ export default function AutomationsScreen() {
   }, [gatewayStatus]);
 
   const handleApprove = useCallback(async (id: string) => {
+    // P1 critical actions require biometric authentication
+    const approval = approvals.find(a => a.id === id);
+    if (approval?.riskTier === 'P1') {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      if (hasHardware) {
+        const result = await LocalAuthentication.authenticateAsync({
+          promptMessage: '🔐 Authenticate to approve critical action',
+          fallbackLabel: 'Use passcode',
+          disableDeviceFallback: false,
+        });
+        if (!result.success) {
+          showToast('Biometric authentication required for P1 approvals', 'error');
+          return;
+        }
+      }
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setApprovals((prev) => prev.filter((a) => a.id !== id));
     if (gatewayStatus === 'connected') {
       try {
@@ -729,7 +802,8 @@ export default function AutomationsScreen() {
         await gw.rpc('automations.approve', { id });
       } catch { }
     }
-  }, [gatewayStatus]);
+    showToast('Action approved', 'success');
+  }, [gatewayStatus, approvals, showToast]);
 
   const handleDeny = useCallback(async (id: string) => {
     setApprovals((prev) => prev.filter((a) => a.id !== id));
@@ -1503,5 +1577,55 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     maxWidth: 260,
+  },
+  swipeContainer: {
+    position: 'relative' as const,
+    overflow: 'hidden' as const,
+    borderRadius: 14,
+  },
+  swipeBehind: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    borderRadius: 14,
+  },
+  swipeAction: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    paddingHorizontal: 24,
+  },
+  swipeApproveAction: {
+    backgroundColor: C.success + '15',
+    flex: 1,
+    height: '100%' as any,
+    borderRadius: 14,
+    justifyContent: 'flex-start' as const,
+    paddingTop: 0,
+  },
+  swipeDenyAction: {
+    backgroundColor: C.error + '15',
+    flex: 1,
+    height: '100%' as any,
+    borderRadius: 14,
+    justifyContent: 'flex-end' as const,
+    paddingTop: 0,
+  },
+  swipeActionText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+  },
+  swipeHint: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 4,
+    paddingTop: 2,
+  },
+  swipeHintText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    color: C.textTertiary,
   },
 });

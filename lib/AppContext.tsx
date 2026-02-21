@@ -7,6 +7,7 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react';
+import { router } from 'expo-router';
 import {
   connectionStorage,
   conversationStorage,
@@ -271,7 +272,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setupNotificationCategories();
   }, []);
 
-  // Register push token when gateway connects
+  // Register push token when gateway connects + flush offline queue
   useEffect(() => {
     if (gatewayStatus === 'connected') {
       registerForPushNotifications().then((token) => {
@@ -279,20 +280,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
           gateway.registerPushToken(token);
         }
       });
+
+      // Flush queued offline messages after a short delay
+      const timer = setTimeout(async () => {
+        try {
+          const { flushQueue } = await import('@/lib/offlineQueue');
+          const sent = await flushQueue(async (_convId, content) => {
+            await gateway.sendChat(content);
+          });
+          if (sent > 0) {
+            console.log(`[OfflineQueue] Flushed ${sent} queued messages`);
+          }
+        } catch (err) {
+          console.error('[OfflineQueue] Flush failed:', err);
+        }
+      }, 500);
+      return () => clearTimeout(timer);
     }
   }, [gatewayStatus, gateway]);
 
-  // Handle interactive notification responses (Approve / Deny buttons)
+  // Handle interactive notification responses (Approve / Deny buttons) + deep linking
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const actionId = response.actionIdentifier;
       const data = response.notification.request.content.data;
       const approvalId = data?.approvalId as string | undefined;
+      const notifType = data?.type as string | undefined;
+      const conversationId = data?.conversationId as string | undefined;
 
       if (approvalId && actionId === 'approve') {
         gateway.approveAction(approvalId);
-      } else if (approvalId && actionId === 'deny') {
+        return;
+      }
+      if (approvalId && actionId === 'deny') {
         gateway.denyAction(approvalId);
+        return;
+      }
+
+      // Deep linking — default tap (no action button)
+      if (actionId === Notifications.DEFAULT_ACTION_IDENTIFIER || !actionId) {
+        if (approvalId || notifType === 'approval') {
+          router.push('/(tabs)/automations');
+        } else if (conversationId) {
+          router.push(`/chat/${conversationId}`);
+        } else if (notifType === 'error') {
+          router.push('/(tabs)/automations');
+        } else {
+          router.push('/(tabs)/chat');
+        }
       }
     });
 

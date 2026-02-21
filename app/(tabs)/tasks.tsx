@@ -64,7 +64,7 @@ function formatAge(ts: number) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function formatDueDate(ts: number): { text: string; isOverdue: boolean } {
   const d = new Date(ts);

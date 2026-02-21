@@ -34,6 +34,7 @@ export default function OnboardingScreen() {
         Animated.timing(glowAnim, { toValue: 0.3, duration: 2000, useNativeDriver: true }),
       ])
     ).start();
+     
   }, [glowAnim]);
 
   const connectionMethods = [

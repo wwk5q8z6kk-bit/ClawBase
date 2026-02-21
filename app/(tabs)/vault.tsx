@@ -481,6 +481,7 @@ function TaskDetailModal({
       setEditTags(task.tags?.join(', ') || '');
       setEditAssignee(task.assignee || '');
     }
+     
   }, [task]);
 
   if (!task) return null;
@@ -1083,6 +1084,7 @@ function AnimatedSegmentSwitcher({
       friction: 8,
       tension: 100,
     }).start();
+     
   }, [activeSegment, underlineLeftRef, underlineWidthRef]);
 
   const handleSegmentPress = (segment: VaultSegment) => {
