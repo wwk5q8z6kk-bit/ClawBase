@@ -46,3 +46,4 @@ yarn-error.*
 log-query.db
 log-query.db-shm
 log-query.db-wal
+attached_assets/
