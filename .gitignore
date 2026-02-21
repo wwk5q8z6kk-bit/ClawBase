@@ -33,9 +33,16 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
 
 # typescript
 *.tsbuildinfo
 .vercel
 
-.env
+# Replit internal files
+.cache/
+.local/
+*.bin
+log-query.db
+log-query.db-shm
+log-query.db-wal
