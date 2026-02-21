@@ -24,7 +24,7 @@ import { router } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import { getGateway } from '@/lib/gateway';
-import { GlassCard } from '@/components/GlassCard';
+import { Card } from '@/components/GlassCard';
 import { Typography } from '@/components/Typography';
 import {
   getNotificationPrefs,
@@ -149,7 +149,7 @@ function AgentHealthMonitor() {
   const statusColor = isConnected ? C.success : isConnecting || gatewayStatus === 'pairing' ? C.amber : gatewayStatus === 'error' ? C.error : C.textTertiary;
 
   return (
-    <GlassCard
+    <Card
       variant={isConnected ? 'card' : 'cardElevated'}
       style={styles.healthCard}
     >
@@ -183,7 +183,7 @@ function AgentHealthMonitor() {
       {gatewayStatus === 'error' && (
         <Typography style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: C.error, marginTop: 4 }}>Check your gateway URL and token</Typography>
       )}
-    </GlassCard>
+    </Card>
   );
 }
 
@@ -689,7 +689,7 @@ export default function SettingsScreen() {
                 onPress={() => openWithTemplate(method.templateName, method.templateUrl)}
                 style={({ pressed }) => [pressed && { opacity: 0.8 }]}
               >
-                <GlassCard
+                <Card
                   variant="cardElevated"
                   style={[styles.methodCard, { borderColor: C.borderLight }]}
                 >
@@ -713,7 +713,7 @@ export default function SettingsScreen() {
                       <Typography style={[styles.methodHint, { color: method.color + 'CC' }]}>{method.hint}</Typography>
                     </View>
                   </View>
-                </GlassCard>
+                </Card>
               </Pressable>
             ))}
           </View>

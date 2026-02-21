@@ -18,7 +18,6 @@ import Animated, {
     runOnJS
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
@@ -268,7 +267,7 @@ export default function VoiceModeOverlay({ visible, onClose, onSend }: VoiceMode
             statusBarTranslucent
         >
             <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
-                <BlurView intensity={40} tint="dark" style={styles.blurFill}>
+                <View style={styles.blurFill}>
                     {/* Close button */}
                     <Pressable style={styles.closeBtn} onPress={handleClose}>
                         <Ionicons name="close" size={24} color={C.textSecondary} />
@@ -368,7 +367,7 @@ export default function VoiceModeOverlay({ visible, onClose, onSend }: VoiceMode
                                 ? 'Tap the mic to stop speaking'
                                 : 'Tap the mic to start a voice command'}
                     </Text>
-                </BlurView>
+                </View>
             </Animated.View>
         </Modal>
     );
@@ -383,6 +382,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 32,
+        backgroundColor: 'rgba(8, 12, 24, 0.95)',
     },
     closeBtn: {
         position: 'absolute',

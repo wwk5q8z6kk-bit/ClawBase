@@ -13,7 +13,7 @@ The app follows a "lobster" dark theme with navy/black backgrounds and orange/re
 - **Feb 21, 2026**: Fixed web animation warnings — useNativeDriver now checks Platform.OS !== 'web'
 - **Feb 21, 2026**: Enhanced Chat UX — expo-clipboard copy-to-clipboard with toast feedback, orange typing indicator dots
 - **Feb 21, 2026**: Polished Dashboard — staggered entrance animations, spring-based tap feedback on stat cards, animated progress bars, gradient accent lines on widgets
-- **Feb 21, 2026**: Added Universal Search — new `/search` screen accessible from Mission Control header, searches across conversations, tasks, memory, calendar, and CRM contacts
+- **Feb 21, 2026**: Added Universal Search — new `/search` screen accessible from Home header, searches across conversations, tasks, memory, calendar, and CRM contacts
 - **Feb 21, 2026**: Cleaned up project — removed junk files, updated .gitignore for Replit internal files
 
 ## User Preferences
@@ -24,10 +24,10 @@ Preferred communication style: Simple, everyday language.
 
 ### Frontend (Mobile App)
 - **Framework**: React Native with Expo SDK 54, using Expo Router v6 for file-based routing
-- **Navigation**: Tab-based layout with 5 visible tabs: Mission Control | Chat | Vault | Calendar | Settings. Vault combines Tasks + Memory with a segment switcher (Tasks | Knowledge | Files). Calendar merges Calendar + Timeline with a view toggle (Calendar | Activity). Automations config lives in Settings. Old tabs (tasks, memory, automations, timeline) are hidden routes. Uses `expo-router` with typed routes enabled
+- **Navigation**: Tab-based layout with 5 visible tabs: Home | Chat | Workspace | Calendar | Settings. Workspace combines Tasks + Memory with a segment switcher (Tasks | Knowledge | Files). Calendar merges Calendar + Timeline with a view toggle (Calendar | Activity). Automations config lives in Settings. Old tabs (tasks, memory, automations, timeline) are hidden routes. Uses `expo-router` with typed routes enabled
 - **State Management**: React Context (`AppContext`) provides global state for connections, conversations, tasks, and memory. React Query (`@tanstack/react-query`) handles server-state for API calls
 - **Local Storage**: AsyncStorage (`@react-native-async-storage/async-storage`) persists all local data (connections, conversations, messages, tasks, memory entries) with a key-prefixed storage pattern (`@clawbase:*`)
-- **UI Libraries**: expo-linear-gradient for gradients, expo-blur for glass effects, expo-haptics for tactile feedback, react-native-reanimated for animations, react-native-gesture-handler for gestures, react-native-keyboard-controller for keyboard handling
+- **UI Libraries**: expo-linear-gradient for gradients, expo-haptics for tactile feedback, react-native-reanimated for animations, react-native-gesture-handler for gestures, react-native-keyboard-controller for keyboard handling
 - **Fonts**: Inter font family (400, 500, 600, 700 weights) via `@expo-google-fonts/inter`
 - **Security**: expo-local-authentication for biometric/PIN lock, expo-secure-store for sensitive data
 

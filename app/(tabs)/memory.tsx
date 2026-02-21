@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
-import { GlassCard } from '@/components/GlassCard';
+import { Card } from '@/components/GlassCard';
 import type { MemoryEntry } from '@/lib/types';
 
 const C = Colors.dark;
@@ -618,13 +618,13 @@ export default function MemoryScreen() {
             Haptics.selectionAsync();
           }}
         >
-          <GlassCard variant="cardElevated" style={styles.deferredBannerGrad}>
+          <Card variant="cardElevated" style={styles.deferredBannerGrad}>
             <Ionicons name="time" size={18} color="#8B7FFF" />
             <Text style={styles.deferredBannerText}>
               {deferredCount} deferred note{deferredCount !== 1 ? 's' : ''} to review
             </Text>
             <Ionicons name="chevron-forward" size={16} color="#8B7FFF" />
-          </GlassCard>
+          </Card>
         </Pressable>
       )}
 
@@ -646,7 +646,7 @@ export default function MemoryScreen() {
 
       {memoryEntries.length > 0 && (
         <View style={[styles.digestCard, C.shadow.elevated as any]}>
-          <GlassCard
+          <Card
             variant="cardElevated"
             style={styles.digestGradient}
           >
@@ -672,7 +672,7 @@ export default function MemoryScreen() {
                 <Text style={styles.digestStatLabel}>Top Tag</Text>
               </View>
             </View>
-          </GlassCard>
+          </Card>
         </View>
       )}
 

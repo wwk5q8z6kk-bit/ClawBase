@@ -6,14 +6,14 @@ import Animated, {
     withSpring,
     withTiming
 } from 'react-native-reanimated';
-import { GlassCard } from './GlassCard';
+import { Card } from './GlassCard';
 
 interface PressableCardProps extends Omit<PressableProps, 'style'> {
     /** Style for the outer animated container */
     style?: ViewStyle | ViewStyle[];
-    /** Padding for the inner GlassCard */
+    /** Padding for the inner Card */
     padding?: number;
-    /** Gradient variant for the inner GlassCard */
+    /** Gradient variant for the inner Card */
     variant?: 'card' | 'cardElevated' | 'heroGlow' | 'ocean' | 'lobster' | 'alertInfo' | 'alertWarn' | 'alertSuccess';
     /** Whether to add a secondary glowing border */
     accentBorder?: boolean;
@@ -75,9 +75,9 @@ export function PressableCard({
             {...rest}
         >
             {(state: any) => (
-                <GlassCard padding={padding} variant={variant} accentBorder={accentBorder}>
+                <Card padding={padding} variant={variant} accentBorder={accentBorder}>
                     {typeof children === 'function' ? children(state) : children}
-                </GlassCard>
+                </Card>
             )}
         </AnimatedPressable>
     );

@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, AppState, AppStateStatus, Platform, Text, Pressable } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '@/lib/AppContext';
 import Colors from '@/constants/colors';
@@ -79,7 +78,7 @@ export function AppLockWrapper({ children }: { children: React.ReactNode }) {
 
             {isLocked && biometricEnabled && (
                 <View style={StyleSheet.absoluteFill}>
-                    <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
+                    <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(8, 12, 24, 0.98)' }]} />
                     <View style={styles.lockContent}>
                         <View style={styles.iconCircle}>
                             <Ionicons name="lock-closed" size={48} color={C.coral} />

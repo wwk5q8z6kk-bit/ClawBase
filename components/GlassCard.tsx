@@ -3,7 +3,7 @@ import { StyleSheet, type ViewProps } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Colors from '@/constants/colors';
 
-interface GlassCardProps extends ViewProps {
+interface CardProps extends ViewProps {
     /** Optional inner content padding, defaults to 16 */
     padding?: number;
     /** Primary gradient variant to use from Colors.dark.gradient */
@@ -13,17 +13,17 @@ interface GlassCardProps extends ViewProps {
 }
 
 /**
- * A reusable container that provides a consistent premium "glass" 
- * or elevated dark-mode gradient aesthetic across the app.
+ * A reusable container that provides a consistent premium
+ * elevated dark-mode gradient aesthetic across the app.
  */
-export function GlassCard({
+export function Card({
     padding = 16,
     variant = 'card',
     accentBorder = false,
     style,
     children,
     ...props
-}: GlassCardProps) {
+}: CardProps) {
     const gradientColors = Colors.dark.gradient[variant] || Colors.dark.gradient.card;
 
     return (

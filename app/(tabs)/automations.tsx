@@ -22,7 +22,7 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import { getGateway } from '@/lib/gateway';
 import { PulsingDot } from '@/components/PulsingDot';
-import { GlassCard } from '@/components/GlassCard';
+import { Card } from '@/components/GlassCard';
 import { Typography } from '@/components/Typography';
 import * as LocalAuthentication from 'expo-local-authentication';
 
@@ -281,7 +281,7 @@ function SystemHealthBanner() {
       gatewayStatus === 'disconnected' ? C.textTertiary : C.amber;
 
   return (
-    <GlassCard variant="card" style={styles.healthBanner}>
+    <Card variant="card" style={styles.healthBanner}>
       <View style={styles.healthTop}>
         <View style={styles.healthLeft}>
           <View style={styles.healthDotWrap}>
@@ -317,7 +317,7 @@ function SystemHealthBanner() {
       {!connected && gatewayStatus === 'disconnected' && (
         <Typography style={styles.healthHint} color="tertiary" weight="400">Connect to a gateway to manage automations</Typography>
       )}
-    </GlassCard>
+    </Card>
   );
 }
 
@@ -578,7 +578,7 @@ function AnalyticsCard({ cronOutputs }: { cronOutputs: CronOutput[] }) {
   }, [cronOutputs]);
 
   return (
-    <GlassCard variant="card" style={styles.analyticsCard}>
+    <Card variant="card" style={styles.analyticsCard}>
       <View style={styles.analyticsHeader}>
         <View style={styles.sectionTitleRow}>
           <Ionicons name="analytics" size={16} color={C.accent} />
@@ -621,7 +621,7 @@ function AnalyticsCard({ cronOutputs }: { cronOutputs: CronOutput[] }) {
           <Typography key={i} color="tertiary" style={styles.weekLabel} weight="400">{d}</Typography>
         ))}
       </View>
-    </GlassCard>
+    </Card>
   );
 }
 

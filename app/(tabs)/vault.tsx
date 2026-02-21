@@ -1433,7 +1433,7 @@ export default function VaultScreen() {
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
       <LinearGradient colors={C.gradient.ocean} style={styles.headerGradient}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Vault</Text>
+          <Text style={styles.headerTitle}>Workspace</Text>
           <Pressable onPress={() => { }}>
             <Ionicons name="settings-outline" size={22} color={C.textSecondary} />
           </Pressable>

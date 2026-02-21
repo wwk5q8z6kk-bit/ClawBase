@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { GlassCard } from '@/components/GlassCard';
+import { Card } from '@/components/GlassCard';
 import { PressableCard } from '@/components/PressableCard';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
@@ -256,7 +256,7 @@ function HeroHeader() {
       <View style={styles.heroTopRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.greeting}>{greeting}</Text>
-          <Text style={styles.heroTitle}>Mission Control</Text>
+          <Text style={styles.heroTitle}>ClawBase</Text>
         </View>
         <View style={styles.heroRight}>
           <View style={[styles.heartbeatDot, connected ? styles.heartbeatActive : styles.heartbeatInactive]}>
@@ -590,7 +590,7 @@ function GatewayStatusWidget() {
   const channelCount = gatewayInfo.channels.filter((c) => c.status === 'active').length;
 
   return (
-    <GlassCard variant="card" style={styles.gatewayWidget}>
+    <Card variant="card" style={styles.gatewayWidget}>
       <View style={[styles.widgetAccentLine, { backgroundColor: C.coral }]} />
       <View style={styles.gatewayHeader}>
         <View style={styles.gatewayTitleRow}>
@@ -668,7 +668,7 @@ function GatewayStatusWidget() {
           )}
         </View>
       )}
-    </GlassCard>
+    </Card>
   );
 }
 
