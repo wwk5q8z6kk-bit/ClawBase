@@ -529,7 +529,7 @@ function StreamingBubble({ text }: { text: string }) {
 
 export default function ChatDetailScreen() {
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, voice, briefing } = useLocalSearchParams<{ id: string; voice?: string; briefing?: string }>();
   const { getMessages, sendMessage, conversations, activeConnection, gateway, gatewayStatus, streamingText, isStreaming } = useApp();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
@@ -613,6 +613,22 @@ export default function ChatDetailScreen() {
       inputRef.current?.focus();
     }
   }, [inputText, isSending, id, sendMessage, getMessages]);
+
+  useEffect(() => {
+    if (voice === 'true') {
+      setTimeout(() => setVoiceModeVisible(true), 400);
+      router.setParams({ voice: '' });
+    }
+  }, [voice]);
+
+  useEffect(() => {
+    if (briefing === 'true') {
+      setTimeout(() => {
+        handleSend("Please give me my daily briefing.");
+      }, 400);
+      router.setParams({ briefing: '' });
+    }
+  }, [briefing, handleSend]);
 
   const handleClearConversation = useCallback(() => {
     const doClear = () => {

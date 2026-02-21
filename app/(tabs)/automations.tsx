@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   StyleSheet,
-  Text,
   View,
   ScrollView,
   Pressable,
@@ -11,6 +10,7 @@ import {
   Switch,
   ActivityIndicator,
   PanResponder,
+  Text,
   type GestureResponderEvent,
   type PanResponderGestureState,
 } from 'react-native';
@@ -23,6 +23,7 @@ import { useApp } from '@/lib/AppContext';
 import { getGateway } from '@/lib/gateway';
 import { PulsingDot } from '@/components/PulsingDot';
 import { GlassCard } from '@/components/GlassCard';
+import { Typography } from '@/components/Typography';
 import * as LocalAuthentication from 'expo-local-authentication';
 
 const C = Colors.dark;
@@ -85,15 +86,15 @@ function formatCountdown(expiresAt: number) {
   if (diff <= 0) return 'Expired';
   const mins = Math.floor(diff / 60000);
   const secs = Math.floor((diff % 60000) / 1000);
-  if (mins > 0) return `${mins}m ${secs}s`;
-  return `${secs}s`;
+  if (mins > 0) return `${mins}m ${secs} s`;
+  return `${secs} s`;
 }
 
 function formatUptime(ms: number) {
   const hrs = Math.floor(ms / 3600000);
   const mins = Math.floor((ms % 3600000) / 60000);
-  if (hrs > 0) return `${hrs}h ${mins}m`;
-  return `${mins}m`;
+  if (hrs > 0) return `${hrs}h ${mins} m`;
+  return `${mins} m`;
 }
 
 const STATUS_CONFIG: Record<string, { color: string; label: string; icon: string }> = {
@@ -138,9 +139,9 @@ function ToastNotification({ toast, onHide }: { toast: ToastState; onHide: () =>
           size={18}
           color={toast.type === 'success' ? C.success : C.error}
         />
-        <Text style={[styles.toastText, { color: toast.type === 'success' ? C.success : C.error }]}>
+        <Typography style={styles.toastText} color={toast.type === 'success' ? C.success : C.error} weight="500">
           {toast.message}
-        </Text>
+        </Typography>
       </LinearGradient>
     </Animated.View>
   );
@@ -178,7 +179,7 @@ function QuickActionButton({
         ) : (
           <Ionicons name={icon as any} size={16} color={C.accent} />
         )}
-        <Text style={styles.quickActionText}>{label}</Text>
+        <Typography style={[styles.quickActionText, { marginLeft: 8 }]} color="white" weight="500">{label}</Typography>
       </LinearGradient>
     </Pressable>
   );
@@ -291,8 +292,8 @@ function SystemHealthBanner() {
             )}
           </View>
           <View>
-            <Text style={styles.healthTitle}>System Health</Text>
-            <Text style={[styles.healthStatus, { color: statusColor }]}>{statusLabel}</Text>
+            <Typography style={styles.healthTitle} weight="600">System Health</Typography>
+            <Typography style={styles.healthStatus} color={statusColor} weight="500">{statusLabel}</Typography>
           </View>
         </View>
         <View style={[styles.healthBadge, { backgroundColor: statusColor + '20' }]}>
@@ -303,18 +304,18 @@ function SystemHealthBanner() {
         <View style={styles.healthStats}>
           <View style={styles.healthStat}>
             <Ionicons name="time-outline" size={14} color={C.textSecondary} />
-            <Text style={styles.healthStatText}>Uptime: {formatUptime(gatewayInfo.uptime)}</Text>
+            <Typography style={styles.healthStatText} color="secondary" weight="400">Uptime: {formatUptime(gatewayInfo.uptime)}</Typography>
           </View>
           {gatewayInfo.model && (
             <View style={styles.healthStat}>
               <Ionicons name="hardware-chip-outline" size={14} color={C.textSecondary} />
-              <Text style={styles.healthStatText}>{gatewayInfo.model}</Text>
+              <Typography style={styles.healthStatText} color="secondary" weight="400">{gatewayInfo.model}</Typography>
             </View>
           )}
         </View>
       )}
       {!connected && gatewayStatus === 'disconnected' && (
-        <Text style={styles.healthHint}>Connect to a gateway to manage automations</Text>
+        <Typography style={styles.healthHint} color="tertiary" weight="400">Connect to a gateway to manage automations</Typography>
       )}
     </GlassCard>
   );
@@ -376,10 +377,10 @@ function ApprovalCard({
       <View style={styles.swipeBehind}>
         <View style={[styles.swipeAction, styles.swipeApproveAction]}>
           <Ionicons name="checkmark-circle" size={24} color={C.success} />
-          <Text style={[styles.swipeActionText, { color: C.success }]}>Approve</Text>
+          <Typography style={styles.swipeActionText} color="success" weight="600">Approve</Typography>
         </View>
         <View style={[styles.swipeAction, styles.swipeDenyAction]}>
-          <Text style={[styles.swipeActionText, { color: C.error }]}>Deny</Text>
+          <Typography style={styles.swipeActionText} color="error" weight="600">Deny</Typography>
           <Ionicons name="close-circle" size={24} color={C.error} />
         </View>
       </View>
@@ -407,9 +408,9 @@ function ApprovalCard({
           >
             <View style={styles.approvalTop}>
               <View style={[styles.riskBadge, { backgroundColor: tierConfig.glowColor }]}>
-                <Text style={[styles.riskText, { color: tierConfig.color }]}>
+                <Typography style={styles.riskBadgeText} color={tierConfig.color} weight="700">
                   {approval.riskTier} · {tierConfig.label}
-                </Text>
+                </Typography>
               </View>
               <View style={styles.approvalExpiry}>
                 <Ionicons
@@ -417,23 +418,22 @@ function ApprovalCard({
                   size={12}
                   color={isUrgent ? C.error : C.textTertiary}
                 />
-                <Text style={[
-                  styles.expiryText,
-                  isUrgent && { color: C.error },
-                  isExpired && { color: C.error },
-                ]}>
+                <Typography
+                  style={[styles.expiryText, isUrgent && { color: C.error }, isExpired && { color: C.error }]}
+                  weight="600"
+                >
                   {countdown}
-                </Text>
+                </Typography>
               </View>
             </View>
-            <Text style={styles.approvalAction}>{approval.action}</Text>
+            <Typography variant="h3" weight="600" style={styles.approvalAction}>{approval.action}</Typography>
             {approval.description ? (
-              <Text style={styles.approvalDesc} numberOfLines={2}>{approval.description}</Text>
+              <Typography color="secondary" numberOfLines={2} style={styles.approvalDesc}>{approval.description}</Typography>
             ) : null}
             {approval.source ? (
               <View style={styles.approvalSource}>
                 <Ionicons name="link-outline" size={11} color={C.textTertiary} />
-                <Text style={styles.approvalSourceText}>{approval.source}</Text>
+                <Typography color="tertiary" style={styles.approvalSourceText}>{approval.source}</Typography>
               </View>
             ) : null}
             <View style={styles.approvalActions}>
@@ -459,7 +459,7 @@ function ApprovalCard({
             {/* Swipe hint */}
             <View style={styles.swipeHint}>
               <Ionicons name="swap-horizontal" size={10} color={C.textTertiary} />
-              <Text style={styles.swipeHintText}>Swipe to act</Text>
+              <Typography color="tertiary" style={styles.swipeHintText} weight="400">Swipe to act</Typography>
             </View>
           </LinearGradient>
         </Pressable>
@@ -487,15 +487,15 @@ function AutomationItem({
         <View style={styles.automationTop}>
           <View style={[styles.automationStatusDot, { backgroundColor: config.color }]} />
           <View style={styles.automationInfo}>
-            <Text style={styles.automationName}>{automation.name}</Text>
+            <Typography variant="h3" weight="600" style={styles.automationName}>{automation.name}</Typography>
             <View style={styles.automationMeta}>
               <Ionicons name="calendar-outline" size={12} color={C.textTertiary} />
-              <Text style={styles.automationSchedule}>{automation.schedule}</Text>
+              <Typography color="tertiary" style={styles.automationSchedule} weight="400">{automation.schedule}</Typography>
               {automation.lastRun ? (
                 <>
                   <View style={styles.metaDivider} />
                   <Ionicons name="time-outline" size={12} color={C.textTertiary} />
-                  <Text style={styles.automationLastRun}>{formatTimeAgo(automation.lastRun)}</Text>
+                  <Typography color="tertiary" style={styles.automationLastRun} weight="400">{formatTimeAgo(automation.lastRun)}</Typography>
                 </>
               ) : null}
             </View>
@@ -503,7 +503,7 @@ function AutomationItem({
           <View style={styles.automationRight}>
             <View style={[styles.statusPill, { backgroundColor: config.color + '18' }]}>
               <Ionicons name={config.icon as any} size={12} color={config.color} />
-              <Text style={[styles.statusPillText, { color: config.color }]}>{config.label}</Text>
+              <Typography color={config.color} weight="600" style={styles.statusPillText}>{config.label}</Typography>
             </View>
             <Switch
               value={automation.enabled}
@@ -519,9 +519,9 @@ function AutomationItem({
         </View>
         {expanded && automation.lastOutput ? (
           <View style={styles.automationExpanded}>
-            <Text style={styles.expandedLabel}>Recent Output</Text>
+            <Typography color="secondary" weight="600" style={styles.expandedLabel}>Recent Output</Typography>
             <View style={styles.expandedOutput}>
-              <Text style={styles.expandedOutputText} numberOfLines={6}>{automation.lastOutput}</Text>
+              <Typography color="primary" numberOfLines={6} style={styles.expandedOutputText} weight="400">{automation.lastOutput}</Typography>
             </View>
           </View>
         ) : null}
@@ -541,13 +541,13 @@ function CronOutputItem({ output }: { output: CronOutput }) {
         />
       </View>
       <View style={styles.cronOutputInfo}>
-        <Text style={styles.cronOutputName}>{output.automationName}</Text>
-        <Text style={styles.cronOutputText} numberOfLines={1}>{output.output}</Text>
+        <Typography weight="600" style={styles.cronOutputName}>{output.automationName}</Typography>
+        <Typography color="secondary" numberOfLines={1} style={styles.cronOutputText} weight="400">{output.output}</Typography>
       </View>
       <View style={styles.cronOutputRight}>
-        <Text style={styles.cronOutputTime}>{formatTimeAgo(output.timestamp)}</Text>
+        <Typography color="tertiary" style={styles.cronOutputTime} weight="400">{formatTimeAgo(output.timestamp)}</Typography>
         {output.duration !== undefined && (
-          <Text style={styles.cronOutputDuration}>{output.duration}ms</Text>
+          <Typography color="tertiary" style={styles.cronOutputDuration} weight="400">{output.duration}ms</Typography>
         )}
       </View>
     </View>
@@ -582,21 +582,21 @@ function AnalyticsCard({ cronOutputs }: { cronOutputs: CronOutput[] }) {
       <View style={styles.analyticsHeader}>
         <View style={styles.sectionTitleRow}>
           <Ionicons name="analytics" size={16} color={C.accent} />
-          <Text style={styles.sectionTitle}>Analytics</Text>
+          <Typography variant="h3" weight="600">Analytics</Typography>
         </View>
       </View>
       <View style={styles.analyticsGrid}>
         <View style={styles.analyticsStat}>
-          <Text style={styles.analyticsValue}>{analytics.totalToday}</Text>
-          <Text style={styles.analyticsLabel}>Runs Today</Text>
+          <Typography variant="h1" style={styles.analyticsValue} weight="600">{analytics.totalToday}</Typography>
+          <Typography color="secondary" style={styles.analyticsLabel} weight="400">Runs Today</Typography>
         </View>
         <View style={styles.analyticsStat}>
-          <Text style={[styles.analyticsValue, { color: C.success }]}>{analytics.successRate}%</Text>
-          <Text style={styles.analyticsLabel}>Success Rate</Text>
+          <Typography variant="h1" color="success" style={styles.analyticsValue} weight="600">{analytics.successRate}%</Typography>
+          <Typography color="secondary" style={styles.analyticsLabel} weight="400">Success Rate</Typography>
         </View>
         <View style={styles.analyticsStat}>
-          <Text style={styles.analyticsValue}>{analytics.avgDuration}ms</Text>
-          <Text style={styles.analyticsLabel}>Avg Time</Text>
+          <Typography variant="h1" style={styles.analyticsValue} weight="600">{analytics.avgDuration}ms</Typography>
+          <Typography color="secondary" style={styles.analyticsLabel} weight="400">Avg Time</Typography>
         </View>
       </View>
       <View style={styles.weekBarContainer}>
@@ -609,7 +609,7 @@ function AnalyticsCard({ cronOutputs }: { cronOutputs: CronOutput[] }) {
                 end={{ x: 0, y: 0 }}
                 style={[
                   styles.weekBarFill,
-                  { height: `${Math.max((val / analytics.maxBar) * 100, 4)}%` as any },
+                  { height: `${Math.max((val / analytics.maxBar) * 100, 4)}% ` as any },
                 ]}
               />
             </View>
@@ -618,7 +618,7 @@ function AnalyticsCard({ cronOutputs }: { cronOutputs: CronOutput[] }) {
       </View>
       <View style={styles.weekLabels}>
         {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-          <Text key={i} style={styles.weekLabel}>{d}</Text>
+          <Typography key={i} color="tertiary" style={styles.weekLabel} weight="400">{d}</Typography>
         ))}
       </View>
     </GlassCard>
@@ -795,22 +795,22 @@ export default function AutomationsScreen() {
       }
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setApprovals((prev) => prev.filter((a) => a.id !== id));
     if (gatewayStatus === 'connected') {
       try {
         const gw = getGateway() as any;
-        await gw.rpc('automations.approve', { id });
+        await gw.approveAction(id);
       } catch { }
     }
     showToast('Action approved', 'success');
-  }, [gatewayStatus, approvals, showToast]);
+  }, [gatewayStatus, showToast]);
 
   const handleDeny = useCallback(async (id: string) => {
+    // Optimistically remove from UI
     setApprovals((prev) => prev.filter((a) => a.id !== id));
     if (gatewayStatus === 'connected') {
       try {
         const gw = getGateway() as any;
-        await gw.rpc('automations.deny', { id });
+        await gw.denyAction(id);
       } catch { }
     }
   }, [gatewayStatus]);
@@ -818,12 +818,13 @@ export default function AutomationsScreen() {
   const handleApproveAllP3 = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const p3Approvals = approvals.filter(a => a.riskTier === 'P3');
+    // Optimistically remove from UI
     setApprovals(prev => prev.filter(a => a.riskTier !== 'P3'));
     if (gatewayStatus === 'connected') {
       const gw = getGateway() as any;
       for (const a of p3Approvals) {
         try {
-          await gw.rpc('automations.approve', { id: a.id });
+          await gw.approveAction(a.id);
         } catch { }
       }
     }
@@ -854,7 +855,7 @@ export default function AutomationsScreen() {
       <ToastNotification toast={toast} onHide={hideToast} />
 
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Automations</Text>
+        <Typography style={styles.headerTitle} variant="h1" weight="700">Automations</Typography>
         <View style={styles.headerRight}>
           {connected && (
             <Pressable
@@ -899,7 +900,7 @@ export default function AutomationsScreen() {
             style={styles.pausedBanner}
           >
             <Ionicons name="pause-circle" size={18} color={C.amber} />
-            <Text style={styles.pausedBannerText}>All automations paused</Text>
+            <Typography style={styles.pausedBannerText} weight="500">All automations paused</Typography>
           </LinearGradient>
         )}
 
@@ -907,11 +908,11 @@ export default function AutomationsScreen() {
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="shield-checkmark" size={16} color={C.amber} />
-              <Text style={styles.sectionTitle}>Pending Approvals</Text>
+              <Typography style={styles.sectionTitle} weight="600">Pending Approvals</Typography>
             </View>
             {approvals.length > 0 && (
               <View style={[styles.countBadge, { backgroundColor: C.amber + '20' }]}>
-                <Text style={[styles.countText, { color: C.amber }]}>{approvals.length}</Text>
+                <Typography style={styles.countText} color={C.amber} weight="600">{approvals.length}</Typography>
               </View>
             )}
           </View>
@@ -937,7 +938,7 @@ export default function AutomationsScreen() {
                     style={styles.approveAllP3Btn}
                   >
                     <Ionicons name="checkmark-done" size={16} color={C.success} />
-                    <Text style={styles.approveAllP3Text}>Approve All P3</Text>
+                    <Typography style={styles.approveAllP3Text} weight="600">Approve All P3</Typography>
                   </LinearGradient>
                 </Pressable>
               )}
@@ -945,12 +946,12 @@ export default function AutomationsScreen() {
           ) : (
             <View style={styles.emptyState}>
               <Ionicons name="shield-outline" size={28} color={C.textTertiary} />
-              <Text style={styles.emptyTitle}>No pending approvals</Text>
-              <Text style={styles.emptyDesc}>
+              <Typography style={styles.emptyTitle} weight="600">No pending approvals</Typography>
+              <Typography style={styles.emptyDesc} color="secondary" weight="400">
                 {connected
                   ? 'Risky actions from your automations will appear here for review'
                   : 'Connect to a gateway to see approval requests'}
-              </Text>
+              </Typography>
             </View>
           )}
         </View>
@@ -959,13 +960,13 @@ export default function AutomationsScreen() {
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="flash" size={16} color={C.coral} />
-              <Text style={styles.sectionTitle}>Active Automations</Text>
+              <Typography style={styles.sectionTitle} weight="600">Active Automations</Typography>
             </View>
             <View style={styles.automationHeaderRight}>
               {automations.length > 0 && (
-                <Text style={styles.automationCount}>
+                <Typography style={styles.automationCount} color="secondary" weight="400">
                   {automations.filter((a) => a.enabled).length}/{automations.length} active
-                </Text>
+                </Typography>
               )}
               {automations.length > 0 && (
                 <Pressable
@@ -1269,9 +1270,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   riskBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  riskBadgeText: {
+    fontSize: 10,
+    letterSpacing: 0.5,
   },
   riskText: {
     fontFamily: 'Inter_700Bold',

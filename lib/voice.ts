@@ -4,6 +4,7 @@ import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';
 
 let recording: Audio.Recording | null = null;
+let chunkInterval: ReturnType<typeof setInterval> | null = null;
 
 // ---------------------------------------------------------------------------
 // Audio Recording
@@ -14,7 +15,7 @@ export async function requestAudioPermission(): Promise<boolean> {
     return status === 'granted';
 }
 
-export async function startRecording(): Promise<boolean> {
+export async function startRecording(opts?: { onChunk?: (base64: string) => void }): Promise<boolean> {
     try {
         const hasPermission = await requestAudioPermission();
         if (!hasPermission) return false;
@@ -28,6 +29,32 @@ export async function startRecording(): Promise<boolean> {
             Audio.RecordingOptionsPresets.HIGH_QUALITY,
         );
         recording = rec;
+
+        if (opts?.onChunk && Platform.OS !== 'web') {
+            const uri = rec.getURI();
+            if (uri) {
+                let position = 0;
+                chunkInterval = setInterval(async () => {
+                    try {
+                        const info = await FileSystem.getInfoAsync(uri);
+                        if (!info.exists || info.size === undefined) return;
+
+                        const newBytes = info.size - position;
+                        // Avoid reading if less than 4KB to prevent excessive small sends
+                        if (newBytes > 4096) {
+                            const b64 = await FileSystem.readAsStringAsync(uri, {
+                                encoding: 'base64' as any,
+                                position,
+                                length: newBytes,
+                            });
+                            position = info.size;
+                            opts?.onChunk?.(b64);
+                        }
+                    } catch { } // Ignore read errors while recording is active
+                }, 500);
+            }
+        }
+
         return true;
     } catch (err) {
         console.error('[Voice] Failed to start recording:', err);
@@ -40,6 +67,11 @@ export async function stopRecording(): Promise<{
     durationMs: number;
     base64: string | null;
 }> {
+    if (chunkInterval) {
+        clearInterval(chunkInterval);
+        chunkInterval = null;
+    }
+
     if (!recording) return { uri: null, durationMs: 0, base64: null };
 
     try {

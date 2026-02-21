@@ -1,18 +1,27 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     StyleSheet,
     View,
     Text,
     Pressable,
     Modal,
-    Animated,
-    Easing,
     ActivityIndicator,
 } from 'react-native';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withRepeat,
+    withTiming,
+    withSequence,
+    Easing,
+    cancelAnimation,
+    runOnJS
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
+import { useApp } from '@/lib/AppContext';
 import {
     startRecording,
     stopRecording,
@@ -32,72 +41,77 @@ interface VoiceModeOverlayProps {
 }
 
 function WaveformBar({ delay, color }: { delay: number; color: string }) {
-    const anim = useRef(new Animated.Value(0.3)).current;
+    const scaleY = useSharedValue(0.3);
 
     useEffect(() => {
-        const loop = Animated.loop(
-            Animated.sequence([
-                Animated.timing(anim, {
-                    toValue: 1,
-                    duration: 300 + Math.random() * 200,
-                    delay,
-                    easing: Easing.inOut(Easing.ease),
-                    useNativeDriver: true,
-                }),
-                Animated.timing(anim, {
-                    toValue: 0.3,
-                    duration: 300 + Math.random() * 200,
-                    easing: Easing.inOut(Easing.ease),
-                    useNativeDriver: true,
-                }),
-            ]),
-        );
-        loop.start();
-        return () => loop.stop();
-    }, [anim, delay]);
+        const timeout = setTimeout(() => {
+            scaleY.value = withRepeat(
+                withSequence(
+                    withTiming(1, { duration: 300 + Math.random() * 200, easing: Easing.inOut(Easing.ease) }),
+                    withTiming(0.3, { duration: 300 + Math.random() * 200, easing: Easing.inOut(Easing.ease) })
+                ),
+                -1,
+                true
+            );
+        }, delay);
+        return () => {
+            clearTimeout(timeout);
+            cancelAnimation(scaleY);
+        };
+    }, [scaleY, delay]);
+
+    const style = useAnimatedStyle(() => ({
+        transform: [{ scaleY: scaleY.value }],
+    }));
 
     return (
         <Animated.View
             style={[
                 styles.waveBar,
-                {
-                    backgroundColor: color,
-                    transform: [{ scaleY: anim }],
-                },
+                { backgroundColor: color },
+                style,
             ]}
         />
     );
 }
 
 function PulseRing({ active, color }: { active: boolean; color: string }) {
-    const scale = useRef(new Animated.Value(1)).current;
-    const opacity = useRef(new Animated.Value(0.3)).current;
+    const scale = useSharedValue(1);
+    const opacity = useSharedValue(0.3);
 
     useEffect(() => {
         if (!active) {
-            scale.setValue(1);
-            opacity.setValue(0);
+            cancelAnimation(scale);
+            cancelAnimation(opacity);
+            scale.value = 1;
+            opacity.value = 0;
             return;
         }
-        const loop = Animated.loop(
-            Animated.parallel([
-                Animated.timing(scale, {
-                    toValue: 2.2,
-                    duration: 1200,
-                    easing: Easing.out(Easing.ease),
-                    useNativeDriver: true,
-                }),
-                Animated.timing(opacity, {
-                    toValue: 0,
-                    duration: 1200,
-                    easing: Easing.out(Easing.ease),
-                    useNativeDriver: true,
-                }),
-            ]),
+
+        scale.value = 1;
+        opacity.value = 0.3;
+
+        scale.value = withRepeat(
+            withTiming(2.2, { duration: 1200, easing: Easing.out(Easing.ease) }),
+            -1,
+            false
         );
-        loop.start();
-        return () => loop.stop();
+        opacity.value = withRepeat(
+            withTiming(0, { duration: 1200, easing: Easing.out(Easing.ease) }),
+            -1,
+            false
+        );
+
+        return () => {
+            cancelAnimation(scale);
+            cancelAnimation(opacity);
+        };
     }, [active, scale, opacity]);
+
+    const style = useAnimatedStyle(() => ({
+        transform: [{ scale: scale.value }],
+        opacity: opacity.value,
+    }));
 
     if (!active) return null;
 
@@ -105,11 +119,8 @@ function PulseRing({ active, color }: { active: boolean; color: string }) {
         <Animated.View
             style={[
                 styles.pulseRing,
-                {
-                    borderColor: color,
-                    transform: [{ scale }],
-                    opacity,
-                },
+                { borderColor: color },
+                style,
             ]}
         />
     );
@@ -120,23 +131,23 @@ export default function VoiceModeOverlay({ visible, onClose, onSend }: VoiceMode
     const [transcribedText, setTranscribedText] = useState('');
     const [responseText, setResponseText] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
-    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const fadeAnim = useSharedValue(0);
 
     useEffect(() => {
         if (visible) {
-            fadeAnim.setValue(0);
-            Animated.timing(fadeAnim, {
-                toValue: 1,
+            fadeAnim.value = 0;
+            fadeAnim.value = withTiming(1, {
                 duration: 300,
                 easing: Easing.out(Easing.ease),
-                useNativeDriver: true,
-            }).start();
+            });
             setState('idle');
             setTranscribedText('');
             setResponseText('');
             setErrorMsg('');
         }
     }, [visible, fadeAnim]);
+
+    const { gateway, gatewayStatus } = useApp();
 
     const handleStartListening = useCallback(async () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -148,7 +159,15 @@ export default function VoiceModeOverlay({ visible, onClose, onSend }: VoiceMode
             return;
         }
 
-        const started = await startRecording();
+        const started = await startRecording({
+            onChunk: (base64) => {
+                if (gatewayStatus === 'connected') {
+                    // Send chunks immediately as they are recorded
+                    gateway.streamAudioChunk(base64, 'agent:main:main').catch(() => { });
+                }
+            }
+        });
+
         if (started) {
             setState('listening');
             setTranscribedText('');
@@ -157,7 +176,7 @@ export default function VoiceModeOverlay({ visible, onClose, onSend }: VoiceMode
             setErrorMsg('Failed to start recording');
             setState('error');
         }
-    }, []);
+    }, [gateway, gatewayStatus]);
 
     const handleStopListening = useCallback(async () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -168,6 +187,11 @@ export default function VoiceModeOverlay({ visible, onClose, onSend }: VoiceMode
             setErrorMsg('No audio recorded');
             setState('error');
             return;
+        }
+
+        // Send end signal to gateway so it knows the audio file stream is finished
+        if (gatewayStatus === 'connected') {
+            gateway.endAudioStream('agent:main:main').catch(() => { });
         }
 
         // If the recording is too short, show an error
@@ -197,18 +221,21 @@ export default function VoiceModeOverlay({ visible, onClose, onSend }: VoiceMode
             setErrorMsg('Failed to get response');
             setState('error');
         }
-    }, [onSend]);
+    }, [gateway, gatewayStatus, onSend]);
 
     const handleClose = useCallback(() => {
         stopSpeaking();
         if (state === 'listening') {
             stopRecording();
         }
-        Animated.timing(fadeAnim, {
-            toValue: 0,
+        fadeAnim.value = withTiming(0, {
             duration: 200,
-            useNativeDriver: true,
-        }).start(() => onClose());
+            easing: Easing.out(Easing.ease),
+        }, (finished) => {
+            if (finished) {
+                runOnJS(onClose)();
+            }
+        });
     }, [fadeAnim, onClose, state]);
 
     const handleStopSpeaking = useCallback(() => {

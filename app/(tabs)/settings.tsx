@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   StyleSheet,
-  Text,
   View,
   ScrollView,
   Pressable,
@@ -26,6 +25,7 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import { getGateway } from '@/lib/gateway';
 import { GlassCard } from '@/components/GlassCard';
+import { Typography } from '@/components/Typography';
 import {
   getNotificationPrefs,
   setNotificationPrefs,
@@ -82,7 +82,7 @@ function SettingsSection({
 }) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <Typography style={styles.sectionTitle}>{title}</Typography>
       <View style={styles.sectionContent}>{children}</View>
     </View>
   );
@@ -116,8 +116,8 @@ function SettingsRow({
         <Ionicons name={icon as any} size={18} color={iconColor || C.accent} />
       </View>
       <View style={styles.rowContent}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        {value ? <Text style={styles.rowValue}>{value}</Text> : null}
+        <Typography style={styles.rowLabel}>{label}</Typography>
+        {value ? <Typography style={styles.rowValue}>{value}</Typography> : null}
       </View>
       {trailing ||
         (onPress && (
@@ -155,33 +155,33 @@ function AgentHealthMonitor() {
     >
       <View style={styles.healthHeader}>
         <Animated.View style={[styles.healthDot, { backgroundColor: statusColor, opacity: isConnecting ? pulseAnim : 1 }]} />
-        <Text style={[styles.healthStatus, { color: statusColor }]}>{statusLabel}</Text>
+        <Typography style={[styles.healthStatus, { color: statusColor }]}>{statusLabel}</Typography>
       </View>
       <View style={styles.healthMetrics}>
         <View style={styles.healthMetric}>
-          <Text style={styles.healthMetricValue}>{isConnected ? gatewayInfo.channels.filter(c => c.status === 'active').length.toString() : '--'}</Text>
-          <Text style={styles.healthMetricLabel}>Channels</Text>
+          <Typography style={styles.healthMetricValue}>{isConnected ? gatewayInfo.channels.filter(c => c.status === 'active').length.toString() : '--'}</Typography>
+          <Typography style={styles.healthMetricLabel}>Channels</Typography>
         </View>
         <View style={styles.healthMetricDivider} />
         <View style={styles.healthMetric}>
-          <Text style={styles.healthMetricValue}>{isConnected ? gatewayInfo.totalSessions.toString() : '--'}</Text>
-          <Text style={styles.healthMetricLabel}>Sessions</Text>
+          <Typography style={styles.healthMetricValue}>{isConnected ? gatewayInfo.totalSessions.toString() : '--'}</Typography>
+          <Typography style={styles.healthMetricLabel}>Sessions</Typography>
         </View>
         <View style={styles.healthMetricDivider} />
         <View style={styles.healthMetric}>
-          <Text style={styles.healthMetricValue}>{isConnected && gatewayInfo.model ? '1' : isConnected ? '0' : '--'}</Text>
-          <Text style={styles.healthMetricLabel}>Model</Text>
+          <Typography style={styles.healthMetricValue}>{isConnected && gatewayInfo.model ? '1' : isConnected ? '0' : '--'}</Typography>
+          <Typography style={styles.healthMetricLabel}>Model</Typography>
         </View>
       </View>
       {isConnected && gatewayInfo.model && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
           <Ionicons name="sparkles" size={12} color={C.coral} />
-          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary }}>{gatewayInfo.model}</Text>
-          {gatewayInfo.agentName && <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary }}>· {gatewayInfo.agentName}</Text>}
+          <Typography style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary }}>{gatewayInfo.model}</Typography>
+          {gatewayInfo.agentName && <Typography style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary }}>· {gatewayInfo.agentName}</Typography>}
         </View>
       )}
       {gatewayStatus === 'error' && (
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: C.error, marginTop: 4 }}>Check your gateway URL and token</Text>
+        <Typography style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: C.error, marginTop: 4 }}>Check your gateway URL and token</Typography>
       )}
     </GlassCard>
   );
@@ -569,7 +569,7 @@ export default function SettingsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
       <LinearGradient colors={C.gradient.ocean} style={styles.header}>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <Typography style={styles.headerTitle}>Settings</Typography>
       </LinearGradient>
 
       <ScrollView
@@ -616,10 +616,10 @@ export default function SettingsScreen() {
                 />
               </View>
               <View style={styles.connInfo}>
-                <Text style={styles.connName}>{conn.name}</Text>
-                <Text style={styles.connUrl} numberOfLines={1}>
+                <Typography style={styles.connName}>{conn.name}</Typography>
+                <Typography style={styles.connUrl} numberOfLines={1}>
                   {conn.url}
-                </Text>
+                </Typography>
               </View>
               {activeConnection?.id === conn.id && (
                 <Ionicons name="checkmark-circle" size={20} color={C.success} />
@@ -631,7 +631,7 @@ export default function SettingsScreen() {
               {connectionError && (
                 <View style={styles.connError}>
                   <Ionicons name="alert-circle" size={14} color={C.error} />
-                  <Text style={styles.connErrorText}>{connectionError}</Text>
+                  <Typography style={styles.connErrorText}>{connectionError}</Typography>
                 </View>
               )}
               <View style={styles.connBtns}>
@@ -641,7 +641,7 @@ export default function SettingsScreen() {
                     onPress={handleManualDisconnect}
                   >
                     <Ionicons name="power" size={16} color={C.error} />
-                    <Text style={[styles.connActionText, { color: C.error }]}>Disconnect</Text>
+                    <Typography style={[styles.connActionText, { color: C.error }]}>Disconnect</Typography>
                   </Pressable>
                 ) : (
                   <Pressable
@@ -650,9 +650,9 @@ export default function SettingsScreen() {
                     disabled={gatewayStatus === 'connecting' || gatewayStatus === 'authenticating'}
                   >
                     <Ionicons name="flash" size={16} color={C.secondary} />
-                    <Text style={[styles.connActionText, { color: C.secondary }]}>
+                    <Typography style={[styles.connActionText, { color: C.secondary }]}>
                       {gatewayStatus === 'connecting' || gatewayStatus === 'authenticating' ? 'Connecting...' : 'Connect'}
-                    </Text>
+                    </Typography>
                   </Pressable>
                 )}
               </View>
@@ -666,7 +666,7 @@ export default function SettingsScreen() {
             onPress={() => router.push({ pathname: '/pair', params: { from: 'settings' } })}
           >
             <Ionicons name="qr-code-outline" size={20} color={C.accent} />
-            <Text style={[styles.addConnText, { color: C.accent }]}>Scan / Pair</Text>
+            <Typography style={[styles.addConnText, { color: C.accent }]}>Scan / Pair</Typography>
           </Pressable>
           <Pressable
             style={({ pressed }) => [
@@ -676,12 +676,12 @@ export default function SettingsScreen() {
             onPress={() => setShowConnModal(true)}
           >
             <Ionicons name="add-circle-outline" size={20} color={C.primary} />
-            <Text style={styles.addConnText}>Add Gateway</Text>
+            <Typography style={styles.addConnText}>Add Gateway</Typography>
           </Pressable>
         </SettingsSection>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Connection Methods</Text>
+          <Typography style={styles.sectionTitle}>Connection Methods</Typography>
           <View style={{ gap: 10 }}>
             {connectionMethods.map((method, index) => (
               <Pressable
@@ -695,7 +695,7 @@ export default function SettingsScreen() {
                 >
                   {index === 0 && (
                     <View style={styles.recommendedBadge}>
-                      <Text style={styles.recommendedText}>Recommended</Text>
+                      <Typography style={styles.recommendedText}>Recommended</Typography>
                     </View>
                   )}
                   <View style={[styles.methodAccent, { backgroundColor: method.color }]} />
@@ -704,13 +704,13 @@ export default function SettingsScreen() {
                       <View style={[styles.methodIconWrap, { backgroundColor: method.color + '18' }]}>
                         <Ionicons name={method.icon} size={20} color={method.color} />
                       </View>
-                      <Text style={styles.methodTitle}>{method.title}</Text>
+                      <Typography style={styles.methodTitle}>{method.title}</Typography>
                       <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
                     </View>
-                    <Text style={styles.methodDesc}>{method.description}</Text>
+                    <Typography style={styles.methodDesc}>{method.description}</Typography>
                     <View style={styles.methodHintRow}>
                       <Ionicons name="bulb-outline" size={13} color={method.color} />
-                      <Text style={[styles.methodHint, { color: method.color + 'CC' }]}>{method.hint}</Text>
+                      <Typography style={[styles.methodHint, { color: method.color + 'CC' }]}>{method.hint}</Typography>
                     </View>
                   </View>
                 </GlassCard>
@@ -742,9 +742,9 @@ export default function SettingsScreen() {
               size={16}
               color={pushToken ? C.success : C.textTertiary}
             />
-            <Text style={[styles.pushStatusText, { color: pushToken ? C.success : C.textTertiary }]}>
+            <Typography style={[styles.pushStatusText, { color: pushToken ? C.success : C.textTertiary }]}>
               {pushToken ? 'Push notifications active' : 'Push not registered'}
-            </Text>
+            </Typography>
           </View>
           <SettingsRow
             icon="shield-checkmark"
@@ -827,7 +827,7 @@ export default function SettingsScreen() {
             }}
           >
             <Ionicons name="paper-plane-outline" size={16} color={C.accent} />
-            <Text style={styles.testPushText}>Send Test Notification</Text>
+            <Typography style={styles.testPushText}>Send Test Notification</Typography>
           </Pressable>
         </SettingsSection>
 
@@ -837,21 +837,21 @@ export default function SettingsScreen() {
               <View style={styles.autoEmptyIconWrap}>
                 <Ionicons name="flash-outline" size={40} color={C.amber} />
               </View>
-              <Text style={styles.autoEmptyTitle}>Automations</Text>
-              <Text style={styles.autoEmptySubtitle}>Connect to your gateway to manage heartbeat and cron automations</Text>
+              <Typography style={styles.autoEmptyTitle}>Automations</Typography>
+              <Typography style={styles.autoEmptySubtitle}>Connect to your gateway to manage heartbeat and cron automations</Typography>
             </View>
           ) : (
             <>
               <View style={styles.autoSummaryCard}>
                 <View style={styles.autoSummaryRow}>
                   <View style={styles.autoSummaryStat}>
-                    <Text style={[styles.autoSummaryCount, { color: C.success }]}>{enabledCount}</Text>
-                    <Text style={styles.autoSummaryLabel}>Enabled</Text>
+                    <Typography style={[styles.autoSummaryCount, { color: C.success }]}>{enabledCount}</Typography>
+                    <Typography style={styles.autoSummaryLabel}>Enabled</Typography>
                   </View>
                   <View style={styles.autoSummaryDivider} />
                   <View style={styles.autoSummaryStat}>
-                    <Text style={[styles.autoSummaryCount, { color: C.amber }]}>{pausedCount}</Text>
-                    <Text style={styles.autoSummaryLabel}>Paused</Text>
+                    <Typography style={[styles.autoSummaryCount, { color: C.amber }]}>{pausedCount}</Typography>
+                    <Typography style={styles.autoSummaryLabel}>Paused</Typography>
                   </View>
                   <Pressable
                     style={({ pressed }) => [styles.autoPauseAllBtn, pressed && { opacity: 0.7 }]}
@@ -862,9 +862,9 @@ export default function SettingsScreen() {
                       size={14}
                       color={enabledCount > 0 ? C.amber : C.success}
                     />
-                    <Text style={[styles.autoPauseAllText, { color: enabledCount > 0 ? C.amber : C.success }]}>
+                    <Typography style={[styles.autoPauseAllText, { color: enabledCount > 0 ? C.amber : C.success }]}>
                       {enabledCount > 0 ? 'Pause All' : 'Resume All'}
-                    </Text>
+                    </Typography>
                   </Pressable>
                 </View>
               </View>
@@ -879,15 +879,15 @@ export default function SettingsScreen() {
                     <View key={auto.id} style={styles.autoItem}>
                       <View style={[styles.autoStatusDot, { backgroundColor: config.color }]} />
                       <View style={styles.autoItemContent}>
-                        <Text style={styles.autoItemName}>{auto.name}</Text>
-                        <Text style={styles.autoItemSchedule}>
+                        <Typography style={styles.autoItemName}>{auto.name}</Typography>
+                        <Typography style={styles.autoItemSchedule}>
                           {auto.schedule}
                           {auto.lastRun ? ` · ${formatTimeAgo(auto.lastRun)}` : ''}
-                        </Text>
+                        </Typography>
                       </View>
                       <View style={[styles.autoStatusPill, { backgroundColor: config.color + '18' }]}>
                         <Ionicons name={config.icon as any} size={11} color={config.color} />
-                        <Text style={[styles.autoStatusText, { color: config.color }]}>{config.label}</Text>
+                        <Typography style={[styles.autoStatusText, { color: config.color }]}>{config.label}</Typography>
                       </View>
                       <Switch
                         value={auto.enabled}
@@ -919,7 +919,7 @@ export default function SettingsScreen() {
                 ) : (
                   <Ionicons name={action.icon as any} size={14} color={C.accent} />
                 )}
-                <Text style={styles.quickActionChipText}>{action.label}</Text>
+                <Typography style={styles.quickActionChipText}>{action.label}</Typography>
               </Pressable>
             ))}
           </View>
@@ -976,8 +976,8 @@ export default function SettingsScreen() {
                     <View style={[styles.storageItemIcon, { backgroundColor: item.color + '15' }]}>
                       <Ionicons name={item.icon as any} size={16} color={item.color} />
                     </View>
-                    <Text style={styles.storageItemCount}>{item.count}</Text>
-                    <Text style={styles.storageItemLabel}>{item.label}</Text>
+                    <Typography style={styles.storageItemCount}>{item.count}</Typography>
+                    <Typography style={styles.storageItemLabel}>{item.label}</Typography>
                     <View style={styles.storageBarTrack}>
                       <View style={[styles.storageBarFill, { width: `${(item.count / maxCount) * 100}%` }]} />
                     </View>
@@ -1005,10 +1005,10 @@ export default function SettingsScreen() {
           <LinearGradient colors={C.gradient.lobster} style={styles.brandLogo}>
             <Ionicons name="sparkles" size={20} color="#fff" />
           </LinearGradient>
-          <Text style={styles.brandText}>ClawBase</Text>
-          <Text style={styles.brandSub}>
+          <Typography style={styles.brandText}>ClawBase</Typography>
+          <Typography style={styles.brandSub}>
             Mission control for your self-hosted agent
-          </Text>
+          </Typography>
         </View>
       </ScrollView>
 
@@ -1021,7 +1021,7 @@ export default function SettingsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Pending Approvals</Text>
+              <Typography style={styles.modalTitle}>Pending Approvals</Typography>
               <Pressable onPress={() => setShowApprovals(false)}>
                 <Ionicons name="close" size={24} color={C.textSecondary} />
               </Pressable>
@@ -1029,19 +1029,19 @@ export default function SettingsScreen() {
             {approvals.length === 0 ? (
               <View style={styles.approvalEmptyWrap}>
                 <Ionicons name="checkmark-done-outline" size={32} color={C.textTertiary} />
-                <Text style={styles.approvalEmptyText}>No pending approvals</Text>
+                <Typography style={styles.approvalEmptyText}>No pending approvals</Typography>
               </View>
             ) : (
               approvals.map((approval) => (
                 <View key={approval.id} style={styles.approvalItem}>
                   <View style={styles.approvalItemHeader}>
                     <View style={[styles.approvalRiskBadge, { backgroundColor: (approval.riskTier === 'P1' ? C.error : approval.riskTier === 'P2' ? C.amber : C.textTertiary) + '20' }]}>
-                      <Text style={[styles.approvalRiskText, { color: approval.riskTier === 'P1' ? C.error : approval.riskTier === 'P2' ? C.amber : C.textTertiary }]}>{approval.riskTier}</Text>
+                      <Typography style={[styles.approvalRiskText, { color: approval.riskTier === 'P1' ? C.error : approval.riskTier === 'P2' ? C.amber : C.textTertiary }]}>{approval.riskTier}</Typography>
                     </View>
-                    <Text style={styles.approvalAction} numberOfLines={1}>{approval.action}</Text>
+                    <Typography style={styles.approvalAction} numberOfLines={1}>{approval.action}</Typography>
                   </View>
                   {approval.description ? (
-                    <Text style={styles.approvalDesc} numberOfLines={2}>{approval.description}</Text>
+                    <Typography style={styles.approvalDesc} numberOfLines={2}>{approval.description}</Typography>
                   ) : null}
                   <View style={styles.approvalBtnsRow}>
                     <Pressable
@@ -1052,7 +1052,7 @@ export default function SettingsScreen() {
                         setApprovals(prev => prev.filter(a => a.id !== approval.id));
                       }}
                     >
-                      <Text style={styles.approvalDenyText}>Deny</Text>
+                      <Typography style={styles.approvalDenyText}>Deny</Typography>
                     </Pressable>
                     <Pressable
                       style={({ pressed }) => [styles.approvalApproveBtn, pressed && { opacity: 0.7 }]}
@@ -1062,7 +1062,7 @@ export default function SettingsScreen() {
                         setApprovals(prev => prev.filter(a => a.id !== approval.id));
                       }}
                     >
-                      <Text style={styles.approvalApproveText}>Approve</Text>
+                      <Typography style={styles.approvalApproveText}>Approve</Typography>
                     </Pressable>
                   </View>
                 </View>
@@ -1081,7 +1081,7 @@ export default function SettingsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Gateway</Text>
+              <Typography style={styles.modalTitle}>Add Gateway</Typography>
               <Pressable onPress={() => { setShowConnModal(false); setTestResult(null); }}>
                 <Ionicons name="close" size={24} color={C.textSecondary} />
               </Pressable>
@@ -1130,23 +1130,23 @@ export default function SettingsScreen() {
               ) : (
                 <Ionicons name="pulse-outline" size={16} color={C.accent} />
               )}
-              <Text style={styles.testConnectionBtnText}>
+              <Typography style={styles.testConnectionBtnText}>
                 {testingConnection ? 'Testing...' : 'Test Connection'}
-              </Text>
+              </Typography>
             </Pressable>
 
             {testResult && (
               <View style={[styles.testResultRow, { borderColor: testResult.ok ? C.success + '30' : C.error + '30', backgroundColor: testResult.ok ? C.success + '08' : C.error + '08' }]}>
                 <Ionicons name={testResult.ok ? 'checkmark-circle' : 'alert-circle'} size={16} color={testResult.ok ? C.success : C.error} />
-                <Text style={[styles.testResultText, { color: testResult.ok ? C.success : C.error }]}>{testResult.msg}</Text>
+                <Typography style={[styles.testResultText, { color: testResult.ok ? C.success : C.error }]}>{testResult.msg}</Typography>
               </View>
             )}
 
             <View style={styles.hintRow}>
               <Ionicons name="information-circle-outline" size={16} color={C.textTertiary} />
-              <Text style={styles.hintText}>
+              <Typography style={styles.hintText}>
                 Enter your OpenClaw Gateway address and optional auth token. Supports local IP, Tailscale, or Cloudflare Tunnel URLs.
-              </Text>
+              </Typography>
             </View>
 
             <Pressable
@@ -1158,7 +1158,7 @@ export default function SettingsScreen() {
               ]}
               disabled={!connName.trim() || !connUrl.trim()}
             >
-              <Text style={styles.saveBtnText}>Save & Connect</Text>
+              <Typography style={styles.saveBtnText}>Save & Connect</Typography>
             </Pressable>
           </View>
         </View>

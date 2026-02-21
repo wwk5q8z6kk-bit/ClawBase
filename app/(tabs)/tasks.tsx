@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -12,6 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -311,12 +312,14 @@ function TaskDetailModal({
   onClose,
   onSave,
   onDelete,
+  onAssignAgent,
 }: {
   visible: boolean;
   task: Task | null;
   onClose: () => void;
   onSave: (id: string, updates: Partial<Task>) => void;
   onDelete: (task: Task) => void;
+  onAssignAgent: (task: Task) => void;
 }) {
   const [editTitle, setEditTitle] = useState('');
   const [editDesc, setEditDesc] = useState('');
@@ -482,6 +485,20 @@ function TaskDetailModal({
               </LinearGradient>
             </Pressable>
 
+            {task.assignee !== 'OpenClaw' && (
+              <Pressable
+                onPress={() => {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  onAssignAgent(task);
+                  onClose();
+                }}
+                style={({ pressed }) => [styles.assignAgentBtn, pressed && { opacity: 0.8 }]}
+              >
+                <Ionicons name="flash" size={18} color="#fff" />
+                <Text style={styles.assignAgentBtnText}>Assign to Agent</Text>
+              </Pressable>
+            )}
+
             <Pressable onPress={handleDelete} style={styles.deleteBtn}>
               <Text style={styles.deleteBtnText}>Delete Task</Text>
             </Pressable>
@@ -577,13 +594,22 @@ function BoardColumn({ title, tasks: columnTasks, color, onMove, onDelete }: {
 
 export default function TasksScreen() {
   const insets = useSafeAreaInsets();
-  const { tasks, createTask, updateTask, deleteTask } = useApp();
+  const { add } = useLocalSearchParams<{ add?: string }>();
+  const { tasks, createTask, updateTask, deleteTask, sendMessage } = useApp();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('priority');
   const [showSortModal, setShowSortModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+
+  useEffect(() => {
+    if (add === 'true') {
+      setTimeout(() => setShowAddModal(true), 400);
+      router.setParams({ add: '' });
+    }
+  }, [add]);
+
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [moveTask, setMoveTask] = useState<Task | null>(null);
@@ -708,6 +734,12 @@ export default function TasksScreen() {
   const handleDetailSave = useCallback((id: string, updates: Partial<Task>) => {
     updateTask(id, updates);
   }, [updateTask]);
+
+  const handleAssignAgent = useCallback((task: Task) => {
+    updateTask(task.id, { assignee: 'OpenClaw' });
+    const message = `Please help me with this task: "${task.title}"\n${task.description ? `Description: ${task.description}` : ''}`;
+    sendMessage('agent:main:main', message);
+  }, [updateTask, sendMessage]);
 
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
@@ -872,6 +904,7 @@ export default function TasksScreen() {
         onClose={() => { setShowDetailModal(false); setDetailTask(null); }}
         onSave={handleDetailSave}
         onDelete={handleDelete}
+        onAssignAgent={handleAssignAgent}
       />
 
       <Modal visible={showSortModal} transparent animationType="fade" onRequestClose={() => setShowSortModal(false)}>
@@ -1185,4 +1218,6 @@ const styles = StyleSheet.create({
   timestampText: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary },
   deleteBtn: { alignItems: 'center', paddingVertical: 12, marginBottom: Platform.OS === 'web' ? 34 : 20 },
   deleteBtnText: { fontFamily: 'Inter_500Medium', fontSize: 14, color: C.primary },
+  assignAgentBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: C.coral, borderRadius: 12, paddingVertical: 14, marginTop: 4, gap: 8 },
+  assignAgentBtnText: { fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' },
 });

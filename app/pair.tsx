@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   StyleSheet,
-  Text,
   View,
   Pressable,
   TextInput,
@@ -18,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router, useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
+import { Typography } from '@/components/Typography';
 import { useApp } from '@/lib/AppContext';
 import { discoverGateways, type DiscoveredGateway } from '@/lib/discovery';
 import { validateGatewayHandshake } from '@/lib/gatewayHandshake';
@@ -127,7 +127,7 @@ export default function PairScreen() {
         onProgress: (checked, total) => setScanProgress({ checked, total }),
       });
       setDiscoveredGateways(found);
-    } catch {}
+    } catch { }
     setScanning(false);
   }, []);
 
@@ -199,7 +199,7 @@ export default function PairScreen() {
       }
 
       let parsed: any;
-      try { parsed = JSON.parse(data); } catch {}
+      try { parsed = JSON.parse(data); } catch { }
 
       if (parsed?.url) {
         finishPairing(parsed.name || 'OpenClaw Gateway', parsed.url, parsed.token);
@@ -287,8 +287,8 @@ export default function PairScreen() {
       <View style={[styles.container, { paddingTop: insets.top + webTopPad, backgroundColor: C.background }]}>
         <View style={styles.phaseContent}>
           <ActivityIndicator size="large" color={C.accent} />
-          <Text style={styles.phaseTitle}>Testing connection...</Text>
-          <Text style={styles.phaseSub}>{pendingConnection?.url || ''}</Text>
+          <Typography style={styles.phaseTitle}>Testing connection...</Typography>
+          <Typography style={styles.phaseSub}>{pendingConnection?.url || ''}</Typography>
         </View>
       </View>
     );
@@ -303,21 +303,21 @@ export default function PairScreen() {
               <Ionicons name="finger-print" size={48} color={C.coral} />
             </View>
           </Animated.View>
-          <Text style={styles.phaseTitle}>Approve on Gateway</Text>
-          <Text style={[styles.phaseSub, { paddingHorizontal: 24 }]}>
+          <Typography style={styles.phaseTitle}>Approve on Gateway</Typography>
+          <Typography style={[styles.phaseSub, { paddingHorizontal: 24 }]}>
             Open your gateway terminal and approve this device:
-          </Text>
+          </Typography>
           <View style={styles.unreachableTips}>
-            <Text style={[styles.tipText, { fontFamily: 'Inter_500Medium', color: C.coral }]}>
+            <Typography style={[styles.tipText, { fontFamily: 'Inter_500Medium', color: C.coral }]}>
               openclaw nodes pending{'\n'}openclaw nodes approve {'<requestId>'}
-            </Text>
+            </Typography>
           </View>
-          <Text style={[styles.phaseUrl, { marginTop: 8 }]}>{pendingConnection?.url}</Text>
+          <Typography style={[styles.phaseUrl, { marginTop: 8 }]}>{pendingConnection?.url}</Typography>
           <Pressable
             onPress={goBack}
             style={({ pressed }) => [{ marginTop: 20 }, pressed && { opacity: 0.7 }]}
           >
-            <Text style={styles.saveAnywayText}>Cancel</Text>
+            <Typography style={styles.saveAnywayText}>Cancel</Typography>
           </Pressable>
         </View>
       </View>
@@ -333,9 +333,9 @@ export default function PairScreen() {
               <Ionicons name="checkmark" size={48} color="#FFF" />
             </LinearGradient>
           </Animated.View>
-          <Text style={[styles.phaseTitle, { color: C.success }]}>Connected!</Text>
-          <Text style={styles.phaseSub}>{pendingConnection?.name}</Text>
-          <Text style={styles.phaseUrl}>{pendingConnection?.url}</Text>
+          <Typography style={[styles.phaseTitle, { color: C.success }]}>Connected!</Typography>
+          <Typography style={styles.phaseSub}>{pendingConnection?.name}</Typography>
+          <Typography style={styles.phaseUrl}>{pendingConnection?.url}</Typography>
         </View>
       </View>
     );
@@ -351,47 +351,47 @@ export default function PairScreen() {
           <Pressable onPress={goBack} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={28} color={C.text} />
           </Pressable>
-          <Text style={styles.topBarTitle}>Connection Issue</Text>
+          <Typography style={styles.topBarTitle}>Connection Issue</Typography>
           <View style={{ width: 28 }} />
         </View>
         <ScrollView contentContainerStyle={styles.phaseContent}>
           <View style={styles.unreachableIcon}>
             <Ionicons name="cloud-offline" size={48} color={C.error} />
           </View>
-          <Text style={styles.phaseTitle}>Can&apos;t reach your gateway</Text>
-          <Text style={[styles.phaseSub, { paddingHorizontal: 24 }]}>{error}</Text>
-          <Text style={[styles.phaseUrl, { marginTop: 4 }]}>{pendingConnection?.url}</Text>
+          <Typography style={styles.phaseTitle}>Can&apos;t reach your gateway</Typography>
+          <Typography style={[styles.phaseSub, { paddingHorizontal: 24 }]}>{error}</Typography>
+          <Typography style={[styles.phaseUrl, { marginTop: 4 }]}>{pendingConnection?.url}</Typography>
 
           <View style={styles.unreachableTips}>
-            <Text style={styles.tipHeader}>Things to check:</Text>
+            <Typography style={styles.tipHeader}>Things to check:</Typography>
             {isLocal ? (
               <>
                 <View style={styles.tipRow}>
                   <Ionicons name="swap-horizontal" size={14} color={C.textSecondary} />
-                  <Text style={styles.tipText}>Make sure your gateway is bound to your LAN IP, not just localhost (127.0.0.1)</Text>
+                  <Typography style={styles.tipText}>Make sure your gateway is bound to your LAN IP, not just localhost (127.0.0.1)</Typography>
                 </View>
                 <View style={styles.tipRow}>
                   <Ionicons name="wifi" size={14} color={C.textSecondary} />
-                  <Text style={styles.tipText}>Both devices need to be on the same WiFi network</Text>
+                  <Typography style={styles.tipText}>Both devices need to be on the same WiFi network</Typography>
                 </View>
                 <View style={styles.tipRow}>
                   <Ionicons name="server-outline" size={14} color={C.textSecondary} />
-                  <Text style={styles.tipText}>Your gateway runs on port 18789 by default</Text>
+                  <Typography style={styles.tipText}>Your gateway runs on port 18789 by default</Typography>
                 </View>
               </>
             ) : (
               <>
                 <View style={styles.tipRow}>
                   <Ionicons name="globe-outline" size={14} color={C.textSecondary} />
-                  <Text style={styles.tipText}>Check that your Tailscale is connected on both devices</Text>
+                  <Typography style={styles.tipText}>Check that your Tailscale is connected on both devices</Typography>
                 </View>
                 <View style={styles.tipRow}>
                   <Ionicons name="power-outline" size={14} color={C.textSecondary} />
-                  <Text style={styles.tipText}>Make sure the gateway is running</Text>
+                  <Typography style={styles.tipText}>Make sure the gateway is running</Typography>
                 </View>
                 <View style={styles.tipRow}>
                   <Ionicons name="shield-outline" size={14} color={C.textSecondary} />
-                  <Text style={styles.tipText}>Firewall may be blocking port 18789</Text>
+                  <Typography style={styles.tipText}>Firewall may be blocking port 18789</Typography>
                 </View>
               </>
             )}
@@ -399,7 +399,7 @@ export default function PairScreen() {
 
           <View style={styles.helpCmdCard}>
             <Ionicons name="terminal-outline" size={14} color={C.textTertiary} />
-            <Text style={styles.helpCmdText}>Need help? Run{'\n'}openclaw gateway --bind 0.0.0.0 --port 18789{'\n'}to make your gateway accessible on your network</Text>
+            <Typography style={styles.helpCmdText}>Need help? Run{'\n'}openclaw gateway --bind 0.0.0.0 --port 18789{'\n'}to make your gateway accessible on your network</Typography>
           </View>
 
           <View style={styles.unreachableActions}>
@@ -410,7 +410,7 @@ export default function PairScreen() {
               style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.8 }]}
             >
               <Ionicons name="refresh" size={18} color={C.accent} />
-              <Text style={[styles.retryBtnText, { color: C.accent }]}>Try again</Text>
+              <Typography style={[styles.retryBtnText, { color: C.accent }]}>Try again</Typography>
             </Pressable>
             <Pressable
               onPress={() => {
@@ -418,7 +418,7 @@ export default function PairScreen() {
               }}
               style={({ pressed }) => [pressed && { opacity: 0.7 }]}
             >
-              <Text style={styles.saveAnywayText}>Save anyway for later</Text>
+              <Typography style={styles.saveAnywayText}>Save anyway for later</Typography>
             </Pressable>
           </View>
         </ScrollView>
@@ -434,18 +434,18 @@ export default function PairScreen() {
             <Pressable onPress={goBack} style={styles.backBtn}>
               <Ionicons name="chevron-back" size={28} color={C.text} />
             </Pressable>
-            <Text style={styles.topBarTitle}>Scan QR Code</Text>
+            <Typography style={styles.topBarTitle}>Scan QR Code</Typography>
             <View style={{ width: 28 }} />
           </View>
           <View style={styles.webCameraFallback}>
             <View style={styles.fallbackIconWrap}>
               <Ionicons name="camera-outline" size={48} color={C.textTertiary} />
             </View>
-            <Text style={styles.fallbackTitle}>Camera not available on web</Text>
-            <Text style={styles.fallbackSub}>Use ClawBase on your phone to scan QR codes, or try manual setup.</Text>
+            <Typography style={styles.fallbackTitle}>Camera not available on web</Typography>
+            <Typography style={styles.fallbackSub}>Use ClawBase on your phone to scan QR codes, or try manual setup.</Typography>
             <Pressable onPress={() => setMethod('manual')} style={({ pressed }) => [styles.fallbackBtn, pressed && { opacity: 0.8 }]}>
               <Ionicons name="code-slash-outline" size={18} color={C.secondary} />
-              <Text style={[styles.fallbackBtnText, { color: C.secondary }]}>Manual Setup</Text>
+              <Typography style={[styles.fallbackBtnText, { color: C.secondary }]}>Manual Setup</Typography>
             </Pressable>
           </View>
         </View>
@@ -459,21 +459,21 @@ export default function PairScreen() {
             <Pressable onPress={goBack} style={styles.backBtn}>
               <Ionicons name="chevron-back" size={28} color={C.text} />
             </Pressable>
-            <Text style={styles.topBarTitle}>Scan QR Code</Text>
+            <Typography style={styles.topBarTitle}>Scan QR Code</Typography>
             <View style={{ width: 28 }} />
           </View>
           <View style={styles.permissionContent}>
             <View style={styles.permissionIconWrap}>
               <Ionicons name="camera" size={40} color={C.accent} />
             </View>
-            <Text style={styles.permissionTitle}>Camera Access Required</Text>
-            <Text style={styles.permissionSub}>We need camera access to scan your gateway&apos;s QR code.</Text>
+            <Typography style={styles.permissionTitle}>Camera Access Required</Typography>
+            <Typography style={styles.permissionSub}>We need camera access to scan your gateway&apos;s QR code.</Typography>
             <Pressable
               onPress={requestCameraPermission}
               style={({ pressed }) => [styles.permissionBtn, pressed && { opacity: 0.8 }]}
             >
               <LinearGradient colors={[C.primary, '#D43D3D']} style={styles.permissionBtnInner}>
-                <Text style={styles.permissionBtnText}>Allow Camera</Text>
+                <Typography style={styles.permissionBtnText}>Allow Camera</Typography>
               </LinearGradient>
             </Pressable>
           </View>
@@ -493,7 +493,7 @@ export default function PairScreen() {
             <Pressable onPress={goBack} style={styles.backBtn}>
               <Ionicons name="chevron-back" size={28} color="#FFF" />
             </Pressable>
-            <Text style={[styles.topBarTitle, { color: '#FFF' }]}>Scan QR Code</Text>
+            <Typography style={[styles.topBarTitle, { color: '#FFF' }]}>Scan QR Code</Typography>
             <View style={{ width: 28 }} />
           </View>
 
@@ -510,10 +510,10 @@ export default function PairScreen() {
             {error && (
               <View style={styles.scanError}>
                 <Ionicons name="alert-circle" size={16} color={C.error} />
-                <Text style={styles.scanErrorText}>{error}</Text>
+                <Typography style={styles.scanErrorText}>{error}</Typography>
               </View>
             )}
-            <Text style={styles.scanHint}>Point at the QR code on your OpenClaw gateway</Text>
+            <Typography style={styles.scanHint}>Point at the QR code on your OpenClaw gateway</Typography>
           </View>
         </View>
       </View>
@@ -527,7 +527,7 @@ export default function PairScreen() {
           <Pressable onPress={goBack} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={28} color={C.text} />
           </Pressable>
-          <Text style={styles.topBarTitle}>Pairing Code</Text>
+          <Typography style={styles.topBarTitle}>Pairing Code</Typography>
           <View style={{ width: 28 }} />
         </View>
 
@@ -535,8 +535,8 @@ export default function PairScreen() {
           <View style={styles.codeIconWrap}>
             <Ionicons name="keypad" size={36} color={C.coral} />
           </View>
-          <Text style={styles.codeTitle}>Pair with your gateway</Text>
-          <Text style={styles.codeSub}>Enter your gateway address and the pairing code it displays. The app connects directly to your gateway.</Text>
+          <Typography style={styles.codeTitle}>Pair with your gateway</Typography>
+          <Typography style={styles.codeSub}>Enter your gateway address and the pairing code it displays. The app connects directly to your gateway.</Typography>
 
           <TextInput
             style={styles.manualInput}
@@ -563,7 +563,7 @@ export default function PairScreen() {
           {error && (
             <View style={styles.errorRow}>
               <Ionicons name="alert-circle" size={14} color={C.error} />
-              <Text style={styles.errorText}>{error}</Text>
+              <Typography style={styles.errorText}>{error}</Typography>
             </View>
           )}
 
@@ -582,7 +582,7 @@ export default function PairScreen() {
               ) : (
                 <>
                   <Ionicons name="link" size={18} color="#FFF" />
-                  <Text style={styles.codeBtnText}>Connect</Text>
+                  <Typography style={styles.codeBtnText}>Connect</Typography>
                 </>
               )}
             </LinearGradient>
@@ -590,7 +590,7 @@ export default function PairScreen() {
 
           <View style={styles.codeHintRow}>
             <Ionicons name="information-circle-outline" size={14} color={C.textTertiary} />
-            <Text style={styles.codeHint}>The code is generated by your gateway and expires after 10 minutes</Text>
+            <Typography style={styles.codeHint}>The code is generated by your gateway and expires after 10 minutes</Typography>
           </View>
         </ScrollView>
       </View>
@@ -604,7 +604,7 @@ export default function PairScreen() {
           <Pressable onPress={goBack} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={28} color={C.text} />
           </Pressable>
-          <Text style={styles.topBarTitle}>Remote Connection</Text>
+          <Typography style={styles.topBarTitle}>Remote Connection</Typography>
           <View style={{ width: 28 }} />
         </View>
 
@@ -612,8 +612,8 @@ export default function PairScreen() {
           <View style={styles.codeIconWrap}>
             <Ionicons name="globe" size={36} color={C.secondary} />
           </View>
-          <Text style={styles.codeTitle}>Connect Remotely</Text>
-          <Text style={styles.codeSub}>Connect to your gateway from anywhere. Enter your Tailscale hostname or public tunnel URL.</Text>
+          <Typography style={styles.codeTitle}>Connect Remotely</Typography>
+          <Typography style={styles.codeSub}>Connect to your gateway from anywhere. Enter your Tailscale hostname or public tunnel URL.</Typography>
 
           <TextInput
             style={styles.manualInput}
@@ -639,7 +639,7 @@ export default function PairScreen() {
           {error && (
             <View style={styles.errorRow}>
               <Ionicons name="alert-circle" size={14} color={C.error} />
-              <Text style={styles.errorText}>{error}</Text>
+              <Typography style={styles.errorText}>{error}</Typography>
             </View>
           )}
 
@@ -654,23 +654,23 @@ export default function PairScreen() {
           >
             <LinearGradient colors={[C.primary, '#D43D3D']} style={styles.codeBtnInner}>
               <Ionicons name="flash" size={18} color="#FFF" />
-              <Text style={styles.codeBtnText}>Connect</Text>
+              <Typography style={styles.codeBtnText}>Connect</Typography>
             </LinearGradient>
           </Pressable>
 
           <View style={styles.setupGuideCard}>
-            <Text style={styles.setupGuideTitle}>Setup Guide</Text>
+            <Typography style={styles.setupGuideTitle}>Setup Guide</Typography>
             <View style={styles.setupGuideStep}>
-              <View style={styles.setupGuideStepNum}><Text style={styles.setupGuideStepNumText}>1</Text></View>
-              <Text style={styles.setupGuideStepText}>Install Tailscale on your gateway machine and this device</Text>
+              <View style={styles.setupGuideStepNum}><Typography style={styles.setupGuideStepNumText}>1</Typography></View>
+              <Typography style={styles.setupGuideStepText}>Install Tailscale on your gateway machine and this device</Typography>
             </View>
             <View style={styles.setupGuideStep}>
-              <View style={styles.setupGuideStepNum}><Text style={styles.setupGuideStepNumText}>2</Text></View>
-              <Text style={styles.setupGuideStepText}>Your gateway&apos;s Tailscale address will look like: my-machine.tail1234.ts.net</Text>
+              <View style={styles.setupGuideStepNum}><Typography style={styles.setupGuideStepNumText}>2</Typography></View>
+              <Typography style={styles.setupGuideStepText}>Your gateway&apos;s Tailscale address will look like: my-machine.tail1234.ts.net</Typography>
             </View>
             <View style={styles.setupGuideStep}>
-              <View style={styles.setupGuideStepNum}><Text style={styles.setupGuideStepNumText}>3</Text></View>
-              <Text style={styles.setupGuideStepText}>Enter the address above — no port needed, we add :18789 automatically</Text>
+              <View style={styles.setupGuideStepNum}><Typography style={styles.setupGuideStepNumText}>3</Typography></View>
+              <Typography style={styles.setupGuideStepText}>Enter the address above — no port needed, we add :18789 automatically</Typography>
             </View>
           </View>
         </ScrollView>
@@ -685,7 +685,7 @@ export default function PairScreen() {
           <Pressable onPress={goBack} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={28} color={C.text} />
           </Pressable>
-          <Text style={styles.topBarTitle}>Manual Setup</Text>
+          <Typography style={styles.topBarTitle}>Manual Setup</Typography>
           <View style={{ width: 28 }} />
         </View>
 
@@ -718,12 +718,12 @@ export default function PairScreen() {
             secureTextEntry
           />
 
-          <Text style={styles.helperText}>Default port is :18789 — added automatically if not specified</Text>
+          <Typography style={styles.helperText}>Default port is :18789 — added automatically if not specified</Typography>
 
           {error && (
             <View style={styles.errorRow}>
               <Ionicons name="alert-circle" size={14} color={C.error} />
-              <Text style={styles.errorText}>{error}</Text>
+              <Typography style={styles.errorText}>{error}</Typography>
             </View>
           )}
 
@@ -738,7 +738,7 @@ export default function PairScreen() {
           >
             <LinearGradient colors={[C.primary, '#D43D3D']} style={styles.codeBtnInner}>
               <Ionicons name="flash" size={18} color="#FFF" />
-              <Text style={styles.codeBtnText}>Connect</Text>
+              <Typography style={styles.codeBtnText}>Connect</Typography>
             </LinearGradient>
           </Pressable>
         </ScrollView>
@@ -752,7 +752,7 @@ export default function PairScreen() {
         <Pressable onPress={goBack} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={28} color={C.text} />
         </Pressable>
-        <Text style={styles.topBarTitle}>Connect to Gateway</Text>
+        <Typography style={styles.topBarTitle}>Connect to Gateway</Typography>
         <View style={{ width: 28 }} />
       </View>
 
@@ -760,19 +760,19 @@ export default function PairScreen() {
         {Platform.OS !== 'web' && (
           <View style={styles.discoverySection}>
             <View style={styles.discoverHeader}>
-              <Text style={styles.methodListTitle}>Nearby Gateways</Text>
+              <Typography style={styles.methodListTitle}>Nearby Gateways</Typography>
               <Pressable onPress={runDiscovery} disabled={scanning} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
                 {scanning ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <ActivityIndicator size="small" color={C.accent} />
-                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary }}>
+                    <Typography style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textTertiary }}>
                       {scanProgress.total > 0 ? `${Math.round((scanProgress.checked / scanProgress.total) * 100)}%` : 'Scanning...'}
-                    </Text>
+                    </Typography>
                   </View>
                 ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Ionicons name="refresh" size={16} color={C.accent} />
-                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: C.accent }}>Scan</Text>
+                    <Typography style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: C.accent }}>Scan</Typography>
                   </View>
                 )}
               </Pressable>
@@ -792,8 +792,8 @@ export default function PairScreen() {
                       <Ionicons name="server" size={24} color={C.success} />
                     </View>
                     <View style={styles.pairMethodInfo}>
-                      <Text style={styles.pairMethodTitle}>{gw.name}</Text>
-                      <Text style={styles.pairMethodDesc}>{gw.host}:{gw.port}{gw.version ? ` \u00B7 v${gw.version}` : ''}</Text>
+                      <Typography style={styles.pairMethodTitle}>{gw.name}</Typography>
+                      <Typography style={styles.pairMethodDesc}>{gw.host}:{gw.port}{gw.version ? ` \u00B7 v${gw.version}` : ''}</Typography>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={C.textTertiary} />
                   </LinearGradient>
@@ -801,15 +801,15 @@ export default function PairScreen() {
               ))
             ) : !scanning ? (
               <View style={{ paddingVertical: 12, paddingHorizontal: 8 }}>
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary }}>
+                <Typography style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary }}>
                   No gateways found on your network. Try manual setup or make sure your gateway is running.
-                </Text>
+                </Typography>
               </View>
             ) : null}
           </View>
         )}
 
-        <Text style={[styles.methodListTitle, { marginTop: Platform.OS !== 'web' ? 12 : 0 }]}>Connect Manually</Text>
+        <Typography style={[styles.methodListTitle, { marginTop: Platform.OS !== 'web' ? 12 : 0 }]}>Connect Manually</Typography>
 
         <Pressable onPress={() => { setMethod('qr'); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }} style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
           <LinearGradient colors={['#1A1520', '#151020']} style={styles.pairMethodCard}>
@@ -817,11 +817,11 @@ export default function PairScreen() {
               <Ionicons name="qr-code" size={28} color={C.accent} />
             </View>
             <View style={styles.pairMethodInfo}>
-              <Text style={styles.pairMethodTitle}>Scan QR Code</Text>
-              <Text style={styles.pairMethodDesc}>Scan the QR code your gateway displays. Instant setup.</Text>
+              <Typography style={styles.pairMethodTitle}>Scan QR Code</Typography>
+              <Typography style={styles.pairMethodDesc}>Scan the QR code your gateway displays. Instant setup.</Typography>
             </View>
             <View style={[styles.pairMethodBadge, { backgroundColor: C.success + '18' }]}>
-              <Text style={[styles.pairMethodBadgeText, { color: C.success }]}>Recommended</Text>
+              <Typography style={[styles.pairMethodBadgeText, { color: C.success }]}>Recommended</Typography>
             </View>
           </LinearGradient>
         </Pressable>
@@ -832,8 +832,8 @@ export default function PairScreen() {
               <Ionicons name="globe" size={28} color={C.secondary} />
             </View>
             <View style={styles.pairMethodInfo}>
-              <Text style={styles.pairMethodTitle}>Tailscale / Remote</Text>
-              <Text style={styles.pairMethodDesc}>Connect from anywhere via Tailscale or public URL</Text>
+              <Typography style={styles.pairMethodTitle}>Tailscale / Remote</Typography>
+              <Typography style={styles.pairMethodDesc}>Connect from anywhere via Tailscale or public URL</Typography>
             </View>
           </LinearGradient>
         </Pressable>
@@ -844,8 +844,8 @@ export default function PairScreen() {
               <Ionicons name="keypad" size={28} color={C.coral} />
             </View>
             <View style={styles.pairMethodInfo}>
-              <Text style={styles.pairMethodTitle}>Pairing Code</Text>
-              <Text style={styles.pairMethodDesc}>Enter your gateway address and the code it shows.</Text>
+              <Typography style={styles.pairMethodTitle}>Pairing Code</Typography>
+              <Typography style={styles.pairMethodDesc}>Enter your gateway address and the code it shows.</Typography>
             </View>
           </LinearGradient>
         </Pressable>
@@ -856,17 +856,17 @@ export default function PairScreen() {
               <Ionicons name="code-slash" size={28} color={C.secondary} />
             </View>
             <View style={styles.pairMethodInfo}>
-              <Text style={styles.pairMethodTitle}>Manual Setup</Text>
-              <Text style={styles.pairMethodDesc}>Enter URL and token directly. For advanced users.</Text>
+              <Typography style={styles.pairMethodTitle}>Manual Setup</Typography>
+              <Typography style={styles.pairMethodDesc}>Enter URL and token directly. For advanced users.</Typography>
             </View>
           </LinearGradient>
         </Pressable>
 
         <View style={styles.deepLinkHint}>
           <Ionicons name="link-outline" size={14} color={C.textTertiary} />
-          <Text style={styles.deepLinkHintText}>
+          <Typography style={styles.deepLinkHintText}>
             You can also tap a clawbase:// link from your gateway to connect automatically.
-          </Text>
+          </Typography>
         </View>
       </ScrollView>
     </View>

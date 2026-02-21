@@ -541,6 +541,35 @@ export class OpenClawGateway {
     });
   }
 
+  async streamAudioChunk(chunk: string, sessionKey = 'agent:main:main'): Promise<void> {
+    if (this.status !== 'connected') {
+      throw new Error('Not connected to gateway');
+    }
+
+    this.send({
+      method: 'chat.audio_stream',
+      params: {
+        sessionKey,
+        chunk,
+      },
+    });
+  }
+
+  async endAudioStream(sessionKey = 'agent:main:main'): Promise<void> {
+    if (this.status !== 'connected') {
+      throw new Error('Not connected to gateway');
+    }
+
+    this.streamBuffer.delete(sessionKey);
+
+    this.send({
+      method: 'chat.audio_end',
+      params: {
+        sessionKey,
+      },
+    });
+  }
+
   async fetchSessions(): Promise<GatewaySession[]> {
     try {
       const result = await this.rpc('sessions.list');
@@ -764,8 +793,20 @@ export class OpenClawGateway {
 
   async approveAction(id: string): Promise<boolean> {
     try {
-      await this.rpc('automations.approve', { id });
-      return true;
+      // Use optimistic HTTP endpoint instead of raw WS RPC
+      const baseUrl = this.url?.replace('ws://', 'http://').replace('wss://', 'https://') || '';
+      const portRegex = /:(\d+)$/;
+      const hasPort = portRegex.test(baseUrl);
+      const apiUrl = hasPort ? baseUrl : `${baseUrl}:18789`;
+
+      const res = await fetch(`${apiUrl}/api/relay/approve/${id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.deviceToken}`
+        }
+      });
+      return res.ok;
     } catch {
       return false;
     }
@@ -773,8 +814,20 @@ export class OpenClawGateway {
 
   async denyAction(id: string): Promise<boolean> {
     try {
-      await this.rpc('automations.deny', { id });
-      return true;
+      // Use optimistic HTTP endpoint instead of raw WS RPC
+      const baseUrl = this.url?.replace('ws://', 'http://').replace('wss://', 'https://') || '';
+      const portRegex = /:(\d+)$/;
+      const hasPort = portRegex.test(baseUrl);
+      const apiUrl = hasPort ? baseUrl : `${baseUrl}:18789`;
+
+      const res = await fetch(`${apiUrl}/api/relay/deny/${id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.deviceToken}`
+        }
+      });
+      return res.ok;
     } catch {
       return false;
     }

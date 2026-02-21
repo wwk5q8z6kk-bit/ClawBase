@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack, router } from 'expo-router';
 import * as Linking from 'expo-linking';
 import * as SplashScreen from 'expo-splash-screen';
+import * as QuickActions from 'expo-quick-actions';
 import React, { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -10,6 +11,7 @@ import ConnectionBanner from '@/components/ConnectionBanner';
 import { ToastProvider } from '@/components/Toast';
 import { queryClient } from '@/lib/query-client';
 import { AppProvider } from '@/lib/AppContext';
+import { AppLockWrapper } from '@/components/AppLockWrapper';
 import {
   useFonts,
   Inter_400Regular,
@@ -87,20 +89,66 @@ export default function RootLayout() {
     return () => sub.remove();
   }, []);
 
+  useEffect(() => {
+    QuickActions.setItems([
+      {
+        title: 'Voice Mode',
+        subtitle: 'Talk to your Agent',
+        icon: 'audio',
+        id: 'voice_mode',
+        params: { route: '/chat/agent:main:main?voice=true' },
+      },
+      {
+        title: 'Daily Briefing',
+        subtitle: 'Get your morning summary',
+        icon: 'contact',
+        id: 'daily_briefing',
+        params: { route: '/chat/agent:main:main?briefing=true' },
+      },
+      {
+        title: 'New Task',
+        subtitle: 'Create a task quickly',
+        icon: 'compose',
+        id: 'new_task',
+        params: { route: '/(tabs)/tasks?add=true' },
+      }
+    ]);
+
+    const handleQuickAction = (action: QuickActions.Action | null) => {
+      if (action?.params?.route) {
+        setTimeout(() => {
+          router.push(action.params?.route as any);
+        }, 500);
+      }
+    };
+
+    const sub = QuickActions.addListener((action) => {
+      handleQuickAction(action);
+    });
+
+    if (QuickActions.initial) {
+      handleQuickAction(QuickActions.initial);
+    }
+
+    return () => sub.remove();
+  }, []);
+
   if (!fontsLoaded) return null;
 
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AppProvider>
-          <GestureHandlerRootView>
-            <KeyboardProvider>
-              <ToastProvider>
-                <RootLayoutNav />
-                <ConnectionBanner />
-              </ToastProvider>
-            </KeyboardProvider>
-          </GestureHandlerRootView>
+          <AppLockWrapper>
+            <GestureHandlerRootView>
+              <KeyboardProvider>
+                <ToastProvider>
+                  <RootLayoutNav />
+                  <ConnectionBanner />
+                </ToastProvider>
+              </KeyboardProvider>
+            </GestureHandlerRootView>
+          </AppLockWrapper>
         </AppProvider>
       </QueryClientProvider>
     </ErrorBoundary>

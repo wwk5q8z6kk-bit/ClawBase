@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   StyleSheet,
-  Text,
   View,
   Pressable,
   TextInput,
@@ -14,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
+import { Typography } from '@/components/Typography';
 import { useApp } from '@/lib/AppContext';
 
 const C = Colors.dark;
@@ -34,7 +34,7 @@ export default function OnboardingScreen() {
         Animated.timing(glowAnim, { toValue: 0.3, duration: 2000, useNativeDriver: true }),
       ])
     ).start();
-     
+
   }, [glowAnim]);
 
   const connectionMethods = [
@@ -85,12 +85,12 @@ export default function OnboardingScreen() {
               <Ionicons name="sparkles" size={40} color="#FFF" />
             </LinearGradient>
           </View>
-          <Text style={styles.title}>ClawBase</Text>
-          <Text style={styles.tagline}>
+          <Typography style={styles.title}>ClawBase</Typography>
+          <Typography style={styles.tagline}>
             The mission control your self-hosted agent deserves
-          </Text>
+          </Typography>
           <View style={styles.versionBadge}>
-            <Text style={styles.versionText}>v2.0</Text>
+            <Typography style={styles.versionText}>v2.0</Typography>
           </View>
 
           <View style={styles.featureList}>
@@ -104,7 +104,7 @@ export default function OnboardingScreen() {
             ].map((f, i) => (
               <View key={i} style={styles.featureRow}>
                 <Ionicons name={f.icon as any} size={20} color={C.secondary} />
-                <Text style={styles.featureText}>{f.text}</Text>
+                <Typography style={styles.featureText}>{f.text}</Typography>
               </View>
             ))}
           </View>
@@ -127,12 +127,12 @@ export default function OnboardingScreen() {
               end={{ x: 1, y: 0 }}
               style={styles.btnGradient}
             >
-              <Text style={styles.btnText}>Get Started</Text>
+              <Typography style={styles.btnText}>Get Started</Typography>
               <Ionicons name="arrow-forward" size={20} color="#FFF" />
             </LinearGradient>
           </Pressable>
           <Pressable onPress={handleSkip}>
-            <Text style={styles.skipText}>Skip for now</Text>
+            <Typography style={styles.skipText}>Skip for now</Typography>
           </Pressable>
         </View>
       </LinearGradient>
@@ -145,7 +145,7 @@ export default function OnboardingScreen() {
         <Pressable onPress={() => setStep(0)}>
           <Ionicons name="chevron-back" size={28} color={C.text} />
         </Pressable>
-        <Text style={styles.stepTitle}>Connect Gateway</Text>
+        <Typography style={styles.stepTitle}>Connect Gateway</Typography>
         <View style={{ width: 28 }} />
       </View>
 
@@ -153,9 +153,9 @@ export default function OnboardingScreen() {
         <View style={styles.stepIconWrap}>
           <Ionicons name="server-outline" size={32} color={C.accent} />
         </View>
-        <Text style={styles.stepDesc}>
+        <Typography style={styles.stepDesc}>
           Connect to your OpenClaw gateway instantly, or set up manually.
-        </Text>
+        </Typography>
 
         <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
           <Pressable
@@ -164,7 +164,7 @@ export default function OnboardingScreen() {
           >
             <LinearGradient colors={[C.accent + '20', C.accent + '08']} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: C.accent + '30' }}>
               <Ionicons name="qr-code" size={18} color={C.accent} />
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.accent }}>Scan QR</Text>
+              <Typography style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.accent }}>Scan QR</Typography>
             </LinearGradient>
           </Pressable>
           <Pressable
@@ -173,14 +173,14 @@ export default function OnboardingScreen() {
           >
             <LinearGradient colors={[C.coral + '20', C.coral + '08']} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: C.coral + '30' }}>
               <Ionicons name="keypad" size={18} color={C.coral} />
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.coral }}>Pair Code</Text>
+              <Typography style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.coral }}>Pair Code</Typography>
             </LinearGradient>
           </Pressable>
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%', paddingHorizontal: 8 }}>
           <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
-          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textTertiary }}>or connect manually</Text>
+          <Typography style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textTertiary }}>or connect manually</Typography>
           <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
         </View>
 
@@ -203,8 +203,8 @@ export default function OnboardingScreen() {
                   <View style={[styles.methodIconWrap, { backgroundColor: `${method.color}20` }]}>
                     <Ionicons name={method.icon} size={20} color={method.color} />
                   </View>
-                  <Text style={[styles.methodLabel, isSelected && { color: method.color }]}>{method.label}</Text>
-                  <Text style={styles.methodSubtitle}>{method.subtitle}</Text>
+                  <Typography style={[styles.methodLabel, isSelected && { color: method.color }]}>{method.label}</Typography>
+                  <Typography style={styles.methodSubtitle}>{method.subtitle}</Typography>
                 </LinearGradient>
               </Pressable>
             );
@@ -234,7 +234,7 @@ export default function OnboardingScreen() {
           autoCorrect={false}
           keyboardType="url"
         />
-        <Text style={styles.helperText}>Default port is :18789 for OpenClaw Gateway</Text>
+        <Typography style={styles.helperText}>Default port is :18789 for OpenClaw Gateway</Typography>
       </View>
 
       <View style={[styles.bottomActions, { paddingBottom: Platform.OS === 'web' ? 34 : insets.bottom + 20 }]}>
@@ -254,11 +254,11 @@ export default function OnboardingScreen() {
             style={styles.btnGradient}
           >
             <Ionicons name="link-outline" size={20} color="#FFF" />
-            <Text style={styles.btnText}>Connect</Text>
+            <Typography style={styles.btnText}>Connect</Typography>
           </LinearGradient>
         </Pressable>
         <Pressable onPress={handleSkip}>
-          <Text style={styles.skipText}>Set up later</Text>
+          <Typography style={styles.skipText}>Set up later</Typography>
         </Pressable>
       </View>
     </View>
