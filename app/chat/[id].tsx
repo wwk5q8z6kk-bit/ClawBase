@@ -60,9 +60,13 @@ function renderFormattedText(content: string, isUser: boolean): React.ReactNode[
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
+  const textColor = isUser ? '#FFFFFF' : C.text;
+  const codeInlineBg = isUser ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.08)';
+
   const renderInlineText = (text: string, key: string): React.ReactNode[] => {
     const inlineNodes: React.ReactNode[] = [];
-    const inlineRegex = /(\*\*(.+?)\*\*)|(https?:\/\/[^\s)\]]+)/g;
+    // Inline patterns: bold, italic, inline code, markdown links, bare URLs
+    const inlineRegex = /(`[^`]+`)|(\*\*(.+?)\*\*)|(\*(.+?)\*)|(\[([^\]]+)\]\(([^)]+)\))|(https?:\/\/[^\s)\]]+)/g;
     let inlineLastIndex = 0;
     let inlineMatch: RegExpExecArray | null;
     let inlineKey = 0;
@@ -74,11 +78,45 @@ function renderFormattedText(content: string, isUser: boolean): React.ReactNode[
         );
       }
       if (inlineMatch[1]) {
+        // Inline code `...`
+        const codeText = inlineMatch[1].slice(1, -1);
         inlineNodes.push(
-          <Text key={`${key}-b${inlineKey++}`} style={{ fontFamily: 'Inter_700Bold' }}>{inlineMatch[2]}</Text>
+          <Text
+            key={`${key}-ic${inlineKey++}`}
+            style={{
+              fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+              fontSize: 13,
+              backgroundColor: codeInlineBg,
+              paddingHorizontal: 4,
+              borderRadius: 4,
+              color: isUser ? '#FFD4C4' : C.coral,
+            }}
+          >{codeText}</Text>
         );
-      } else if (inlineMatch[3]) {
-        const url = inlineMatch[3];
+      } else if (inlineMatch[2]) {
+        // Bold **...**
+        inlineNodes.push(
+          <Text key={`${key}-b${inlineKey++}`} style={{ fontFamily: 'Inter_700Bold' }}>{inlineMatch[3]}</Text>
+        );
+      } else if (inlineMatch[4]) {
+        // Italic *...*
+        inlineNodes.push(
+          <Text key={`${key}-i${inlineKey++}`} style={{ fontStyle: 'italic' }}>{inlineMatch[5]}</Text>
+        );
+      } else if (inlineMatch[6]) {
+        // Markdown link [text](url)
+        const linkText = inlineMatch[7];
+        const linkUrl = inlineMatch[8];
+        inlineNodes.push(
+          <Text
+            key={`${key}-ml${inlineKey++}`}
+            style={{ color: C.coral, textDecorationLine: 'underline' }}
+            onPress={() => Linking.openURL(linkUrl)}
+          >{linkText}</Text>
+        );
+      } else if (inlineMatch[9]) {
+        // Bare URL
+        const url = inlineMatch[9];
         inlineNodes.push(
           <Text
             key={`${key}-l${inlineKey++}`}
@@ -98,18 +136,107 @@ function renderFormattedText(content: string, isUser: boolean): React.ReactNode[
     return inlineNodes;
   };
 
+  const renderTextBlock = (text: string, key: string) => {
+    // Split text into lines so we can handle headers and lists
+    const lines = text.split('\n');
+    const lineNodes: React.ReactNode[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const lineKey = `${key}-ln${i}`;
+
+      // Header (# ## ### etc)
+      const headerMatch = line.match(/^(#{1,4})\s+(.*)/);
+      if (headerMatch && !isUser) {
+        const level = headerMatch[1].length;
+        const headerSizes = [20, 17, 15, 14];
+        lineNodes.push(
+          <Text
+            key={lineKey}
+            style={{
+              fontFamily: 'Inter_700Bold',
+              fontSize: headerSizes[level - 1] || 14,
+              color: textColor,
+              marginTop: i > 0 ? 10 : 2,
+              marginBottom: 4,
+            }}
+          >
+            {renderInlineText(headerMatch[2], lineKey)}
+          </Text>
+        );
+        continue;
+      }
+
+      // Bullet list (- or * )
+      const bulletMatch = line.match(/^(\s*)[-*]\s+(.*)/);
+      if (bulletMatch) {
+        const indent = Math.min(Math.floor((bulletMatch[1]?.length || 0) / 2), 3);
+        lineNodes.push(
+          <View key={lineKey} style={{ flexDirection: 'row', marginLeft: indent * 12, marginTop: 3, paddingRight: 8 }}>
+            <Text style={{ color: isUser ? 'rgba(255,255,255,0.6)' : C.coral, fontSize: 14, marginRight: 6, lineHeight: 20 }}>•</Text>
+            <Text style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant, { flex: 1, marginBottom: 0 }]}>
+              {renderInlineText(bulletMatch[2], lineKey)}
+            </Text>
+          </View>
+        );
+        continue;
+      }
+
+      // Numbered list (1. 2. etc)
+      const numMatch = line.match(/^(\s*)(\d+)\.\s+(.*)/);
+      if (numMatch) {
+        const indent = Math.min(Math.floor((numMatch[1]?.length || 0) / 2), 3);
+        lineNodes.push(
+          <View key={lineKey} style={{ flexDirection: 'row', marginLeft: indent * 12, marginTop: 3, paddingRight: 8 }}>
+            <Text style={{ color: isUser ? 'rgba(255,255,255,0.6)' : C.textSecondary, fontSize: 14, marginRight: 6, lineHeight: 20, minWidth: 18 }}>{numMatch[2]}.</Text>
+            <Text style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant, { flex: 1, marginBottom: 0 }]}>
+              {renderInlineText(numMatch[3], lineKey)}
+            </Text>
+          </View>
+        );
+        continue;
+      }
+
+      // Empty line → small spacer
+      if (line.trim() === '') {
+        lineNodes.push(<View key={lineKey} style={{ height: 8 }} />);
+        continue;
+      }
+
+      // Regular text line
+      if (i > 0 && lines[i - 1].trim() !== '' && !headerMatch) {
+        // Continuing paragraph — add inline with newline
+        lineNodes.push(
+          <Text
+            key={lineKey}
+            style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant]}
+          >
+            {renderInlineText(line, lineKey)}
+          </Text>
+        );
+      } else {
+        lineNodes.push(
+          <Text
+            key={lineKey}
+            style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant]}
+          >
+            {renderInlineText(line, lineKey)}
+          </Text>
+        );
+      }
+    }
+
+    return lineNodes;
+  };
+
   while ((match = codeBlockRegex.exec(content)) !== null) {
     if (match.index > lastIndex) {
       const textBefore = content.slice(lastIndex, match.index);
-      parts.push(
-        <Text
-          key={`text-${lastIndex}`}
-          style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant]}
-        >
-          {renderInlineText(textBefore, `inline-${lastIndex}`)}
-        </Text>
-      );
+      parts.push(...renderTextBlock(textBefore, `tb-${lastIndex}`));
     }
+    // Extract language label
+    const langMatch = match[0].match(/^```(\w+)/);
+    const lang = langMatch ? langMatch[1] : 'code';
     const codeContent = match[0].replace(/^```\w*\n?/, '').replace(/\n?```$/, '');
     parts.push(
       <View
@@ -127,7 +254,9 @@ function renderFormattedText(content: string, isUser: boolean): React.ReactNode[
           position: 'absolute',
           top: 4,
           right: 6,
-        }}>code</Text>
+          textTransform: 'uppercase',
+          letterSpacing: 0.5,
+        }}>{lang}</Text>
         <Text style={{
           fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
           fontSize: 12,
@@ -141,14 +270,7 @@ function renderFormattedText(content: string, isUser: boolean): React.ReactNode[
 
   if (lastIndex < content.length) {
     const remaining = content.slice(lastIndex);
-    parts.push(
-      <Text
-        key={`text-${lastIndex}`}
-        style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant]}
-      >
-        {renderInlineText(remaining, `inline-${lastIndex}`)}
-      </Text>
-    );
+    parts.push(...renderTextBlock(remaining, `tb-${lastIndex}`));
   }
 
   if (parts.length === 0) {
