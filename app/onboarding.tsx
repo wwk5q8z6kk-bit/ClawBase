@@ -30,8 +30,8 @@ export default function OnboardingScreen() {
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 0.7, duration: 2000, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0.3, duration: 2000, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0.7, duration: 2000, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(glowAnim, { toValue: 0.3, duration: 2000, useNativeDriver: Platform.OS !== 'web' }),
       ])
     ).start();
 

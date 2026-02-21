@@ -17,8 +17,10 @@ import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import * as Clipboard from 'expo-clipboard';
 import { router, useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
+import { useToast } from '@/components/Toast';
 import { useApp } from '@/lib/AppContext';
 import { PulsingDot } from '@/components/PulsingDot';
 import type { ChatMessage } from '@/lib/types';
@@ -531,6 +533,7 @@ export default function ChatDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id, voice, briefing } = useLocalSearchParams<{ id: string; voice?: string; briefing?: string }>();
   const { getMessages, sendMessage, conversations, activeConnection, gateway, gatewayStatus, streamingText, isStreaming } = useApp();
+  const { showToast } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -657,15 +660,21 @@ export default function ChatDetailScreen() {
     }
   }, [messages]);
 
-  const handleCopyAction = useCallback(() => {
+  const handleCopyAction = useCallback(async () => {
     if (!actionMenuMsg) return;
-    if (Platform.OS === 'web') {
-      try { navigator.clipboard.writeText(actionMenuMsg.content); } catch { }
+    try {
+      await Clipboard.setStringAsync(actionMenuMsg.content);
+    } catch {
+      if (Platform.OS === 'web') {
+        try { navigator.clipboard.writeText(actionMenuMsg.content); } catch { }
+      }
     }
     setCopiedId(actionMenuMsg.id);
+    showToast('success', 'Copied to clipboard');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setTimeout(() => setCopiedId(null), 1500);
     setActionMenuMsg(null);
-  }, [actionMenuMsg]);
+  }, [actionMenuMsg, showToast]);
 
   const suggestions = messages.length === 0
     ? ['Summarize my inbox', 'What tasks are pending?', 'System health check', "What's my schedule today?", 'Run a system health check', 'Summarize recent activity']
@@ -1127,7 +1136,7 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: C.textSecondary,
+    backgroundColor: '#FF6B4A',
   },
   welcomeState: {
     alignItems: 'center',
