@@ -66,9 +66,9 @@ const ConnectionBanner = React.memo(function ConnectionBanner() {
         {
           top: insets.top + webTopPad,
           transform: [{ translateY: slideAnim }],
+          pointerEvents: shouldShow ? 'auto' : 'none',
         },
       ]}
-      pointerEvents={shouldShow ? 'auto' : 'none'}
     >
       <LinearGradient
         colors={isError ? ['#3A1515', '#2A1010'] : ['#2A2010', '#201810']}

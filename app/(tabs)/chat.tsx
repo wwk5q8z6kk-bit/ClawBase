@@ -591,7 +591,7 @@ export default function ChatListScreen() {
         <Pressable style={styles.fabOverlay} onPress={closeFab} />
       )}
 
-      <View style={[styles.fabContainer, { bottom: insets.bottom + (Platform.OS === 'web' ? 34 : 0) + 80 }]} pointerEvents="box-none">
+      <View style={[styles.fabContainer, { bottom: insets.bottom + (Platform.OS === 'web' ? 34 : 0) + 80, pointerEvents: 'box-none' }]}>
         <Animated.View style={[styles.fabMenuItem, { transform: [{ translateY: fabMenuItem3Y }, { scale: fabMenuScale }], opacity: fabMenuOpacity }]}>
           <Pressable
             style={styles.fabMenuItemInner}

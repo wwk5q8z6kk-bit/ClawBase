@@ -32,10 +32,7 @@ const TabIcon = ({ name, color, size, focused }: { name: any; color: string; siz
         height: 3,
         borderRadius: 2,
         backgroundColor: color,
-        shadowColor: color,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.8,
-        shadowRadius: 6,
+        boxShadow: `0px 2px 6px ${color}CC`,
         elevation: 4,
       }, style]} />
       <Ionicons name={name} size={size} color={color} />

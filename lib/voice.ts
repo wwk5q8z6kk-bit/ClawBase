@@ -1,9 +1,9 @@
-import { Audio } from 'expo-av';
+import { Audio, Recording } from 'expo-audio';
 import * as Speech from 'expo-speech';
 import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';
 
-let recording: Audio.Recording | null = null;
+let recording: Recording | null = null;
 let chunkInterval: ReturnType<typeof setInterval> | null = null;
 
 // ---------------------------------------------------------------------------
@@ -11,8 +11,12 @@ let chunkInterval: ReturnType<typeof setInterval> | null = null;
 // ---------------------------------------------------------------------------
 
 export async function requestAudioPermission(): Promise<boolean> {
-    const { status } = await Audio.requestPermissionsAsync();
-    return status === 'granted';
+    try {
+        const { granted } = await Audio.requestPermissionsAsync();
+        return granted;
+    } catch {
+        return false;
+    }
 }
 
 export async function startRecording(opts?: { onChunk?: (base64: string) => void }): Promise<boolean> {
@@ -20,18 +24,18 @@ export async function startRecording(opts?: { onChunk?: (base64: string) => void
         const hasPermission = await requestAudioPermission();
         if (!hasPermission) return false;
 
-        await Audio.setAudioModeAsync({
-            allowsRecordingIOS: true,
-            playsInSilentModeIOS: true,
+        const rec = new Recording();
+        await rec.prepareToRecordAsync({
+            extension: '.m4a',
+            sampleRate: 44100,
+            numberOfChannels: 2,
+            bitRate: 128000,
         });
-
-        const { recording: rec } = await Audio.Recording.createAsync(
-            Audio.RecordingOptionsPresets.HIGH_QUALITY,
-        );
+        await rec.startAsync();
         recording = rec;
 
         if (opts?.onChunk && Platform.OS !== 'web') {
-            const uri = rec.getURI();
+            const uri = rec.uri;
             if (uri) {
                 let position = 0;
                 chunkInterval = setInterval(async () => {
@@ -40,7 +44,6 @@ export async function startRecording(opts?: { onChunk?: (base64: string) => void
                         if (!info.exists || info.size === undefined) return;
 
                         const newBytes = info.size - position;
-                        // Avoid reading if less than 4KB to prevent excessive small sends
                         if (newBytes > 4096) {
                             const b64 = await FileSystem.readAsStringAsync(uri, {
                                 encoding: 'base64' as any,
@@ -50,7 +53,7 @@ export async function startRecording(opts?: { onChunk?: (base64: string) => void
                             position = info.size;
                             opts?.onChunk?.(b64);
                         }
-                    } catch { } // Ignore read errors while recording is active
+                    } catch { }
                 }, 500);
             }
         }
@@ -75,14 +78,10 @@ export async function stopRecording(): Promise<{
     if (!recording) return { uri: null, durationMs: 0, base64: null };
 
     try {
+        const durationMs = (recording.currentTime || 0) * 1000;
         await recording.stopAndUnloadAsync();
-        await Audio.setAudioModeAsync({
-            allowsRecordingIOS: false,
-        });
 
-        const uri = recording.getURI();
-        const status = await recording.getStatusAsync();
-        const durationMs = status.durationMillis || 0;
+        const uri = recording.uri;
 
         let base64: string | null = null;
         if (uri && Platform.OS !== 'web') {
@@ -94,7 +93,7 @@ export async function stopRecording(): Promise<{
         }
 
         recording = null;
-        return { uri, durationMs, base64 };
+        return { uri: uri || null, durationMs, base64 };
     } catch (err) {
         console.error('[Voice] Failed to stop recording:', err);
         recording = null;
@@ -114,7 +113,6 @@ export function speakText(
     text: string,
     opts?: { rate?: number; pitch?: number; language?: string; onDone?: () => void },
 ) {
-    // Strip markdown formatting for cleaner speech
     const clean = text
         .replace(/```[\s\S]*?```/g, ' code block ')
         .replace(/`([^`]+)`/g, '$1')

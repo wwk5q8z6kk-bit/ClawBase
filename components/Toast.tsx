@@ -82,7 +82,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <View style={[styles.container, { top: insets.top + webTopPad + 8 }]} pointerEvents="none">
+      <View style={[styles.container, { top: insets.top + webTopPad + 8, pointerEvents: 'none' }]}>
         {toasts.map((toast) => (
           <ToastItem key={toast.id} toast={toast} onDismiss={dismissToast} />
         ))}
