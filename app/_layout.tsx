@@ -41,6 +41,7 @@ function RootLayoutNav() {
       <Stack.Screen name="crm" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="pair" options={{ headerShown: false }} />
+      <Stack.Screen name="search" options={{ headerShown: false, animation: 'fade' }} />
     </Stack>
   );
 }

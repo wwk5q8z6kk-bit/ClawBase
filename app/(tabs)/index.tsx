@@ -106,19 +106,88 @@ function SkeletonLoader({ height = 120 }: { height?: number }) {
 
 function FadeInWidget({ delay, children }: { delay: number; children: ReactNode }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateAnim = useRef(new Animated.Value(20)).current;
+  const translateAnim = useRef(new Animated.Value(30)).current;
+  const scaleAnim = useRef(new Animated.Value(0.97)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 400, delay, useNativeDriver: Platform.OS !== 'web' }),
-      Animated.timing(translateAnim, { toValue: 0, duration: 400, delay, useNativeDriver: Platform.OS !== 'web' }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 500, delay, useNativeDriver: Platform.OS !== 'web' }),
+      Animated.spring(translateAnim, { toValue: 0, delay, useNativeDriver: Platform.OS !== 'web', tension: 60, friction: 9 }),
+      Animated.spring(scaleAnim, { toValue: 1, delay, useNativeDriver: Platform.OS !== 'web', tension: 60, friction: 9 }),
     ]).start();
-  }, [fadeAnim, translateAnim, delay]);
+  }, [fadeAnim, translateAnim, scaleAnim, delay]);
 
   return (
-    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: translateAnim }] }}>
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: translateAnim }, { scale: scaleAnim }] }}>
       {children}
     </Animated.View>
+  );
+}
+
+function ScalePressable({ children, onPress, style }: { children: ReactNode; onPress?: () => void; style?: any }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const onPressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      useNativeDriver: Platform.OS !== 'web',
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  const onPressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: Platform.OS !== 'web',
+      tension: 200,
+      friction: 8,
+    }).start();
+  };
+
+  return (
+    <Pressable onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut}>
+      <Animated.View style={[style, { transform: [{ scale: scaleAnim }] }]}>
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+function AnimatedProgressBar({ segments, total }: { segments: { value: number; color: string }[]; total: number }) {
+  const widthAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(widthAnim, {
+      toValue: 1,
+      duration: 800,
+      delay: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [widthAnim]);
+
+  const safeTotal = total || 1;
+
+  return (
+    <View style={styles.progressTrack}>
+      {segments.map((seg, i) => {
+        if (seg.value <= 0) return null;
+        return (
+          <Animated.View
+            key={i}
+            style={[
+              styles.progressSeg,
+              {
+                flex: seg.value,
+                backgroundColor: seg.color,
+                opacity: widthAnim,
+                transform: [{ scaleX: widthAnim }],
+              },
+            ]}
+          />
+        );
+      })}
+    </View>
   );
 }
 
@@ -200,6 +269,17 @@ function HeroHeader() {
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/search' as any);
+            }}
+            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+          >
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.borderLight }}>
+              <Ionicons name="search" size={18} color={C.textSecondary} />
+            </View>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push('/(tabs)/settings' as any);
             }}
             style={({ pressed }) => [pressed && { opacity: 0.7 }]}
@@ -259,6 +339,12 @@ const KanbanProgressWidget = React.memo(function KanbanProgressWidget() {
       onPress={() => router.push('/(tabs)/vault')}
       style={styles.kanbanWidget}
     >
+      <LinearGradient
+        colors={C.gradient.lobster}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.widgetGradientAccent}
+      />
       <View style={styles.kanbanHeader}>
         <View style={styles.kanbanTitleRow}>
           <Ionicons name="albums" size={18} color={C.coral} />
@@ -269,34 +355,39 @@ const KanbanProgressWidget = React.memo(function KanbanProgressWidget() {
         </View>
       </View>
 
-      <View style={styles.kanbanStats}>
-        <View style={styles.kanbanStat}>
-          <AnimatedCounter target={todo} delay={0} style={[styles.kanbanStatNum, { color: C.textSecondary }]} />
-          <Text style={styles.kanbanStatLabel}>To Do</Text>
+      <ScalePressable onPress={() => router.push('/(tabs)/tasks')}>
+        <View style={styles.kanbanStats}>
+          <View style={styles.kanbanStat}>
+            <AnimatedCounter target={todo} delay={0} style={[styles.kanbanStatNum, { color: C.textSecondary }]} />
+            <Text style={styles.kanbanStatLabel}>To Do</Text>
+          </View>
+          <View style={styles.kanbanStatDiv} />
+          <View style={styles.kanbanStat}>
+            <AnimatedCounter target={inProg} delay={100} style={[styles.kanbanStatNum, { color: C.amber }]} />
+            <Text style={styles.kanbanStatLabel}>Active</Text>
+          </View>
+          <View style={styles.kanbanStatDiv} />
+          <View style={styles.kanbanStat}>
+            <AnimatedCounter target={done} delay={200} style={[styles.kanbanStatNum, { color: C.success }]} />
+            <Text style={styles.kanbanStatLabel}>Done</Text>
+          </View>
+          <View style={styles.kanbanStatDiv} />
+          <View style={styles.kanbanStat}>
+            <AnimatedCounter target={deferred} delay={300} style={[styles.kanbanStatNum, { color: C.purple }]} />
+            <Text style={styles.kanbanStatLabel}>Deferred</Text>
+          </View>
         </View>
-        <View style={styles.kanbanStatDiv} />
-        <View style={styles.kanbanStat}>
-          <AnimatedCounter target={inProg} delay={100} style={[styles.kanbanStatNum, { color: C.amber }]} />
-          <Text style={styles.kanbanStatLabel}>Active</Text>
-        </View>
-        <View style={styles.kanbanStatDiv} />
-        <View style={styles.kanbanStat}>
-          <AnimatedCounter target={done} delay={200} style={[styles.kanbanStatNum, { color: C.success }]} />
-          <Text style={styles.kanbanStatLabel}>Done</Text>
-        </View>
-        <View style={styles.kanbanStatDiv} />
-        <View style={styles.kanbanStat}>
-          <AnimatedCounter target={deferred} delay={300} style={[styles.kanbanStatNum, { color: C.purple }]} />
-          <Text style={styles.kanbanStatLabel}>Deferred</Text>
-        </View>
-      </View>
+      </ScalePressable>
 
-      <View style={styles.progressTrack}>
-        {done > 0 && <View style={[styles.progressSeg, { flex: done, backgroundColor: C.success }]} />}
-        {inProg > 0 && <View style={[styles.progressSeg, { flex: inProg, backgroundColor: C.amber }]} />}
-        {deferred > 0 && <View style={[styles.progressSeg, { flex: deferred, backgroundColor: C.purple }]} />}
-        {todo > 0 && <View style={[styles.progressSeg, { flex: todo, backgroundColor: C.textTertiary + '60' }]} />}
-      </View>
+      <AnimatedProgressBar
+        segments={[
+          { value: done, color: C.success },
+          { value: inProg, color: C.amber },
+          { value: deferred, color: C.purple },
+          { value: todo, color: C.textTertiary + '60' },
+        ]}
+        total={total}
+      />
 
       {urgentTasks.length > 0 && (
         <View style={styles.urgentRow}>
@@ -500,6 +591,7 @@ function GatewayStatusWidget() {
 
   return (
     <GlassCard variant="card" style={styles.gatewayWidget}>
+      <View style={[styles.widgetAccentLine, { backgroundColor: C.coral }]} />
       <View style={styles.gatewayHeader}>
         <View style={styles.gatewayTitleRow}>
           <Ionicons name="server" size={16} color={C.coral} />
@@ -512,25 +604,27 @@ function GatewayStatusWidget() {
       </View>
 
       {gatewayStatus === 'connected' && (
-        <View style={styles.gatewayStats}>
-          <View style={styles.gatewayStat}>
-            <Ionicons name="chatbubbles-outline" size={16} color={C.secondary} />
-            <Text style={styles.gatewayStatNum}>{gatewaySessions.length}</Text>
-            <Text style={styles.gatewayStatLabel}>Sessions</Text>
+        <ScalePressable onPress={() => router.push('/sessions' as any)}>
+          <View style={styles.gatewayStats}>
+            <View style={styles.gatewayStat}>
+              <Ionicons name="chatbubbles-outline" size={16} color={C.secondary} />
+              <Text style={styles.gatewayStatNum}>{gatewaySessions.length}</Text>
+              <Text style={styles.gatewayStatLabel}>Sessions</Text>
+            </View>
+            <View style={styles.gatewayStatDiv} />
+            <View style={styles.gatewayStat}>
+              <Ionicons name="radio-outline" size={16} color={C.accent} />
+              <Text style={styles.gatewayStatNum}>{channelCount}</Text>
+              <Text style={styles.gatewayStatLabel}>Channels</Text>
+            </View>
+            <View style={styles.gatewayStatDiv} />
+            <View style={styles.gatewayStat}>
+              <Ionicons name="hardware-chip-outline" size={16} color={C.amber} />
+              <Text style={styles.gatewayStatNum}>{gatewayInfo.model ? '1' : '0'}</Text>
+              <Text style={styles.gatewayStatLabel}>Model</Text>
+            </View>
           </View>
-          <View style={styles.gatewayStatDiv} />
-          <View style={styles.gatewayStat}>
-            <Ionicons name="radio-outline" size={16} color={C.accent} />
-            <Text style={styles.gatewayStatNum}>{channelCount}</Text>
-            <Text style={styles.gatewayStatLabel}>Channels</Text>
-          </View>
-          <View style={styles.gatewayStatDiv} />
-          <View style={styles.gatewayStat}>
-            <Ionicons name="hardware-chip-outline" size={16} color={C.amber} />
-            <Text style={styles.gatewayStatNum}>{gatewayInfo.model ? '1' : '0'}</Text>
-            <Text style={styles.gatewayStatLabel}>Model</Text>
-          </View>
-        </View>
+        </ScalePressable>
       )}
 
       {gatewayStatus === 'connected' && gatewayInfo.channels.length > 0 && (
@@ -608,6 +702,7 @@ function AutomationStatusWidget() {
       onPress={() => router.push('/(tabs)/settings')}
       style={styles.autoStatusWidget}
     >
+      <View style={[styles.widgetAccentLine, { backgroundColor: C.amber }]} />
       <View style={styles.autoStatusHeader}>
         <View style={styles.sectionTitleRow}>
           <Ionicons name="flash" size={16} color={C.amber} />
@@ -730,6 +825,7 @@ const SystemHealthWidget = React.memo(function SystemHealthWidget() {
 
   return (
     <View style={styles.systemHealthWidget}>
+      <View style={styles.widgetAccentLine} />
       <View style={styles.systemHealthHeader}>
         <View style={styles.systemHealthTitleRow}>
           <Ionicons name="pulse" size={16} color={C.accent} />
@@ -1411,7 +1507,7 @@ const styles = StyleSheet.create({
   alertCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, padding: 14, gap: 10, borderWidth: 1 },
   alertText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.text, flex: 1, lineHeight: 18 },
 
-  skillsBar: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: C.card, borderRadius: 12, paddingVertical: 10, borderWidth: 1, borderColor: C.borderLight },
+  skillsBar: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: C.card, borderRadius: 12, paddingVertical: 10, borderWidth: 1, borderColor: C.borderLight, borderTopWidth: 2, borderTopColor: C.coral + '40' },
   skillItem: { alignItems: 'center', gap: 4 },
   skillIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   skillName: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary },
@@ -1433,7 +1529,7 @@ const styles = StyleSheet.create({
   urgentText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.primary, flex: 1 },
   urgentMore: { fontFamily: 'Inter_600SemiBold', fontSize: 11, color: C.primary },
 
-  calendarWidget: { flexDirection: 'row', backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.borderLight, overflow: 'hidden' },
+  calendarWidget: { flexDirection: 'row', backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.borderLight, overflow: 'hidden' as const, borderLeftWidth: 3, borderLeftColor: C.coral },
   calendarWidgetLeft: { width: 68, backgroundColor: C.coral + '10', alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
   calDateBox: { alignItems: 'center', gap: 1 },
   calDateDay: { fontFamily: 'Inter_500Medium', fontSize: 11, color: C.coral },
@@ -1523,7 +1619,9 @@ const styles = StyleSheet.create({
   autoStatusLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textSecondary },
   autoStatusDiv: { width: 1, height: 24, backgroundColor: C.border },
 
-  systemHealthWidget: { backgroundColor: C.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.borderLight, gap: 12 },
+  widgetAccentLine: { height: 3, borderRadius: 2, backgroundColor: C.accent, marginBottom: 4, width: 40 },
+  widgetGradientAccent: { height: 3, borderRadius: 2, marginBottom: 4, width: 50 },
+  systemHealthWidget: { backgroundColor: C.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.borderLight, gap: 12, overflow: 'hidden' as const },
   systemHealthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   systemHealthTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   systemHealthPlaceholder: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16 },
