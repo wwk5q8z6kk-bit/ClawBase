@@ -6,6 +6,16 @@ ClawBase is a React Native (Expo) mobile companion app for self-hosted OpenClaw 
 
 The app follows a "lobster" dark theme with navy/black backgrounds and orange/red accents. It's designed to be built and deployed from Replit, with Expo cloud builds for native app store distribution.
 
+## Recent Changes
+
+- **Feb 21, 2026**: Import migration completed — packages installed, database provisioned, workflows configured
+- **Feb 21, 2026**: Fixed deprecation warnings — replaced shadow* props with boxShadow, moved pointerEvents from prop to style, migrated expo-av to expo-audio
+- **Feb 21, 2026**: Fixed web animation warnings — useNativeDriver now checks Platform.OS !== 'web'
+- **Feb 21, 2026**: Enhanced Chat UX — expo-clipboard copy-to-clipboard with toast feedback, orange typing indicator dots
+- **Feb 21, 2026**: Polished Dashboard — staggered entrance animations, spring-based tap feedback on stat cards, animated progress bars, gradient accent lines on widgets
+- **Feb 21, 2026**: Added Universal Search — new `/search` screen accessible from Mission Control header, searches across conversations, tasks, memory, calendar, and CRM contacts
+- **Feb 21, 2026**: Cleaned up project — removed junk files, updated .gitignore for Replit internal files
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
