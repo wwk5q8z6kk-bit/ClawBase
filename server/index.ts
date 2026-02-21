@@ -160,7 +160,7 @@ function serveLandingPage({
   res.status(200).send(html);
 }
 
-function configureExpoAndLanding(app: express.Application) {
+async function configureExpoAndLanding(app: express.Application) {
   const templatePath = path.resolve(
     process.cwd(),
     "server",
@@ -171,6 +171,37 @@ function configureExpoAndLanding(app: express.Application) {
   const appName = getAppName();
 
   log("Serving static Expo files with dynamic manifest routing");
+
+  // Development-only proxy to Metro bundler
+  if (process.env.NODE_ENV === "development") {
+    const { createProxyMiddleware } = await import("http-proxy-middleware");
+
+    const metroProxy = createProxyMiddleware({
+      target: "http://127.0.0.1:8081",
+      changeOrigin: true,
+      ws: true,
+      logLevel: "warn",
+    });
+
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      const isMetroRequest =
+        req.path.includes(".bundle") ||
+        req.path.includes(".map") ||
+        req.path.startsWith("/hot") ||
+        req.path.startsWith("/status") ||
+        req.path.startsWith("/symbolicate") ||
+        req.path.startsWith("/logs") ||
+        req.path.startsWith("/__metro") ||
+        req.path.startsWith("/debugger-frontend");
+
+      if (isMetroRequest) {
+        return metroProxy(req, res, next);
+      }
+      next();
+    });
+
+    log("Development proxy to Metro bundler (port 8081) enabled");
+  }
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith("/api")) {
@@ -230,7 +261,7 @@ function setupErrorHandler(app: express.Application) {
   setupBodyParsing(app);
   setupRequestLogging(app);
 
-  configureExpoAndLanding(app);
+  await configureExpoAndLanding(app);
 
   const server = await registerRoutes(app);
 
