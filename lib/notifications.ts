@@ -41,6 +41,8 @@ export function setupNotificationHandler() {
 // ---------------------------------------------------------------------------
 
 export async function setupNotificationCategories() {
+    if (Platform.OS === 'web') return;
+
     await Notifications.setNotificationCategoryAsync('approval', [
         {
             identifier: 'approve',
