@@ -24,7 +24,7 @@ import { router } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import { getGateway } from '@/lib/gateway';
-import { Card } from '@/components/GlassCard';
+import { Card } from '@/components/Card';
 import { Typography } from '@/components/Typography';
 import {
   getNotificationPrefs,

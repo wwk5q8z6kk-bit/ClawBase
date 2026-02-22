@@ -6,7 +6,7 @@ import Animated, {
     withSpring,
     withTiming
 } from 'react-native-reanimated';
-import { Card } from './GlassCard';
+import { Card } from './Card';
 
 interface PressableCardProps extends Omit<PressableProps, 'style'> {
     /** Style for the outer animated container */

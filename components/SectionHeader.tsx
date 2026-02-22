@@ -15,7 +15,7 @@ interface SectionHeaderProps {
 
 /**
  * A reusable section header with an icon, title, and optional action button.
- * Used across Mission Control, Vault, Memory, and other list views.
+ * Used across Mission Control, Workspace, Memory, and other list views.
  */
 export function SectionHeader({
     icon,

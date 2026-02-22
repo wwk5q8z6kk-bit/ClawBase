@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
-import { Card } from '@/components/GlassCard';
+import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
 
 const C = Colors.dark;

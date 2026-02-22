@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
-import { Card } from '@/components/GlassCard';
+import { Card } from '@/components/Card';
 import type { MemoryEntry } from '@/lib/types';
 
 const C = Colors.dark;

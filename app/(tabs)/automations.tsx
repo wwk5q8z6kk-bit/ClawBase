@@ -22,7 +22,7 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import { getGateway } from '@/lib/gateway';
 import { PulsingDot } from '@/components/PulsingDot';
-import { Card } from '@/components/GlassCard';
+import { Card } from '@/components/Card';
 import { Typography } from '@/components/Typography';
 import * as LocalAuthentication from 'expo-local-authentication';
 

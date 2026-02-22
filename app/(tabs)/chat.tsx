@@ -27,6 +27,46 @@ const C = Colors.dark;
 
 const CODE_PATTERNS = /(\bcode\b|```|function\s|const\s|import\s|class\s|def\s|var\s|let\s|<\w+>|{|}|\[\]|=>|console\.|return\s)/i;
 
+function AnimatedListItem({ index, children }: { index: number; children: React.ReactNode }) {
+  const opacityRef = React.useRef(new Animated.Value(0));
+  const translateYRef = React.useRef(new Animated.Value(20));
+  const hasAnimatedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (hasAnimatedRef.current) return;
+    hasAnimatedRef.current = true;
+
+    const delay = Math.min(index * 60, 8 * 60);
+    const timeout = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(opacityRef.current, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.timing(translateYRef.current, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+      ]).start();
+    }, delay);
+
+    return () => clearTimeout(timeout);
+  }, [index]);
+
+  return (
+    <Animated.View
+      style={{
+        opacity: opacityRef.current,
+        transform: [{ translateY: translateYRef.current }],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
 function getSessionIcon(title: string): { name: keyof typeof Ionicons.glyphMap; color: string } {
   const t = title.toLowerCase();
   if (t.includes('email') || t.includes('mail')) return { name: 'mail', color: C.coral };
@@ -516,30 +556,32 @@ export default function ChatListScreen() {
         data={filteredAndSorted}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => (
-          <View>
-            {hasPinned && index === 0 && item.pinned && (
-              <View style={styles.sectionHeader}>
-                <Ionicons name="pin" size={12} color={C.coral} />
-                <Text style={styles.sectionHeaderText}>Pinned</Text>
+          <AnimatedListItem index={index}>
+            <View>
+              {hasPinned && index === 0 && item.pinned && (
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="pin" size={12} color={C.coral} />
+                  <Text style={styles.sectionHeaderText}>Pinned</Text>
+                </View>
+              )}
+              {hasPinned && index === firstUnpinnedIndex && (
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="time-outline" size={12} color={C.textTertiary} />
+                  <Text style={styles.sectionHeaderText}>Recent</Text>
+                </View>
+              )}
+              <View style={styles.conversationItemWrapper}>
+                <SwipeableConversationItem
+                  item={item}
+                  onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.id } })}
+                  onLongPress={() => openActionSheet(item)}
+                  isFirstUnpinned={index === firstUnpinnedIndex}
+                  onDelete={handleSwipeDelete}
+                  onTogglePin={handleSwipeTogglePin}
+                />
               </View>
-            )}
-            {hasPinned && index === firstUnpinnedIndex && (
-              <View style={styles.sectionHeader}>
-                <Ionicons name="time-outline" size={12} color={C.textTertiary} />
-                <Text style={styles.sectionHeaderText}>Recent</Text>
-              </View>
-            )}
-            <View style={styles.conversationItemWrapper}>
-              <SwipeableConversationItem
-                item={item}
-                onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.id } })}
-                onLongPress={() => openActionSheet(item)}
-                isFirstUnpinned={index === firstUnpinnedIndex}
-                onDelete={handleSwipeDelete}
-                onTogglePin={handleSwipeTogglePin}
-              />
             </View>
-          </View>
+          </AnimatedListItem>
         )}
         contentContainerStyle={[
           styles.listContent,

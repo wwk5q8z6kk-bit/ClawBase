@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Card } from '@/components/GlassCard';
+import { Card } from '@/components/Card';
 import { PressableCard } from '@/components/PressableCard';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
