@@ -70,7 +70,7 @@ export async function validateGatewayHandshake(
   return new Promise((resolve) => {
     let socket: WebSocket | null = null;
     let done = false;
-    let challengeSeen = false;
+    let requestId = `clawbase-probe-${Date.now().toString()}-${Math.random().toString(36).substr(2, 9)}`;
 
     const finish = (result: GatewayHandshakeResult) => {
       if (done) return;
@@ -81,12 +81,37 @@ export async function validateGatewayHandshake(
     };
 
     const timeout = setTimeout(() => {
-      if (challengeSeen) {
-        finish({ valid: false, error: 'Gateway did not complete handshake in time' });
-      } else {
-        finish({ valid: false, error: 'Server reachable, but no OpenClaw handshake challenge was received' });
-      }
+      finish({ valid: false, error: 'Server reachable, but no OpenClaw handshake was completed' });
     }, timeoutMs);
+
+    const sendConnect = (nonce?: string) => {
+      const auth: Record<string, string> = {};
+      if (token) auth.token = token;
+      if (nonce) auth.nonce = nonce;
+
+      const connectMsg = {
+        type: 'req',
+        id: requestId,
+        method: 'connect',
+        params: {
+          minProtocol: 3,
+          maxProtocol: 3,
+          client: {
+            id: 'clawbase-validation',
+            version: '2.0.0',
+            platform: Platform.OS,
+            mode: 'probe',
+          },
+          role: 'operator',
+          scopes: ['operator.read'],
+          auth,
+          locale: 'en-US',
+          userAgent: 'ClawBase-Probe/2.0.0',
+        },
+      };
+
+      socket?.send(JSON.stringify(connectMsg));
+    };
 
     try {
       socket = new WebSocket(wsUrl);
@@ -96,68 +121,49 @@ export async function validateGatewayHandshake(
       return;
     }
 
+    socket.onopen = () => {
+      sendConnect();
+    };
+
     socket.onmessage = (event) => {
       try {
         const data = typeof event.data === 'string' ? event.data : '';
         if (!data) return;
         const msg = JSON.parse(data);
-        const type = msg?.event || msg?.type;
-        const payload = msg?.payload || msg?.data || msg;
 
-        if (type === 'connect.challenge') {
-          challengeSeen = true;
-
-          const auth: Record<string, string> = {};
-          if (token) auth.token = token;
-          if (typeof payload?.nonce === 'string' && payload.nonce.length > 0) {
-            auth.nonce = payload.nonce;
+        // Handle res type messages (protocol v3)
+        if (msg.type === 'res') {
+          if (msg.ok === true && msg.payload?.type === 'hello-ok') {
+            finish({ valid: true, info: extractHandshakeInfo(msg.payload) });
+            return;
           }
-
-          const connectMsg = {
-            type: 'connect',
-            minProtocol: 1,
-            maxProtocol: 1,
-            params: {
-              role: 'node',
-              scopes: ['operator.chat', 'operator.sessions', 'operator.config', 'node.invoke'],
-              device: {
-                id: 'clawbase-validation',
-                name: 'ClawBase Validation Probe',
-                type: 'mobile',
-                platform: Platform.OS,
-              },
-              capabilities: ['chat'],
-              auth,
-            },
-          };
-
-          socket?.send(JSON.stringify(connectMsg));
+          if (msg.ok === false) {
+            const message = typeof msg.payload?.message === 'string'
+              ? msg.payload.message
+              : typeof msg.payload?.reason === 'string'
+                ? msg.payload.reason
+                : 'Handshake was rejected';
+            finish({
+              valid: true,
+              info: extractHandshakeInfo(msg.payload),
+              authError: message,
+            });
+            return;
+          }
           return;
         }
 
-        if (!challengeSeen) return;
-
-        if (type === 'hello-ok') {
-          finish({ valid: true, info: extractHandshakeInfo(payload) });
-          return;
-        }
-
-        if (type === 'hello-error' || type === 'error') {
-          const message = typeof payload?.message === 'string'
-            ? payload.message
-            : typeof payload?.reason === 'string'
-              ? payload.reason
-              : 'Handshake was rejected';
-          finish({
-            valid: true,
-            info: extractHandshakeInfo(payload),
-            authError: message,
-          });
-          return;
-        }
-
-        if (type === 'pairing.required' || type === 'pairing.approved') {
-          finish({ valid: true, info: extractHandshakeInfo(payload) });
+        // Handle event type messages
+        if (msg.type === 'event') {
+          if (msg.event === 'connect.challenge') {
+            const nonce = typeof msg.payload?.nonce === 'string' ? msg.payload.nonce : undefined;
+            sendConnect(nonce);
+            return;
+          }
+          if (msg.event === 'pairing.required') {
+            finish({ valid: true, info: extractHandshakeInfo(msg.payload) });
+            return;
+          }
         }
       } catch {}
     };
@@ -168,12 +174,8 @@ export async function validateGatewayHandshake(
 
     socket.onclose = (event) => {
       if (done) return;
-      if (challengeSeen) {
-        const code = typeof event.code === 'number' ? ` (code ${event.code})` : '';
-        finish({ valid: false, error: `Gateway closed connection before handshake completed${code}` });
-        return;
-      }
-      finish({ valid: false, error: 'Could not reach gateway WebSocket endpoint' });
+      const code = typeof event.code === 'number' ? ` (code ${event.code})` : '';
+      finish({ valid: false, error: `Gateway closed connection before handshake completed${code}` });
     };
   });
 }

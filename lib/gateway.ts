@@ -132,6 +132,7 @@ export class OpenClawGateway {
   private maxReconnectAttempts: number = 10;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private pendingRequests: Map<string, { resolve: (v: any) => void; reject: (e: any) => void; timer: ReturnType<typeof setTimeout> }> = new Map();
+  private connectRequestId: string | null = null;
   private gatewayInfo: GatewayInfo = {
     channels: [],
     activeSessionCount: 0,
@@ -207,10 +208,10 @@ export class OpenClawGateway {
       this.ws = new WebSocket(fullUrl);
 
       this.ws.onopen = () => {
-        console.log('[Gateway] WebSocket opened, authenticating...');
+        console.log('[Gateway] WebSocket opened, sending connect request...');
         this.setStatus('authenticating');
         this.reconnectAttempts = 0;
-        this.startPing();
+        this.sendConnectRequest();
       };
 
       this.ws.onmessage = (event) => {
@@ -241,127 +242,141 @@ export class OpenClawGateway {
     }
   }
 
+  private sendConnectRequest() {
+    const id = Crypto.randomUUID();
+    this.connectRequestId = id;
+
+    const authToken = this.deviceToken || this.token;
+
+    this.send({
+      type: 'req',
+      id,
+      method: 'connect',
+      params: {
+        minProtocol: 3,
+        maxProtocol: 3,
+        client: {
+          id: 'clawbase-mobile',
+          version: '2.0.0',
+          platform: Platform.OS,
+          mode: 'node',
+        },
+        role: 'node',
+        scopes: ['operator.read', 'operator.write', 'operator.chat', 'operator.sessions', 'operator.config', 'node.invoke'],
+        auth: {
+          token: authToken,
+        },
+        locale: 'en-US',
+        userAgent: 'ClawBase/2.0.0',
+      },
+    });
+  }
+
   private handleMessage(raw: string) {
     try {
       const msg = JSON.parse(raw);
       console.log('[Gateway] Message received:', msg.type || msg.event || 'unknown');
 
-      if (msg.event === 'connect.challenge' || msg.type === 'connect.challenge') {
-        this.handleChallenge(msg.payload || msg);
+      if (msg.type === 'res') {
+        this.handleResponse(msg);
         return;
       }
 
-      if (msg.event === 'hello-ok' || msg.type === 'hello-ok') {
-        this.handleHelloOk(msg.payload || msg);
-        return;
-      }
-
-      if (msg.event === 'hello-error' || msg.type === 'hello-error' || msg.event === 'error') {
-        this.handleHelloError(msg.payload || msg);
-        return;
-      }
-
-      if (msg.event === 'pairing.required' || msg.type === 'pairing.required') {
-        this.setStatus('pairing');
-        this.emit('status_change', { status: 'pairing', message: 'Approve this device on your gateway' });
-        return;
-      }
-
-      if (msg.event === 'pairing.approved' || msg.type === 'pairing.approved') {
-        this.setStatus('connected');
-        this.emit('status_change', { status: 'connected' });
-        this.requestGatewayInfo();
-        return;
-      }
-
-      if (msg.id && this.pendingRequests.has(msg.id)) {
-        const pending = this.pendingRequests.get(msg.id)!;
-        clearTimeout(pending.timer);
-        this.pendingRequests.delete(msg.id);
-        if (msg.error) {
-          pending.reject(new Error(msg.error.message || 'RPC error'));
-        } else {
-          pending.resolve(msg.result || msg.payload || msg.data);
-        }
-        return;
-      }
-
-      if (msg.type === 'message.chunk' || msg.event === 'message.chunk') {
-        this.handleStreamChunk(msg.data || msg.payload || msg);
-        return;
-      }
-
-      if (msg.type === 'done' || msg.event === 'done') {
-        this.handleStreamDone(msg.data || msg.payload || msg);
-        return;
-      }
-
-      if (msg.type === 'tool_call' || msg.event === 'tool_call') {
-        this.emit('tool_call', msg.data || msg.payload || msg);
-        return;
-      }
-
-      if (msg.type === 'presence' || msg.event === 'presence') {
-        this.emit('presence', msg.data || msg.payload || msg);
-        return;
-      }
-
-      if (msg.type === 'session.update' || msg.event === 'session.update') {
-        this.emit('session_update', msg.data || msg.payload || msg);
-        return;
-      }
-
-      if (msg.type === 'node.invoke' || msg.event === 'node.invoke') {
-        this.handleNodeInvoke(msg);
-        return;
-      }
-
-      if (msg.type === 'notification' || msg.event === 'notification') {
-        this.emit('notification', msg.data || msg.payload || msg);
+      if (msg.type === 'event') {
+        this.handleEvent(msg);
         return;
       }
 
     } catch { }
   }
 
+  private handleResponse(msg: any) {
+    const payload = msg.payload || {};
+
+    if (msg.id === this.connectRequestId) {
+      if (msg.ok === true) {
+        if (payload.type === 'hello-ok' || msg.ok) {
+          this.handleHelloOk(payload);
+        }
+      } else {
+        this.handleHelloError(payload || msg.error);
+      }
+      return;
+    }
+
+    if (msg.id && this.pendingRequests.has(msg.id)) {
+      const pending = this.pendingRequests.get(msg.id)!;
+      clearTimeout(pending.timer);
+      this.pendingRequests.delete(msg.id);
+      if (msg.ok === true) {
+        pending.resolve(msg.payload);
+      } else {
+        pending.reject(new Error(msg.error?.message || msg.payload?.message || 'RPC error'));
+      }
+      return;
+    }
+  }
+
+  private handleEvent(msg: any) {
+    const eventName = msg.event;
+    const payload = msg.payload || {};
+
+    if (eventName === 'connect.challenge') {
+      this.handleChallenge(payload);
+      return;
+    }
+
+    if (eventName === 'pairing.required') {
+      this.setStatus('pairing');
+      this.emit('status_change', { status: 'pairing', message: 'Approve this device on your gateway' });
+      return;
+    }
+
+    if (eventName === 'pairing.approved') {
+      this.setStatus('connected');
+      this.emit('status_change', { status: 'connected' });
+      this.requestGatewayInfo();
+      return;
+    }
+
+    if (eventName === 'message.chunk') {
+      this.handleStreamChunk(payload);
+      return;
+    }
+
+    if (eventName === 'message.complete' || eventName === 'done') {
+      this.handleStreamDone(payload);
+      return;
+    }
+
+    if (eventName === 'tool_call') {
+      this.emit('tool_call', payload);
+      return;
+    }
+
+    if (eventName === 'presence') {
+      this.emit('presence', payload);
+      return;
+    }
+
+    if (eventName === 'session.update') {
+      this.emit('session_update', payload);
+      return;
+    }
+
+    if (eventName === 'node.invoke') {
+      this.handleNodeInvoke(msg);
+      return;
+    }
+
+    if (eventName === 'notification') {
+      this.emit('notification', payload);
+      return;
+    }
+  }
+
   private handleChallenge(payload: any) {
-    const connectMsg: any = {
-      type: 'connect',
-      minProtocol: 1,
-      maxProtocol: 1,
-      params: {
-        role: 'node',
-        scopes: ['operator.chat', 'operator.sessions', 'operator.config', 'node.invoke'],
-        device: {
-          id: this.deviceId,
-          name: 'ClawBase Mobile',
-          type: 'mobile',
-          platform: Platform.OS,
-        },
-        capabilities: [
-          'chat',
-          'tasks',
-          'memory',
-          'calendar',
-          'crm',
-          'canvas',
-          'notifications',
-        ],
-        auth: {} as any,
-      },
-    };
-
-    if (this.deviceToken) {
-      connectMsg.params.auth.deviceToken = this.deviceToken;
-    } else if (this.token) {
-      connectMsg.params.auth.token = this.token;
-    }
-
-    if (payload?.nonce) {
-      connectMsg.params.auth.nonce = payload.nonce;
-    }
-
-    this.send(connectMsg);
+    this.sendConnectRequest();
   }
 
   private async handleHelloOk(payload: any) {
@@ -377,6 +392,9 @@ export class OpenClawGateway {
       this.gatewayInfo.agentName = payload.gateway.agentName || payload.gateway.name;
       this.gatewayInfo.model = payload.gateway.model;
     }
+
+    const tickInterval = payload?.policy?.tickIntervalMs || 15000;
+    this.startPing(tickInterval);
 
     this.requestGatewayInfo();
   }
@@ -416,17 +434,19 @@ export class OpenClawGateway {
   }
 
   private handleNodeInvoke(msg: any) {
-    const command = msg.command || msg.data?.command || '';
-    const params = msg.params || msg.data?.params || {};
-    const invokeId = msg.id || msg.invokeId;
+    const payload = msg.payload || {};
+    const command = payload.command || '';
+    const params = payload.params || {};
+    const invokeId = msg.id || payload.invokeId;
 
     this.emit('node_invoke', { command, params, invokeId });
 
     if (command === 'node.status') {
       this.send({
-        type: 'node.invoke.result',
+        type: 'res',
         id: invokeId,
-        result: {
+        ok: true,
+        payload: {
           status: 'active',
           platform: Platform.OS,
           capabilities: ['chat', 'tasks', 'memory', 'calendar', 'crm', 'canvas', 'notifications'],
@@ -434,9 +454,10 @@ export class OpenClawGateway {
       });
     } else {
       this.send({
-        type: 'node.invoke.result',
+        type: 'res',
         id: invokeId,
-        result: { acknowledged: true, command },
+        ok: true,
+        payload: { acknowledged: true, command },
       });
     }
   }
@@ -455,7 +476,7 @@ export class OpenClawGateway {
         reject(new Error(`RPC timeout: ${method}`));
       }, timeout);
       this.pendingRequests.set(id, { resolve, reject, timer });
-      this.send({ id, method, params });
+      this.send({ type: 'req', id, method, params: params || {} });
     });
   }
 
@@ -464,11 +485,11 @@ export class OpenClawGateway {
     this.fetchConfig().catch(() => { });
   }
 
-  private startPing() {
+  private startPing(intervalMs: number = 15000) {
     this.stopPing();
     this.pingInterval = setInterval(() => {
-      this.send({ type: 'ping' });
-    }, 30000);
+      this.send({ type: 'req', id: Crypto.randomUUID(), method: 'ping', params: {} });
+    }, intervalMs);
   }
 
   private stopPing() {
@@ -525,7 +546,9 @@ export class OpenClawGateway {
     this.streamBuffer.delete(sessionKey);
 
     this.send({
-      method: 'chat.send',
+      type: 'req',
+      id: Crypto.randomUUID(),
+      method: 'sessions.send',
       params: {
         sessionKey,
         message,
@@ -536,7 +559,9 @@ export class OpenClawGateway {
 
   async abortChat(runId?: string): Promise<void> {
     this.send({
-      method: 'chat.abort',
+      type: 'req',
+      id: Crypto.randomUUID(),
+      method: 'agent.cancel',
       params: runId ? { runId } : {},
     });
   }
@@ -547,6 +572,8 @@ export class OpenClawGateway {
     }
 
     this.send({
+      type: 'req',
+      id: Crypto.randomUUID(),
       method: 'chat.audio_stream',
       params: {
         sessionKey,
@@ -563,6 +590,8 @@ export class OpenClawGateway {
     this.streamBuffer.delete(sessionKey);
 
     this.send({
+      type: 'req',
+      id: Crypto.randomUUID(),
       method: 'chat.audio_end',
       params: {
         sessionKey,
@@ -793,7 +822,6 @@ export class OpenClawGateway {
 
   async approveAction(id: string): Promise<boolean> {
     try {
-      // Use optimistic HTTP endpoint instead of raw WS RPC
       const baseUrl = this.url?.replace('ws://', 'http://').replace('wss://', 'https://') || '';
       const portRegex = /:(\d+)$/;
       const hasPort = portRegex.test(baseUrl);
@@ -814,7 +842,6 @@ export class OpenClawGateway {
 
   async denyAction(id: string): Promise<boolean> {
     try {
-      // Use optimistic HTTP endpoint instead of raw WS RPC
       const baseUrl = this.url?.replace('ws://', 'http://').replace('wss://', 'https://') || '';
       const portRegex = /:(\d+)$/;
       const hasPort = portRegex.test(baseUrl);
@@ -882,11 +909,9 @@ export class OpenClawGateway {
     recentActivity: number[];
   }[]> {
     try {
-      // Try dedicated workstreams RPC first
       const result = await this.rpc('workstreams.list').catch(() => null);
       if (result && Array.isArray(result)) return result;
 
-      // Fall back to deriving from channels + sessions
       const sessions = await this.fetchSessions();
       const channelMap = new Map<string, { count: number; active: number; label: string }>();
 
@@ -952,7 +977,7 @@ export class OpenClawGateway {
         .replace(/^ws:\/\//, 'http://')
         .replace(/^wss:\/\//, 'https://');
       const hasPort = /:\d+$/.test(httpUrl) || /:\d+\//.test(httpUrl);
-      const healthUrl = hasPort ? `${httpUrl}/healthz` : `${httpUrl}:18789/healthz`;
+      const healthUrl = hasPort ? `${httpUrl}/health` : `${httpUrl}:18789/health`;
 
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 5000);
