@@ -246,7 +246,9 @@ export class OpenClawGateway {
     const id = Crypto.randomUUID();
     this.connectRequestId = id;
 
-    const authToken = this.deviceToken || this.token;
+    const authToken = this.deviceToken || this.token || '';
+    const auth: Record<string, string> = {};
+    if (authToken) auth.token = authToken;
 
     this.send({
       type: 'req',
@@ -263,9 +265,14 @@ export class OpenClawGateway {
         },
         role: 'node',
         scopes: ['operator.read', 'operator.write', 'operator.chat', 'operator.sessions', 'operator.config', 'node.invoke'],
-        auth: {
-          token: authToken,
+        auth,
+        device: {
+          id: this.deviceId,
+          name: 'ClawBase Mobile',
+          type: 'mobile',
+          platform: Platform.OS,
         },
+        capabilities: ['chat', 'tasks', 'memory', 'calendar', 'crm', 'canvas', 'notifications'],
         locale: 'en-US',
         userAgent: 'ClawBase/2.0.0',
       },
