@@ -30,10 +30,14 @@ Preferred communication style: Simple, everyday language.
 
 - **ORM**: Drizzle ORM with PostgreSQL dialect, schema defined in `shared/schema.ts` using `drizzle-zod` for validation. Migrations are handled via `drizzle-kit`. Primarily, app data resides in client-side AsyncStorage.
 
-### Gateway Integration
+### Gateway Integration (Protocol v3)
 
-- **WebSocket Client**: `OpenClawGateway` class connects to the user's self-hosted OpenClaw Gateway on port 18789 using a defined protocol for handshake, pairing, token auth, and RPC calls.
-- **Features**: Supports real-time streaming, session browsing, memory synchronization, automatic re-connection, an event system, and dashboard widgets for status display.
+- **WebSocket Client**: `OpenClawGateway` class connects to the user's self-hosted OpenClaw Gateway on port 18789 using Protocol v3. The client sends a connect request as the first WebSocket frame on open, using `{ type: "req", id, method: "connect", params: {...} }` format with `minProtocol: 3, maxProtocol: 3`.
+- **Message Format**: All RPC requests use `{ type: "req", id, method, params }`. Responses come as `{ type: "res", id, ok, payload }`. Server events come as `{ type: "event", event, payload }`.
+- **Authentication**: Supports gateway token and device token auth. Device tokens are persisted via SecureStore/AsyncStorage and reused on reconnect.
+- **RPC Methods**: `sessions.list`, `sessions.history`, `sessions.send` (chat), `agent.cancel` (abort), `config.get`, `system.health`, `automations.list`, `events.list`, `ping`.
+- **Health Check**: Uses `/health` endpoint (HTTP GET) for reachability testing.
+- **Features**: Supports real-time streaming, session browsing, memory synchronization, automatic re-connection with exponential backoff, an event system, and dashboard widgets for status display.
 - **Orchestration**: The app can command the gateway to start/stop tunnels, generate pairing codes, rebind settings, and invoke arbitrary commands.
 - **Automations & Events RPC**: Provides methods for managing heartbeat/cron automations and fetching unified timeline events.
 - **Zero Relay Architecture**: Direct communication between app and gateway, with pairing codes handled directly by the gateway.
@@ -42,9 +46,9 @@ Preferred communication style: Simple, everyday language.
 ### Pairing System
 
 - **Connection Methods**: Supports QR code scanning, Tailscale/remote URL, gateway pairing code, and manual URL entry.
-- **Reachability**: Tests gateway `/healthz` endpoint before saving connections.
+- **Reachability**: Tests gateway via Protocol v3 WebSocket handshake (sends connect request, waits for hello-ok) before saving connections.
 - **Deep Links**: Supports `clawbase://` and `openclaw://` URL schemes.
-- **Auto-discovery**: Scans local networks for gateways on port 18789 by probing `/healthz` endpoints.
+- **Auto-discovery**: Scans local networks for gateways on port 18789 by probing via Protocol v3 WebSocket handshake.
 
 ### Network Discovery
 
