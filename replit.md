@@ -2,19 +2,7 @@
 
 ## Overview
 
-ClawBase is a React Native (Expo) mobile companion app for self-hosted OpenClaw AI gateways. It provides a secure, beautiful interface for managing AI agent interactions — including real-time chat, task/Kanban boards, memory browsing, and gateway connection management. The app connects directly to the user's own OpenClaw Gateway via WebSocket, keeping all data private. It targets iOS, Android, and web platforms, with an Express backend server for API support and static serving.
-
-The app follows a "lobster" dark theme with navy/black backgrounds and orange/red accents. It's designed to be built and deployed from Replit, with Expo cloud builds for native app store distribution.
-
-## Recent Changes
-
-- **Feb 21, 2026**: Import migration completed — packages installed, database provisioned, workflows configured
-- **Feb 21, 2026**: Fixed deprecation warnings — replaced shadow* props with boxShadow, moved pointerEvents from prop to style, migrated expo-av to expo-audio
-- **Feb 21, 2026**: Fixed web animation warnings — useNativeDriver now checks Platform.OS !== 'web'
-- **Feb 21, 2026**: Enhanced Chat UX — expo-clipboard copy-to-clipboard with toast feedback, orange typing indicator dots
-- **Feb 21, 2026**: Polished Dashboard — staggered entrance animations, spring-based tap feedback on stat cards, animated progress bars, gradient accent lines on widgets
-- **Feb 21, 2026**: Added Universal Search — new `/search` screen accessible from Home header, searches across conversations, tasks, memory, calendar, and CRM contacts
-- **Feb 21, 2026**: Cleaned up project — removed junk files, updated .gitignore for Replit internal files
+ClawBase is a React Native (Expo) mobile companion app for self-hosted OpenClaw AI gateways. It provides a secure interface for managing AI agent interactions, including real-time chat, task/Kanban boards, memory browsing, and gateway connection management. The app connects directly to the user's own OpenClaw Gateway via WebSocket, ensuring data privacy. It targets iOS, Android, and web platforms, with an Express backend server for API support and static serving. The app follows a "lobster" dark theme and is designed for building and deployment from Replit, utilizing Expo cloud builds for native app store distribution.
 
 ## User Preferences
 
@@ -23,121 +11,102 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Frontend (Mobile App)
-- **Framework**: React Native with Expo SDK 54, using Expo Router v6 for file-based routing
-- **Navigation**: Tab-based layout with 5 visible tabs: Home | Chat | Workspace | Calendar | Settings. Workspace combines Tasks + Memory with a segment switcher (Tasks | Knowledge | Files). Calendar merges Calendar + Timeline with a view toggle (Calendar | Activity). Automations config lives in Settings. Old tabs (tasks, memory, automations, timeline) are hidden routes. Uses `expo-router` with typed routes enabled
-- **State Management**: React Context (`AppContext`) provides global state for connections, conversations, tasks, and memory. React Query (`@tanstack/react-query`) handles server-state for API calls
-- **Local Storage**: AsyncStorage (`@react-native-async-storage/async-storage`) persists all local data (connections, conversations, messages, tasks, memory entries) with a key-prefixed storage pattern (`@clawbase:*`)
-- **UI Libraries**: expo-linear-gradient for gradients, expo-haptics for tactile feedback, react-native-reanimated for animations, react-native-gesture-handler for gestures, react-native-keyboard-controller for keyboard handling
-- **Fonts**: Inter font family (400, 500, 600, 700 weights) via `@expo-google-fonts/inter`
-- **Security**: expo-local-authentication for biometric/PIN lock, expo-secure-store for sensitive data
+
+- **Framework**: React Native with Expo SDK 54 and Expo Router v6 for file-based routing.
+- **Navigation**: Tab-based layout featuring Home, Chat, Workspace (Tasks + Memory), Calendar (Calendar + Activity), and Settings. Hidden routes exist for granular features.
+- **State Management**: React Context (`AppContext`) for global state and React Query (`@tanstack/react-query`) for server-state management.
+- **Local Storage**: AsyncStorage (`@react-native-async-storage/async-storage`) for persisting local data with a key-prefixed pattern.
+- **UI Libraries**: Utilizes `expo-linear-gradient`, `expo-haptics`, `react-native-reanimated`, `react-native-gesture-handler`, and `react-native-keyboard-controller`.
+- **Fonts**: Inter font family is used.
+- **Security**: `expo-local-authentication` for biometric/PIN lock and `expo-secure-store` for sensitive data.
 
 ### Backend (Express Server + Relay)
-- **Framework**: Express 5 (TypeScript) running on the server side
-- **Purpose**: Serves as relay server between mobile app and OpenClaw gateway, plus API proxy and static file server
-- **Relay Server** (`server/relay.ts`): WebSocket bridge between mobile clients and OpenClaw gateway. Keeps gateway token server-side (never exposed to mobile). Each deployment runs its own relay instance
-  - **JWT Authentication**: Mobile devices authenticate with deviceId + pairingCode → receive 1-hour JWT → connect via `/ws/relay?token=JWT`
-  - **Gateway Connection Manager**: Maintains server-side WebSocket to gateway with OpenClaw protocol (connect.challenge → connect → hello-ok), exponential backoff reconnection (max 10 attempts, 30s max delay)
-  - **WebSocket Bridge**: Bridges messages between mobile ↔ gateway, handles streaming (message.chunk, done), tool calls, presence, session updates
-  - **16 REST API Endpoints**: `/api/relay/*` — setup, auth, health, status, sessions, automations, approvals, approve/deny, toggle, events, memory, chat, invoke, quick-action, audit
-  - **Rate Limiting**: express-rate-limit at 100 req/min per IP on all relay endpoints
-  - **Audit Trail**: In-memory log (max 1000 entries) of every action with timestamp, deviceId, action type, result
-  - **Token Isolation**: Gateway token stored server-side only, mobile never receives or transmits it
-- **Routes**: Defined in `server/routes.ts`, prefixed with `/api`
-- **Storage**: Currently uses in-memory storage (`MemStorage` class in `server/storage.ts`) with a simple user model. Drizzle ORM is configured for PostgreSQL but the DB connection is optional — the app primarily uses client-side AsyncStorage
+
+- **Framework**: Express 5 (TypeScript) acts as a relay server, API proxy, and static file server.
+- **Relay Server**: Manages a WebSocket bridge between mobile clients and the OpenClaw gateway, handling JWT authentication, gateway connection management with exponential backoff, message bridging, and streaming. It exposes 16 REST API endpoints, implements rate limiting, and maintains an in-memory audit trail.
+- **Storage**: Currently uses in-memory storage, with Drizzle ORM configured for PostgreSQL, though database usage is optional and minimal.
 
 ### Database
-- **ORM**: Drizzle ORM with PostgreSQL dialect
-- **Schema**: Defined in `shared/schema.ts` — currently minimal with just a `users` table (id, username, password). Uses `drizzle-zod` for validation schema generation
-- **Migrations**: Output to `./migrations` directory via `drizzle-kit`
-- **Note**: The database is not yet heavily used. Most app data lives in client-side AsyncStorage. The Postgres database will likely grow as server-side features are added
 
-### Gateway Integration (lib/gateway.ts)
-- **WebSocket Client**: `OpenClawGateway` class connects to user's self-hosted OpenClaw Gateway on port 18789
-- **Protocol**: Handshake → device pairing → token auth → RPC calls (chat.send, sessions.list, sessions.history, config.get, tools.invoke)
-- **Streaming**: Real-time message.chunk events render streaming text in chat with blinking cursor
-- **Session Browser**: `app/sessions.tsx` lists active gateway sessions (WhatsApp, Telegram, Discord, etc.) with conversation history modal
-- **Memory Sync**: Memory tab fetches MEMORY.md, SESSION-STATE.md, and daily logs from gateway via tools.invoke
-- **Auto-reconnect**: Exponential backoff with max 30s delay, automatic reconnection on connection loss
-- **Event System**: 6+ event types (status_change, gateway_info, sessions_list, memory_data, message_chunk, message_complete)
-- **Dashboard Widget**: GatewayStatusWidget shows live connection status, channel chips, session/model counts
-- **Gateway Orchestration**: App can tell the gateway to start/stop tunnels (`config.tunnel.start/stop/status`), generate pairing codes (`config.pair.generate`), rebind gateway (`config.set`), and invoke arbitrary commands (`tools.invoke` with `command` tool)
-- **Automations RPC**: `automations.list`, `automations.approvals`, `automations.toggle`, `automations.approve`, `automations.deny`, `automations.outputs` for managing heartbeat/cron automations
-- **Events RPC**: `events.list` for fetching unified timeline of agent actions, alerts, and errors
-- **Zero Relay Architecture**: All communication is direct between app and gateway — no intermediary servers, no relay dependencies. The pairing code flow calls the gateway's own `/api/pair/<code>` endpoint
-- **Node Registration**: App registers as a "node" with capabilities (chat, tasks, memory, calendar, crm, canvas, notifications) following the OpenClaw protocol
-- **Node.invoke Handling**: Gateway can send commands to the app via node.invoke; the app responds with node.invoke.result
-- **Pairing Approval**: When gateway returns pairing.required, app shows approval waiting screen with CLI commands (openclaw nodes pending/approve)
+- **ORM**: Drizzle ORM with PostgreSQL dialect, schema defined in `shared/schema.ts` using `drizzle-zod` for validation. Migrations are handled via `drizzle-kit`. Primarily, app data resides in client-side AsyncStorage.
 
-### Pairing System (app/pair.tsx)
-- **Four connection methods**: QR code scanning (camera), Tailscale/remote URL, gateway pairing code (gateway URL + code), manual URL entry
-- **Reachability test**: Before saving a connection, the app tests the gateway's `/healthz` endpoint with a 6-second timeout
-- **Unreachable flow**: If gateway can't be reached, shows diagnostic tips and offers "Try again" or "Save anyway for later"
-- **Deep links**: Supports `clawbase://` and `openclaw://` URL schemes for one-tap connection
-- **Direct-to-gateway pairing**: Pairing code is looked up via `GET http://<gateway>/api/pair/<code>` — the gateway generates and validates its own codes
-- **Auto-discovery**: On mobile (Expo Go), the app scans the local network (192.168.x.x, 10.0.x.x ranges) for gateways on port 18789 by probing /healthz endpoints
-- **Discovered gateways**: Discovered gateways are shown at the top of the connection screen with one-tap connect
+### Gateway Integration
 
-### Network Discovery (lib/discovery.ts)
-- **Network scanning for OpenClaw gateways**: HTTP-based subnet scanning as a fallback since native mDNS/Bonjour is not available in Expo Go
-- **Scanning strategy**: Scans common LAN subnets (192.168.x.x, 10.0.x.x ranges) in batches of 15 with 2-second timeout per probe
-- **Gateway detection**: Gateways are detected by probing the /healthz endpoint on port 18789
-- **Discovery response**: Returns DiscoveredGateway[] array with host, port, name, version, and url for each discovered gateway
+- **WebSocket Client**: `OpenClawGateway` class connects to the user's self-hosted OpenClaw Gateway on port 18789 using a defined protocol for handshake, pairing, token auth, and RPC calls.
+- **Features**: Supports real-time streaming, session browsing, memory synchronization, automatic re-connection, an event system, and dashboard widgets for status display.
+- **Orchestration**: The app can command the gateway to start/stop tunnels, generate pairing codes, rebind settings, and invoke arbitrary commands.
+- **Automations & Events RPC**: Provides methods for managing heartbeat/cron automations and fetching unified timeline events.
+- **Zero Relay Architecture**: Direct communication between app and gateway, with pairing codes handled directly by the gateway.
+- **Node Registration**: The app registers as a "node" with specific capabilities, and handles `node.invoke` commands from the gateway.
+
+### Pairing System
+
+- **Connection Methods**: Supports QR code scanning, Tailscale/remote URL, gateway pairing code, and manual URL entry.
+- **Reachability**: Tests gateway `/healthz` endpoint before saving connections.
+- **Deep Links**: Supports `clawbase://` and `openclaw://` URL schemes.
+- **Auto-discovery**: Scans local networks for gateways on port 18789 by probing `/healthz` endpoints.
+
+### Network Discovery
+
+- **Gateway Scanning**: HTTP-based subnet scanning (192.168.x.x, 10.0.x.x) is used to discover OpenClaw gateways on port 18789.
 
 ### Key Design Patterns
-- **Local-first architecture**: All user data (connections, chats, tasks, memory) is stored locally on device via AsyncStorage. No central server required for core functionality
-- **Zero-dependency design**: The app connects directly to user's OpenClaw Gateway with no relay, proxy, or intermediary service. The Express backend only serves static files and a landing page
-- **Gateway connection model**: Users connect to their own OpenClaw Gateway instances via WebSocket URLs (supports local discovery, manual URL, Tailscale, Cloudflare Tunnel)
-- **Local-first discovery**: Native mDNS/Bonjour not available in Expo Go, so HTTP-based subnet scanning is used as a fallback. Gateways are detected by probing port 18789
-- **Smart URL scheme detection**: Local/private IPs automatically use http/ws; public domains use https/wss
-- **Shared types**: `lib/types.ts` defines TypeScript interfaces used across the app (GatewayConnection, ChatMessage, Conversation, Task, MemoryEntry)
-- **Gateway types**: `lib/gateway.ts` exports GatewaySession, GatewaySessionMessage, GatewayMemoryFile interfaces
-- **Onboarding flow**: First-launch experience guides users through connecting to a gateway, with option to skip
-- **Error boundaries**: Class-based ErrorBoundary component wraps the app for graceful error handling
-- **Platform-aware components**: Components like `KeyboardAwareScrollViewCompat` provide platform-specific implementations (web vs native)
-- **Connection status banner**: Floating animated banner (`components/ConnectionBanner.tsx`) shown across all screens when gateway is disconnected/errored, with reconnect and settings buttons
-- **Toast notification system**: Reusable toast provider (`components/Toast.tsx`) with success/error/info/warning types, animated slide-in/out, accessible via `useToast()` hook
-- **Swipe actions**: Conversation list items support swipe-to-delete (left) and swipe-to-pin (right) via react-native-gesture-handler Swipeable, with long-press fallback on web
-- **Data export**: Settings > Data & Storage > Export Data creates a full JSON backup of all app data (tasks, conversations, memory, events, contacts, connections) with metadata. Uses expo-sharing on native, Blob download on web
-- **Performance optimizations**: Heavy list item components (ConversationItem, MessageBubble, TaskCard, MemoryItem) and dashboard widgets (KanbanProgressWidget, CalendarAgendaWidget, SystemHealthWidget, WorkstreamCards, RecentActivityWidget) wrapped in React.memo to reduce unnecessary re-renders
+
+- **Local-first architecture**: All user data is stored locally via AsyncStorage.
+- **Zero-dependency design**: Direct app-to-gateway connection without intermediary services.
+- **Gateway connection model**: Supports various connection methods including local discovery, manual URL, Tailscale, and Cloudflare Tunnel.
+- **Smart URL Scheme Detection**: Automatically selects `http/ws` for local IPs and `https/wss` for public domains.
+- **Shared Types**: TypeScript interfaces for data models are defined in `lib/types.ts` and `lib/gateway.ts`.
+- **Onboarding Flow**: Guides users through initial gateway connection.
+- **Error Boundaries**: For graceful error handling.
+- **Platform-aware Components**: Components adapt behavior for web vs. native.
+- **Connection Status Banner**: Animated banner displays gateway connection status.
+- **Toast Notification System**: Reusable provider for various notification types.
+- **Swipe Actions**: For list items, with long-press fallback on web.
+- **Data Export**: Full JSON backup of app data.
+- **Performance Optimizations**: Heavy components are memoized to prevent unnecessary re-renders.
 
 ### Build & Deployment
-- **Development**: Two parallel processes — `expo:dev` for the Expo Metro bundler, `server:dev` for the Express server (via tsx)
-- **Production build**: `expo:static:build` generates static web assets, `server:build` bundles server with esbuild, `server:prod` runs the production server
-- **Database migrations**: `db:push` pushes schema changes via drizzle-kit
+
+- **Development**: Parallel `expo:dev` (Metro bundler) and `server:dev` (Express server) processes.
+- **Production**: `expo:static:build` for web assets, `server:build` for bundled server, `server:prod` for production server execution.
+- **Database Migrations**: `db:push` for schema changes via drizzle-kit.
 
 ### Directory Structure
-- `app/` — Expo Router file-based screens and layouts
-- `app/(tabs)/` — Main tab screens (dashboard, chat, tasks, memory, settings)
-- `app/chat/[id].tsx` — Individual chat conversation screen
-- `components/` — Reusable UI components
-- `constants/` — Theme colors and design tokens
-- `lib/` — Core logic (AppContext, storage, types, query client)
-- `server/` — Express backend (routes, storage, templates)
-- `shared/` — Shared code between frontend and backend (DB schema)
-- `scripts/` — Build scripts
-- `assets/` — Images, icons, fonts
+
+- `app/`: Expo Router screens and layouts.
+- `components/`: Reusable UI components.
+- `constants/`: Theme colors and design tokens.
+- `lib/`: Core logic and utilities.
+- `server/`: Express backend.
+- `shared/`: Shared frontend/backend code.
+- `scripts/`: Build scripts.
+- `assets/`: Media and fonts.
 
 ## External Dependencies
 
 ### Core Services
-- **PostgreSQL**: Database (configured via `DATABASE_URL` environment variable, used by Drizzle ORM). Currently minimal usage — schema has only a users table
-- **OpenClaw Gateway**: The primary external service the app connects to. User's self-hosted AI gateway running on port 18789 with WebSocket protocol
+
+-   **PostgreSQL**: Configured via `DATABASE_URL` and used by Drizzle ORM, currently with minimal usage for a `users` table.
+-   **OpenClaw Gateway**: The primary self-hosted AI gateway that the app connects to via WebSocket on port 18789.
 
 ### Key npm Packages
-- **expo** (~54.0.33): Core mobile framework
-- **expo-dev-client** (~6.0.20): Development build client (replaces Expo Go for device testing)
-- **expo-router** (~6.0.23): File-based navigation
-- **express** (^5.0.1): Backend HTTP server
-- **drizzle-orm** (^0.39.3) + **pg** (^8.16.3): Database ORM and PostgreSQL driver
-- **@tanstack/react-query** (^5.83.0): Server state management
-- **react-native-reanimated** (~4.1.1): Animations
-- **react-native-gesture-handler** (~2.28.0): Touch gestures
-- **expo-secure-store**: Secure credential storage
-- **expo-local-authentication**: Biometric authentication
-- **http-proxy-middleware**: Dev server proxy to Metro bundler
+
+-   **expo** (~54.0.33): Core mobile framework.
+-   **expo-dev-client** (~6.0.20): Development build client.
+-   **expo-router** (~6.0.23): File-based navigation.
+-   **express** (^5.0.1): Backend HTTP server.
+-   **drizzle-orm** (^0.39.3) + **pg** (^8.16.3): Database ORM and PostgreSQL driver.
+-   **@tanstack/react-query** (^5.83.0): Server state management.
+-   **react-native-reanimated** (~4.1.1): Animations.
+-   **react-native-gesture-handler** (~2.28.0): Touch gestures.
+-   **expo-secure-store**: Secure credential storage.
+-   **expo-local-authentication**: Biometric authentication.
+-   **http-proxy-middleware**: Dev server proxy.
 
 ### Environment Variables
-- `DATABASE_URL`: PostgreSQL connection string
-- `REPLIT_DEV_DOMAIN`: Replit development domain (used for CORS and proxy configuration)
-- `REPLIT_INTERNAL_APP_DOMAIN`: Replit deployment domain
-- `EXPO_PUBLIC_DOMAIN`: Public domain for API URL construction
+
+-   `DATABASE_URL`: PostgreSQL connection string.
+-   `REPLIT_DEV_DOMAIN`: Replit development domain.
+-   `REPLIT_INTERNAL_APP_DOMAIN`: Replit deployment domain.
+-   `EXPO_PUBLIC_DOMAIN`: Public domain for API URL construction.
