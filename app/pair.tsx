@@ -66,8 +66,16 @@ async function testReachability(rawUrl: string, token?: string): Promise<{ reach
     timeoutMs: 6000,
   });
 
-  if (handshake.valid) {
+  if (handshake.valid && !handshake.authError) {
     return { reachable: true, info: handshake.info };
+  }
+
+  if (handshake.authError) {
+    return {
+      reachable: false,
+      info: handshake.info,
+      error: handshake.authError,
+    };
   }
 
   return {
@@ -161,12 +169,16 @@ export default function PairScreen() {
 
     try {
       const result = await testReachability(url, token);
-      const gwName = result.reachable
-        ? (result.info?.name || result.info?.agentName || name)
-        : name;
+      if (!result.reachable) {
+        setError(result.error || "Cannot reach gateway — check the address and make sure it's accessible");
+        setConnectPhase('unreachable');
+        return;
+      }
+      const gwName = result.info?.name || result.info?.agentName || name;
       await saveAndFinish(gwName, url, token);
-    } catch {
-      await saveAndFinish(name, url, token);
+    } catch (e: any) {
+      setError(e?.message || 'Cannot reach gateway — check the address');
+      setConnectPhase('unreachable');
     }
   }, [saveAndFinish]);
 
