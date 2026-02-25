@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,12 +9,13 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/EmptyState';
+import { getAllLinks, type EntityLink } from '@/lib/entityLinks';
 
 const C = Colors.dark;
 
@@ -27,6 +28,8 @@ interface TimelineEvent {
   source: string;
   timestamp: number;
   raw?: string;
+  entityType?: string;
+  entityId?: string;
 }
 
 const EVENT_CONFIG: Record<EventType, { icon: string; color: string; label: string }> = {
@@ -62,11 +65,13 @@ function TimelineItem({
   isLast,
   expanded,
   onToggle,
+  connCount,
 }: {
   item: TimelineEvent;
   isLast: boolean;
   expanded: boolean;
   onToggle: () => void;
+  connCount: number;
 }) {
   const config = EVENT_CONFIG[item.type] || EVENT_CONFIG.info;
 
@@ -92,6 +97,12 @@ function TimelineItem({
               <Ionicons name={config.icon as any} size={12} color={config.color} />
               <Text style={[styles.eventBadgeText, { color: config.color }]}>{config.label}</Text>
             </View>
+            {connCount > 0 && (
+              <View style={styles.connBadge}>
+                <Ionicons name="git-network-outline" size={10} color={C.accent} />
+                <Text style={styles.connBadgeText}>{connCount}</Text>
+              </View>
+            )}
             <Text style={styles.eventTime}>{formatTimeAgo(item.timestamp)}</Text>
           </View>
           <Text style={styles.eventDescription} numberOfLines={expanded ? undefined : 2}>
@@ -149,6 +160,21 @@ export default function TimelineScreen() {
 
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
+  const [linkCounts, setLinkCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    getAllLinks().then(links => {
+      const counts: Record<string, number> = {};
+      for (const link of links) {
+        const sKey = `${link.sourceType}:${link.sourceId}`;
+        const tKey = `${link.targetType}:${link.targetId}`;
+        counts[sKey] = (counts[sKey] || 0) + 1;
+        counts[tKey] = (counts[tKey] || 0) + 1;
+      }
+      setLinkCounts(counts);
+    }).catch(() => {});
+  }, [conversations, tasks, memoryEntries]);
+
   const localEvents = useMemo(() => {
     const events: TimelineEvent[] = [];
 
@@ -160,6 +186,8 @@ export default function TimelineScreen() {
         source: 'chat',
         timestamp: c.lastMessageTime || Date.now(),
         raw: JSON.stringify({ id: c.id, title: c.title, messages: c.messageCount }, null, 2),
+        entityType: 'conversation',
+        entityId: c.id,
       });
     }
 
@@ -175,6 +203,8 @@ export default function TimelineScreen() {
         source: t.source || 'system',
         timestamp: t.updatedAt,
         raw: JSON.stringify({ id: t.id, status: t.status, priority: t.priority, tags: t.tags }, null, 2),
+        entityType: 'task',
+        entityId: t.id,
       });
     }
 
@@ -186,6 +216,8 @@ export default function TimelineScreen() {
         source: m.source || 'agent',
         timestamp: m.timestamp,
         raw: JSON.stringify({ id: m.id, type: m.type, tags: m.tags, content: m.content?.slice(0, 200) }, null, 2),
+        entityType: 'memory',
+        entityId: m.id,
       });
     }
 
@@ -294,14 +326,18 @@ export default function TimelineScreen() {
       <FlatList
         data={allEvents}
         keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => (
-          <TimelineItem
-            item={item}
-            isLast={index === allEvents.length - 1}
-            expanded={expandedId === item.id}
-            onToggle={() => toggleExpand(item.id)}
-          />
-        )}
+        renderItem={({ item, index }) => {
+          const connKey = item.entityType && item.entityId ? `${item.entityType}:${item.entityId}` : '';
+          return (
+            <TimelineItem
+              item={item}
+              isLast={index === allEvents.length - 1}
+              expanded={expandedId === item.id}
+              onToggle={() => toggleExpand(item.id)}
+              connCount={connKey ? (linkCounts[connKey] || 0) : 0}
+            />
+          );
+        }}
         contentContainerStyle={[
           styles.listContent,
           allEvents.length === 0 && styles.listContentEmpty,
@@ -426,6 +462,20 @@ const styles = StyleSheet.create({
   eventBadgeText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 11,
+  },
+  connBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(91,127,255,0.12)',
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  connBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#5B7FFF',
   },
   eventTime: {
     fontFamily: 'Inter_400Regular',

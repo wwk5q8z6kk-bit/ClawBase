@@ -539,6 +539,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const { addLink } = await import('@/lib/entityLinks');
         await addLink('memory', memEntry.id, 'conversation', conversationId, 'created_from');
+
+        const combinedText = (userContent + ' ' + response).toLowerCase();
+
+        const currentContacts = await crmStorage.getAll();
+        for (const contact of currentContacts) {
+          const parts = contact.name.split(' ');
+          const firstName = parts[0]?.toLowerCase();
+          if (firstName && firstName.length >= 3 && combinedText.includes(firstName)) {
+            if (parts.length < 2 || !combinedText.includes(parts[1]?.toLowerCase().charAt(0))) continue;
+            await addLink('memory', memEntry.id, 'contact', contact.id, 'mentions');
+          }
+        }
+
+        const currentTasks = await taskStorage.getAll();
+        for (const task of currentTasks) {
+          const taskWords = task.title.toLowerCase().split(/\s+/).filter((w: string) => w.length >= 5);
+          const matchCount = taskWords.filter((w: string) => combinedText.includes(w)).length;
+          if (matchCount >= 2) {
+            await addLink('memory', memEntry.id, 'task', task.id, 'mentions');
+          }
+        }
+
+        const currentEvents = await calendarStorage.getAll();
+        for (const event of currentEvents) {
+          const eventWords = event.title.toLowerCase().split(/\s+/).filter((w: string) => w.length >= 5);
+          const matchCount = eventWords.filter((w: string) => combinedText.includes(w)).length;
+          if (matchCount >= 2) {
+            await addLink('memory', memEntry.id, 'calendar', event.id, 'mentions');
+          }
+        }
       } catch {}
 
       const allMem = await memoryStorage.getAll();

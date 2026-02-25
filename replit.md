@@ -110,7 +110,9 @@ Preferred communication style: Simple, everyday language.
 - **Auto-Tagging**: All entities receive `from:<source>` tags on creation (e.g., `from:chat`, `from:gateway`, `from:manual`).
 - **Gateway Event → Entity Creation**: `message_complete` events from the gateway auto-create memory entries linked to the conversation.
 - **Cross-Entity Seed Links**: Seed data creates entity links between related items (memory↔task by shared tags, memory↔contact by name mentions, calendar↔contact by attendee name, calendar↔task by description keywords).
-- **Search Relevance Scoring** (`app/search.tsx`): Weighted multi-field scoring with recency boost, tag matching, priority/status bonuses, and pinned item boost. Results sorted by score with tag chips and timestamps.
+- **Chat Mention Detection** (`lib/AppContext.tsx`): `simulateResponse` scans chat messages for mentions of CRM contacts (first name + last initial), tasks (2+ keyword matches), and calendar events (2+ keyword matches), then auto-creates `mentions` entity links.
+- **Search Relevance Scoring** (`app/search.tsx`): Weighted multi-field scoring with recency boost, tag matching, priority/status bonuses, and pinned item boost. Results show connection count badges from the knowledge graph.
+- **Timeline Connection Indicators** (`app/(tabs)/timeline.tsx`): Each timeline event shows a connection badge if the underlying entity has links in the knowledge graph.
 - **EntityLinksSection**: UI components in vault.tsx, calendar.tsx, and crm.tsx showing linked entities as tappable colored chips with 5-second polling refresh. Resolved names for all entity types.
 - **Knowledge Graph Widget** (`app/(tabs)/index.tsx`): Dashboard widget showing total connections, linked items, entity type breakdown, and the "hub" entity with the most links. Links to the Connections explorer.
 - **Connections Explorer** (`app/connections.tsx`): Full-screen browser for all entity links with type filters, resolved names, relation labels, and navigation to linked entities. Refreshes on screen focus via `useFocusEffect`.

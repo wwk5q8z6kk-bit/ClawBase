@@ -13,7 +13,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
-import { getLinksFor, type EntityLink } from '@/lib/entityLinks';
+import { getLinksFor, getAllLinks, type EntityLink, type EntityType } from '@/lib/entityLinks';
 
 const C = Colors.dark;
 
@@ -78,10 +78,24 @@ export default function SearchScreen() {
   const [query, setQuery] = useState('');
   const inputRef = useRef<TextInput>(null);
   const { conversations, tasks, memoryEntries, calendarEvents, crmContacts } = useApp();
+  const [linkCounts, setLinkCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 100);
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    getAllLinks().then(links => {
+      const counts: Record<string, number> = {};
+      for (const link of links) {
+        const sKey = `${link.sourceType}:${link.sourceId}`;
+        const tKey = `${link.targetType}:${link.targetId}`;
+        counts[sKey] = (counts[sKey] || 0) + 1;
+        counts[tKey] = (counts[tKey] || 0) + 1;
+      }
+      setLinkCounts(counts);
+    }).catch(() => {});
   }, []);
 
   const results = useMemo(() => {
@@ -251,6 +265,13 @@ export default function SearchScreen() {
     const hasTags = result.tags && result.tags.length > 0;
     const visibleTags = result.tags?.filter(t => !t.startsWith('from:')).slice(0, 3);
 
+    const categoryToType: Record<SearchResultCategory, string> = {
+      conversations: 'conversation', tasks: 'task', memory: 'memory',
+      calendar: 'calendar', contacts: 'contact',
+    };
+    const entityType = categoryToType[result.category];
+    const connCount = linkCounts[`${entityType}:${result.entityId}`] || 0;
+
     return (
       <Pressable
         style={({ pressed }) => [styles.resultItem, pressed && { opacity: 0.7, backgroundColor: C.cardElevated }]}
@@ -266,7 +287,15 @@ export default function SearchScreen() {
           )}
         </View>
         <View style={styles.resultContent}>
-          <Text style={styles.resultTitle} numberOfLines={1}>{result.title}</Text>
+          <View style={styles.resultTitleRow}>
+            <Text style={styles.resultTitle} numberOfLines={1}>{result.title}</Text>
+            {connCount > 0 && (
+              <View style={styles.connBadge}>
+                <Ionicons name="git-network-outline" size={10} color={C.accent} />
+                <Text style={styles.connBadgeText}>{connCount}</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.resultSubtitle} numberOfLines={1}>{result.subtitle}</Text>
           {visibleTags && visibleTags.length > 0 && (
             <View style={styles.tagRow}>
@@ -430,10 +459,30 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  resultTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   resultTitle: {
     fontSize: 15,
     fontFamily: 'Inter_500Medium',
     color: C.text,
+    flex: 1,
+  },
+  connBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(91,127,255,0.12)',
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  connBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+    color: C.accent,
   },
   resultSubtitle: {
     fontSize: 13,
