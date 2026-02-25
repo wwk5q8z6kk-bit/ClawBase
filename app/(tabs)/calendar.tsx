@@ -20,8 +20,91 @@ import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { CalendarEvent } from '@/lib/types';
+import { getLinksFor, type EntityLink, type EntityType } from '@/lib/entityLinks';
+import { router } from 'expo-router';
 
 const C = Colors.dark;
+
+const LINK_TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
+  conversation: { icon: 'chatbubbles', color: '#5B7FFF', label: 'Chat' },
+  task: { icon: 'checkmark-circle', color: '#FFB020', label: 'Task' },
+  memory: { icon: 'book', color: '#8B7FFF', label: 'Memory' },
+  calendar: { icon: 'calendar', color: '#FF7B5C', label: 'Event' },
+  contact: { icon: 'person', color: '#9CA3AF', label: 'Contact' },
+};
+
+function EventLinksSection({ eventId }: { eventId: string }) {
+  const [links, setLinks] = React.useState<EntityLink[]>([]);
+  const { tasks, crmContacts } = useApp();
+
+  React.useEffect(() => {
+    getLinksFor('calendar', eventId).then(setLinks).catch(() => {});
+  }, [eventId]);
+
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      getLinksFor('calendar', eventId).then(setLinks).catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [eventId]);
+
+  if (links.length === 0) return null;
+
+  const getLinkLabel = (link: EntityLink): string => {
+    const isSource = link.sourceType === 'calendar' && link.sourceId === eventId;
+    const otherType = isSource ? link.targetType : link.sourceType;
+    const otherId = isSource ? link.targetId : link.sourceId;
+    if (otherType === 'task') {
+      const t = tasks.find(t => t.id === otherId);
+      return t ? t.title : 'Task';
+    }
+    if (otherType === 'contact') {
+      const c = crmContacts.find(c => c.id === otherId);
+      return c ? c.name : 'Contact';
+    }
+    return LINK_TYPE_CONFIG[otherType]?.label || otherType;
+  };
+
+  const handlePress = (link: EntityLink) => {
+    const isSource = link.sourceType === 'calendar' && link.sourceId === eventId;
+    const otherType = isSource ? link.targetType : link.sourceType;
+    const otherId = isSource ? link.targetId : link.sourceId;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (otherType === 'conversation') router.push(`/chat/${otherId}`);
+    else if (otherType === 'task' || otherType === 'memory') router.push('/(tabs)/vault');
+    else if (otherType === 'contact') router.push('/crm' as any);
+  };
+
+  return (
+    <View style={{ gap: 6, marginTop: 12 }}>
+      <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary }}>Linked Items</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        {links.map(link => {
+          const isSource = link.sourceType === 'calendar' && link.sourceId === eventId;
+          const otherType = isSource ? link.targetType : link.sourceType;
+          const cfg = LINK_TYPE_CONFIG[otherType] || LINK_TYPE_CONFIG.task;
+          return (
+            <Pressable
+              key={link.id}
+              onPress={() => handlePress(link)}
+              style={({ pressed }) => [{
+                flexDirection: 'row', alignItems: 'center', gap: 4,
+                paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
+                borderWidth: 1, borderColor: cfg.color + '40',
+                backgroundColor: 'rgba(255,255,255,0.03)',
+              }, pressed && { opacity: 0.7 }]}
+            >
+              <Ionicons name={cfg.icon as any} size={12} color={cfg.color} />
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: cfg.color, maxWidth: 140 }} numberOfLines={1}>
+                {getLinkLabel(link)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
 
 type ActiveView = 'calendar' | 'activity';
 type ViewMode = 'month' | 'week' | 'day';
@@ -728,6 +811,8 @@ export default function CalendarTab() {
                       <Text style={[styles.detailSourceText, { color: eventColor }]}>{selectedEvent.source}</Text>
                     </View>
                   ) : null}
+
+                  <EventLinksSection eventId={selectedEvent.id} />
 
                   <View style={styles.detailActions}>
                     <Pressable
