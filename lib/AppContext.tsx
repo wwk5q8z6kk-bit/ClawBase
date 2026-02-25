@@ -178,6 +178,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     const seedMemory = generateSeedMemory();
+    const createdMemoryEntries: { id: string; tags?: string[]; title: string; content: string }[] = [];
     for (const m of seedMemory) {
       const entry = await memoryStorage.add({
         type: m.type,
@@ -187,11 +188,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
         tags: m.tags,
         pinned: m.pinned,
         reviewStatus: m.reviewStatus,
+        relevance: m.relevance,
       });
       if (m.timestamp !== undefined) {
         await memoryStorage.update(entry.id, { timestamp: m.timestamp });
       }
+      createdMemoryEntries.push({ id: entry.id, tags: m.tags, title: m.title, content: m.content });
     }
+
+    try {
+      const { addLink } = await import('@/lib/entityLinks');
+      const allTasks = await taskStorage.getAll();
+      const allContacts = await crmStorage.getAll();
+
+      for (const mem of createdMemoryEntries) {
+        const memTags = (mem.tags || []).filter(t => !t.startsWith('from:'));
+        for (const task of allTasks) {
+          const taskTags = (task.tags || []).filter(t => !t.startsWith('from:'));
+          const shared = taskTags.filter(t => memTags.includes(t));
+          if (shared.length > 0) {
+            await addLink('memory', mem.id, 'task', task.id, 'related_to');
+          }
+        }
+        for (const contact of allContacts) {
+          if (mem.content.toLowerCase().includes(contact.name.split(' ')[0].toLowerCase())) {
+            await addLink('memory', mem.id, 'contact', contact.id, 'mentions');
+          }
+        }
+      }
+    } catch {}
 
     await AsyncStorage.setItem('@clawbase:seeded', 'true');
   }, []);
@@ -248,9 +273,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setStreamingText(event.data.text);
       setIsStreaming(true);
     });
-    const unsub6 = gateway.on('message_complete', (event) => {
+    const unsub6 = gateway.on('message_complete', async (event) => {
       setStreamingText(null);
       setIsStreaming(false);
+
+      const fullText = event.data?.text;
+      if (fullText && fullText.length > 20) {
+        try {
+          const { addLink } = await import('@/lib/entityLinks');
+          const memEntry = await memoryStorage.add({
+            type: 'conversation',
+            title: fullText.slice(0, 60).replace(/\n/g, ' '),
+            content: fullText,
+            source: 'gateway',
+            tags: ['from:gateway'],
+            reviewStatus: 'unread',
+          });
+          setMemoryEntries(await memoryStorage.getAll());
+
+          const sessionKey = event.data?.sessionKey;
+          if (sessionKey) {
+            await addLink('memory', memEntry.id, 'conversation', sessionKey, 'created_from');
+          }
+        } catch {}
+      }
     });
     const unsub7 = gateway.on('error', (event) => {
       console.log('[AppContext] Gateway error:', event.data?.message || event.data);

@@ -13,6 +13,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
+import { getLinksFor, type EntityLink } from '@/lib/entityLinks';
 
 const C = Colors.dark;
 
@@ -20,9 +21,13 @@ type SearchResultCategory = 'conversations' | 'tasks' | 'memory' | 'calendar' | 
 
 interface SearchResult {
   id: string;
+  entityId: string;
   category: SearchResultCategory;
   title: string;
   subtitle: string;
+  score: number;
+  tags?: string[];
+  timestamp?: number;
   onPress: () => void;
 }
 
@@ -50,6 +55,24 @@ function formatTime(ts: number): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+function scoreMatch(query: string, text: string | undefined, weight: number): number {
+  if (!text) return 0;
+  const lower = text.toLowerCase();
+  if (lower === query) return weight * 3;
+  if (lower.startsWith(query)) return weight * 2;
+  if (lower.includes(query)) return weight;
+  return 0;
+}
+
+function recencyBoost(timestamp: number | undefined): number {
+  if (!timestamp) return 0;
+  const ageHours = (Date.now() - timestamp) / 3600000;
+  if (ageHours < 1) return 3;
+  if (ageHours < 24) return 2;
+  if (ageHours < 168) return 1;
+  return 0;
+}
+
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
@@ -68,65 +91,120 @@ export default function SearchScreen() {
     const items: SearchResult[] = [];
 
     for (const c of conversations) {
-      if (c.title.toLowerCase().includes(q) || c.lastMessage?.toLowerCase().includes(q)) {
+      const s =
+        scoreMatch(q, c.title, 10) +
+        scoreMatch(q, c.lastMessage, 5) +
+        recencyBoost(c.lastMessageTime);
+      if (s > 0) {
         items.push({
           id: `conv-${c.id}`,
+          entityId: c.id,
           category: 'conversations',
           title: c.title,
           subtitle: c.lastMessage ? c.lastMessage.slice(0, 80) : `${c.messageCount} messages`,
+          score: s,
+          timestamp: c.lastMessageTime,
           onPress: () => router.push(`/chat/${c.id}`),
         });
       }
     }
 
     for (const t of tasks) {
-      if (t.title.toLowerCase().includes(q) || t.description?.toLowerCase().includes(q) || t.tags?.some(tag => tag.toLowerCase().includes(q))) {
+      const s =
+        scoreMatch(q, t.title, 10) +
+        scoreMatch(q, t.description, 5) +
+        (t.tags?.some(tag => tag.toLowerCase().includes(q)) ? 8 : 0) +
+        (t.source?.toLowerCase().includes(q) ? 3 : 0) +
+        recencyBoost(t.updatedAt) +
+        (t.status === 'in_progress' ? 2 : 0) +
+        (t.priority === 'urgent' ? 2 : t.priority === 'high' ? 1 : 0);
+      if (s > 0) {
         items.push({
           id: `task-${t.id}`,
+          entityId: t.id,
           category: 'tasks',
           title: t.title,
-          subtitle: t.description ? t.description.slice(0, 80) : `${t.status} - ${t.priority}`,
-          onPress: () => router.push('/(tabs)/tasks'),
+          subtitle: t.description ? t.description.slice(0, 80) : `${t.status} · ${t.priority}`,
+          score: s,
+          tags: t.tags,
+          timestamp: t.updatedAt,
+          onPress: () => router.push('/(tabs)/vault'),
         });
       }
     }
 
     for (const m of memoryEntries) {
-      if (m.title.toLowerCase().includes(q) || m.content.toLowerCase().includes(q) || m.tags?.some(tag => tag.toLowerCase().includes(q))) {
+      const s =
+        scoreMatch(q, m.title, 10) +
+        scoreMatch(q, m.content, 4) +
+        (m.tags?.some(tag => tag.toLowerCase().includes(q)) ? 8 : 0) +
+        (m.source?.toLowerCase().includes(q) ? 3 : 0) +
+        recencyBoost(m.timestamp) +
+        (m.pinned ? 3 : 0) +
+        (typeof m.relevance === 'number' ? m.relevance * 5 : 0);
+      if (s > 0) {
         items.push({
           id: `mem-${m.id}`,
+          entityId: m.id,
           category: 'memory',
           title: m.title,
-          subtitle: m.content.slice(0, 80),
-          onPress: () => router.push('/(tabs)/memory'),
+          subtitle: m.summary || m.content.slice(0, 80),
+          score: s,
+          tags: m.tags,
+          timestamp: m.timestamp,
+          onPress: () => router.push('/(tabs)/vault'),
         });
       }
     }
 
     for (const e of calendarEvents) {
-      if (e.title.toLowerCase().includes(q) || e.description?.toLowerCase().includes(q) || e.location?.toLowerCase().includes(q)) {
+      const s =
+        scoreMatch(q, e.title, 10) +
+        scoreMatch(q, e.description, 5) +
+        scoreMatch(q, e.location, 6) +
+        (e.tags?.some(tag => tag.toLowerCase().includes(q)) ? 8 : 0) +
+        (e.attendees?.some(a => a.toLowerCase().includes(q)) ? 7 : 0) +
+        recencyBoost(e.startTime);
+      if (s > 0) {
         items.push({
           id: `cal-${e.id}`,
+          entityId: e.id,
           category: 'calendar',
           title: e.title,
           subtitle: e.description ? e.description.slice(0, 60) : formatTime(e.startTime),
+          score: s,
+          tags: e.tags,
+          timestamp: e.startTime,
           onPress: () => router.push('/(tabs)/calendar'),
         });
       }
     }
 
     for (const c of crmContacts) {
-      if (c.name.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q) || c.company?.toLowerCase().includes(q) || c.notes?.toLowerCase().includes(q)) {
+      const s =
+        scoreMatch(q, c.name, 10) +
+        scoreMatch(q, c.email, 6) +
+        scoreMatch(q, c.company, 8) +
+        scoreMatch(q, c.notes, 3) +
+        scoreMatch(q, c.role, 5) +
+        (c.tags?.some(tag => tag.toLowerCase().includes(q)) ? 8 : 0) +
+        recencyBoost(c.lastInteraction);
+      if (s > 0) {
         items.push({
           id: `crm-${c.id}`,
+          entityId: c.id,
           category: 'contacts',
           title: c.name,
-          subtitle: [c.company, c.role, c.email].filter(Boolean).join(' - ').slice(0, 80) || c.stage,
+          subtitle: [c.company, c.role, c.email].filter(Boolean).join(' · ').slice(0, 80) || c.stage,
+          score: s,
+          tags: c.tags,
+          timestamp: c.lastInteraction,
           onPress: () => router.push('/crm' as any),
         });
       }
     }
 
+    items.sort((a, b) => b.score - a.score);
     return items;
   }, [query, conversations, tasks, memoryEntries, calendarEvents, crmContacts]);
 
@@ -167,6 +245,9 @@ export default function SearchScreen() {
 
     const result = item as SearchResult;
     const config = CATEGORY_CONFIG[result.category];
+    const hasTags = result.tags && result.tags.length > 0;
+    const visibleTags = result.tags?.filter(t => !t.startsWith('from:')).slice(0, 3);
+
     return (
       <Pressable
         style={({ pressed }) => [styles.resultItem, pressed && { opacity: 0.7, backgroundColor: C.cardElevated }]}
@@ -184,13 +265,25 @@ export default function SearchScreen() {
         <View style={styles.resultContent}>
           <Text style={styles.resultTitle} numberOfLines={1}>{result.title}</Text>
           <Text style={styles.resultSubtitle} numberOfLines={1}>{result.subtitle}</Text>
+          {visibleTags && visibleTags.length > 0 && (
+            <View style={styles.tagRow}>
+              {visibleTags.map((tag, i) => (
+                <View key={i} style={styles.tagChip}>
+                  <Text style={styles.tagText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
-        <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
+        {result.timestamp && (
+          <Text style={styles.resultTime}>{formatTime(result.timestamp)}</Text>
+        )}
       </Pressable>
     );
   };
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
+  const totalCount = results.length;
 
   return (
     <View style={[styles.container, { paddingTop: topInset }]}>
@@ -233,14 +326,19 @@ export default function SearchScreen() {
           <Text style={styles.emptySubtitle}>Try a different search term</Text>
         </View>
       ) : (
-        <FlatList
-          data={flatData}
-          renderItem={renderItem}
-          keyExtractor={(item, index) => ('type' in item ? `header-${item.category}` : (item as SearchResult).id)}
-          contentContainerStyle={styles.listContent}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-        />
+        <>
+          <View style={styles.resultsSummary}>
+            <Text style={styles.resultsSummaryText}>{totalCount} result{totalCount !== 1 ? 's' : ''}</Text>
+          </View>
+          <FlatList
+            data={flatData}
+            renderItem={renderItem}
+            keyExtractor={(item, index) => ('type' in item ? `header-${item.category}` : (item as SearchResult).id)}
+            contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          />
+        </>
       )}
     </View>
   );
@@ -281,6 +379,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Inter_500Medium',
     color: C.primary,
+  },
+  resultsSummary: {
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+  },
+  resultsSummaryText: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    color: C.textTertiary,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -329,6 +436,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_400Regular',
     color: C.textSecondary,
+  },
+  resultTime: {
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
+    color: C.textTertiary,
+    marginLeft: 4,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 4,
+  },
+  tagChip: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  tagText: {
+    fontSize: 10,
+    fontFamily: 'Inter_500Medium',
+    color: C.textTertiary,
   },
   listContent: {
     paddingBottom: 40,

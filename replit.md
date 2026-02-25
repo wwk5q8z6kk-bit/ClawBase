@@ -103,6 +103,17 @@ Preferred communication style: Simple, everyday language.
 - **Production**: `expo:static:build` for web assets, `server:build` for bundled server, `server:prod` for production server execution.
 - **Database Migrations**: `db:push` for schema changes via drizzle-kit.
 
+### Metadata Enrichment & Cross-Entity Intelligence
+
+- **Entity Link Registry** (`lib/entityLinks.ts`): Bi-directional links between entities (task↔conversation, memory↔contact, etc.) stored in AsyncStorage. Types: `conversation`, `task`, `memory`, `calendar`, `contact`. Relations: `created_from`, `mentions`, `related_to`, `spawned_by`.
+- **Proactive Insights Engine** (`lib/insights.ts`): Pure-logic module analyzing local data for actionable alerts (overdue tasks, stale contacts, unreviewed memory, busy day, task streaks). Insights shown on dashboard as ProactiveAlert cards.
+- **Auto-Tagging**: All entities receive `from:<source>` tags on creation (e.g., `from:chat`, `from:gateway`, `from:manual`).
+- **Gateway Event → Entity Creation**: `message_complete` events from the gateway auto-create memory entries linked to the conversation.
+- **Cross-Entity Seed Links**: Seed data creates entity links between related items (memory↔task by shared tags, memory↔contact by name mentions).
+- **Search Relevance Scoring** (`app/search.tsx`): Weighted multi-field scoring with recency boost, tag matching, priority/status bonuses, and pinned item boost. Results sorted by score with tag chips and timestamps.
+- **EntityLinksSection**: UI component in vault.tsx showing linked entities as tappable colored chips with 5-second polling refresh.
+- **Audit Log**: Persisted to PostgreSQL via `audit_log` table (Drizzle schema).
+
 ### Directory Structure
 
 - `app/`: Expo Router screens and layouts.
