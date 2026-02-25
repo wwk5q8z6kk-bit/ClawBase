@@ -68,7 +68,8 @@ interface AppContextValue {
     status?: TaskStatus,
     priority?: Task['priority'],
     description?: string,
-  ) => Promise<void>;
+    meta?: { source?: string; tags?: string[] },
+  ) => Promise<Task>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
 
@@ -451,12 +452,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ),
       );
 
-      await memoryStorage.add({
+      const memEntry = await memoryStorage.add({
         type: 'conversation',
         title: userContent.slice(0, 50),
         content: response,
         source: 'chat',
+        tags: ['from:chat'],
+        linkedIds: [conversationId],
       });
+
+      try {
+        const { addLink } = await import('@/lib/entityLinks');
+        await addLink('memory', memEntry.id, 'conversation', conversationId, 'created_from');
+      } catch {}
 
       const allMem = await memoryStorage.getAll();
       setMemoryEntries(allMem);
@@ -510,9 +518,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       status: TaskStatus = 'todo',
       priority: Task['priority'] = 'medium',
       description?: string,
-    ) => {
+      meta?: { source?: string; tags?: string[] },
+    ): Promise<Task> => {
       const task = await taskStorage.create(title, status, priority, description);
+      const source = meta?.source || 'manual';
+      const sourceTag = `from:${source}`;
+      const tags = meta?.tags ? [...meta.tags] : [];
+      if (!tags.includes(sourceTag)) tags.push(sourceTag);
+      if (tags.length > 0 || source !== 'manual') {
+        await taskStorage.update(task.id, { source, tags });
+        task.source = source;
+        task.tags = tags;
+      }
       setTasks((prev) => [...prev, task]);
+      return task;
     },
     [],
   );
@@ -530,7 +549,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const createMemoryEntry = useCallback(async (entry: Omit<MemoryEntry, 'id' | 'timestamp'>) => {
-    const created = await memoryStorage.add(entry);
+    const source = entry.source || 'manual';
+    const sourceTag = `from:${source}`;
+    const tags = entry.tags ? [...entry.tags] : [];
+    if (!tags.includes(sourceTag)) tags.push(sourceTag);
+    const created = await memoryStorage.add({ ...entry, tags });
     setMemoryEntries((prev) => [created, ...prev]);
   }, []);
 
@@ -552,7 +575,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const createCalendarEvent = useCallback(async (event: Omit<CalendarEvent, 'id'>) => {
-    const created = await calendarStorage.create(event);
+    const source = event.source || 'manual';
+    const sourceTag = `from:${source}`;
+    const tags = event.tags ? [...event.tags] : [];
+    if (!tags.includes(sourceTag)) tags.push(sourceTag);
+    const created = await calendarStorage.create({ ...event, tags });
     setCalendarEvents((prev) => [...prev, created].sort((a, b) => a.startTime - b.startTime));
   }, []);
 

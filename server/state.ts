@@ -48,10 +48,15 @@ export const state = {
 const MAX_AUDIT_ENTRIES = 1000;
 
 export function addAudit(deviceId: string, action: string, result: 'success' | 'error', details?: string) {
-    state.auditLog.push({ timestamp: Date.now(), deviceId, action, result, details });
+    const entry: AuditEntry = { timestamp: Date.now(), deviceId, action, result, details };
+    state.auditLog.push(entry);
     if (state.auditLog.length > MAX_AUDIT_ENTRIES) {
         state.auditLog.splice(0, state.auditLog.length - MAX_AUDIT_ENTRIES);
     }
+
+    import('./db').then(({ pushAuditToDb }) => {
+        pushAuditToDb(entry).catch(() => {});
+    }).catch(() => {});
 }
 
 export function hasActiveMobileClients(): boolean {

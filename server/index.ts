@@ -268,6 +268,17 @@ function setupErrorHandler(app: express.Application) {
   setupErrorHandler(app);
 
   const port = parseInt(process.env.PORT || "5000", 10);
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      log(`Port ${port} is in use, retrying in 1s...`);
+      setTimeout(() => {
+        server.close();
+        server.listen({ port, host: "0.0.0.0", reusePort: true });
+      }, 1000);
+    } else {
+      throw err;
+    }
+  });
   server.listen(
     {
       port,

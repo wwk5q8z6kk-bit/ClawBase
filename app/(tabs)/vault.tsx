@@ -22,6 +22,8 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { Task, TaskStatus, MemoryEntry } from '@/lib/types';
 import type { GatewayMemoryFile } from '@/lib/gateway';
+import { getLinksFor, type EntityLink, type EntityType } from '@/lib/entityLinks';
+import { router } from 'expo-router';
 
 const C = Colors.dark;
 
@@ -445,6 +447,104 @@ function MoveToModal({
   );
 }
 
+const ENTITY_TYPE_CONFIG: Record<EntityType, { icon: string; color: string; label: string }> = {
+  conversation: { icon: 'chatbubble', color: C.accent, label: 'Conversation' },
+  task: { icon: 'checkbox', color: C.amber, label: 'Task' },
+  memory: { icon: 'book', color: '#8B7FFF', label: 'Memory' },
+  calendar: { icon: 'calendar', color: C.coral, label: 'Event' },
+  contact: { icon: 'person', color: C.textSecondary, label: 'Contact' },
+};
+
+function EntityLinksSection({ entityType, entityId }: { entityType: EntityType; entityId: string }) {
+  const [links, setLinks] = useState<EntityLink[]>([]);
+  const { conversations } = useApp();
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  React.useEffect(() => {
+    getLinksFor(entityType, entityId).then(setLinks).catch(() => {});
+  }, [entityType, entityId, refreshKey]);
+
+  React.useEffect(() => {
+    const interval = setInterval(() => setRefreshKey((k) => k + 1), 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (links.length === 0) return null;
+
+  const handleLinkPress = (link: EntityLink) => {
+    const targetType = link.sourceType === entityType && link.sourceId === entityId
+      ? link.targetType
+      : link.sourceType;
+    const targetId = link.sourceType === entityType && link.sourceId === entityId
+      ? link.targetId
+      : link.sourceId;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (targetType === 'conversation') {
+      router.push(`/chat/${targetId}`);
+    } else if (targetType === 'task' || targetType === 'memory') {
+      router.push('/(tabs)/vault');
+    } else if (targetType === 'calendar') {
+      router.push('/(tabs)/calendar');
+    } else if (targetType === 'contact') {
+      router.push('/crm');
+    }
+  };
+
+  const getLinkLabel = (link: EntityLink): string => {
+    const isSource = link.sourceType === entityType && link.sourceId === entityId;
+    const otherType = isSource ? link.targetType : link.sourceType;
+    const otherId = isSource ? link.targetId : link.sourceId;
+    const config = ENTITY_TYPE_CONFIG[otherType];
+    if (otherType === 'conversation') {
+      const conv = conversations.find((c) => c.id === otherId);
+      return conv ? conv.title : config.label;
+    }
+    return `${config.label} (${link.relation.replace(/_/g, ' ')})`;
+  };
+
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={linkStyles.sectionLabel}>Linked Items</Text>
+      <View style={linkStyles.chipsRow}>
+        {links.map((link) => {
+          const isSource = link.sourceType === entityType && link.sourceId === entityId;
+          const otherType = isSource ? link.targetType : link.sourceType;
+          const config = ENTITY_TYPE_CONFIG[otherType];
+          return (
+            <Pressable
+              key={link.id}
+              onPress={() => handleLinkPress(link)}
+              style={({ pressed }) => [linkStyles.chip, { borderColor: config.color + '40' }, pressed && { opacity: 0.7 }]}
+            >
+              <Ionicons name={config.icon as any} size={12} color={config.color} />
+              <Text style={[linkStyles.chipText, { color: config.color }]} numberOfLines={1}>
+                {getLinkLabel(link)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const linkStyles = StyleSheet.create({
+  sectionLabel: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary, marginBottom: 2 },
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  chipText: { fontFamily: 'Inter_500Medium', fontSize: 11, maxWidth: 140 },
+});
+
 function TaskDetailModal({
   visible,
   task,
@@ -608,6 +708,8 @@ function TaskDetailModal({
                 </View>
               </View>
             )}
+
+            <EntityLinksSection entityType="task" entityId={task.id} />
 
             <View style={styles.timestampsContainer}>
               <Text style={styles.timestampText}>Created: {formatTimestamp(task.createdAt)}</Text>
@@ -967,17 +1069,7 @@ function MemoryDetailModal({
               </View>
             )}
 
-            {item.linkedIds && item.linkedIds.length > 0 && (
-              <View style={memModalStyles.section}>
-                <Text style={memModalStyles.sectionLabel}>Linked Items</Text>
-                {item.linkedIds.map((lid, i) => (
-                  <View key={i} style={memModalStyles.linkedItem}>
-                    <Ionicons name="link-outline" size={12} color={C.textTertiary} />
-                    <Text style={memModalStyles.linkedText}>{lid}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+            <EntityLinksSection entityType="memory" entityId={item.id} />
 
             <View style={memModalStyles.section}>
               <Text style={memModalStyles.sectionLabel}>Timestamp</Text>

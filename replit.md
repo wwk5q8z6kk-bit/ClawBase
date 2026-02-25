@@ -70,6 +70,33 @@ Preferred communication style: Simple, everyday language.
 - **Data Export**: Full JSON backup of app data.
 - **Performance Optimizations**: Heavy components are memoized to prevent unnecessary re-renders.
 
+### Entity Link Registry (`lib/entityLinks.ts`)
+
+- **Bi-directional entity linking**: Connects any two entities (task↔conversation, memory↔contact, etc.) stored in AsyncStorage under `@clawbase:entity_links`.
+- **Link structure**: `{ id, sourceType, sourceId, targetType, targetId, relation, createdAt }`.
+- **Entity types**: `conversation`, `task`, `memory`, `calendar`, `contact`.
+- **Relations**: `created_from`, `mentions`, `related_to`, `spawned_by`.
+- **Auto-linking**: Memory entries created from chat are automatically linked to their source conversation. Tasks created via CommandBar are auto-tagged with `from:chat`.
+- **UI display**: `EntityLinksSection` component in vault.tsx renders linked items as tappable chips in task and memory detail modals.
+
+### Proactive Insights Engine (`lib/insights.ts`)
+
+- **Pure-logic insights**: Analyzes local data (tasks, CRM contacts, memory, calendar) without AI to generate actionable alerts.
+- **Insight types**: Overdue tasks, tasks due today, stale CRM contacts (7+ days), unreviewed memory items (24+ hours), busy day (3+ events), task completion streaks.
+- **Priority system**: P1 (critical, animated glow), P2 (normal), P3 (low, dimmed).
+- **Dashboard integration**: Insights replace hardcoded alerts on the home screen, showing top 3 with a "View All" option.
+
+### Auto-Tagging
+
+- **Source-based tags**: All entities automatically receive `from:<source>` tags when created (e.g., `from:chat`, `from:manual`, `from:gateway`).
+- **Applied to**: Tasks, memory entries, and calendar events via their respective `create` functions in `AppContext.tsx`.
+
+### Persistent Audit Log
+
+- **Database table**: `audit_log` in PostgreSQL (via Drizzle ORM) with fields: `id`, `timestamp`, `deviceId`, `action`, `result`, `details`.
+- **Dual storage**: Audit entries are persisted to DB and kept in-memory (last 1000) for fast API access.
+- **DB connection**: `server/db.ts` provides Drizzle connection to PostgreSQL when `DATABASE_URL` is available.
+
 ### Build & Deployment
 
 - **Development**: Parallel `expo:dev` (Metro bundler) and `server:dev` (Express server) processes.

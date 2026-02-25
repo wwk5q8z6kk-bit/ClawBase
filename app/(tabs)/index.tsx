@@ -22,6 +22,7 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import { PulsingDot } from '@/components/PulsingDot';
 import type { TaskStatus, Task } from '@/lib/types';
+import { generateInsights, type Insight } from '@/lib/insights';
 
 const C = Colors.dark;
 
@@ -1258,7 +1259,7 @@ function CommandBar() {
       const priority = parsePriority(title);
       title = stripKeywords(title, ['urgent', 'high priority', 'low priority', 'by tomorrow', 'by today', 'by monday', 'by tuesday', 'by wednesday', 'by thursday', 'by friday', 'by saturday', 'by sunday']);
       if (!title) title = 'New task';
-      await createTask(title, 'todo' as TaskStatus, priority, undefined);
+      await createTask(title, 'todo' as TaskStatus, priority, undefined, { source: 'chat' });
       setFeedbackMsg(`✓ Task "${title}" created`);
       return;
     }
@@ -1279,7 +1280,7 @@ function CommandBar() {
       const startTime = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate(), hour, minute, 0, 0).getTime();
       const endTime = startTime + 3600000;
 
-      await createCalendarEvent({ title, startTime, endTime, color: C.coral, allDay: false });
+      await createCalendarEvent({ title, startTime, endTime, color: C.coral, allDay: false, source: 'manual' });
       setFeedbackMsg(`✓ Event "${title}" scheduled`);
       return;
     }
@@ -1379,8 +1380,9 @@ function CommandBar() {
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
-  const { refreshAll, activeConnection, tasks, fetchGatewaySessions } = useApp();
+  const { refreshAll, activeConnection, tasks, memoryEntries, calendarEvents, crmContacts, fetchGatewaySessions } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
+  const [showAllInsights, setShowAllInsights] = useState(false);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -1391,13 +1393,19 @@ export default function DashboardScreen() {
 
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
-  const dueToday = useMemo(() => {
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
-    return tasks.filter(
-      (t) => t.dueDate && t.dueDate <= todayEnd.getTime() && t.status !== 'done' && t.status !== 'archived',
-    );
-  }, [tasks]);
+  const insights = useMemo(
+    () => generateInsights({ tasks, memoryEntries, calendarEvents, crmContacts }),
+    [tasks, memoryEntries, calendarEvents, crmContacts],
+  );
+
+  const insightTypeToAlertType = (insight: Insight): 'info' | 'warn' | 'success' => {
+    if (insight.priority === 'P1') return 'warn';
+    if (insight.category === 'streak') return 'success';
+    return 'info';
+  };
+
+  const visibleInsights = showAllInsights ? insights : insights.slice(0, 3);
+  const hasMoreInsights = insights.length > 3;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
@@ -1421,20 +1429,34 @@ export default function DashboardScreen() {
               icon="link"
               message="Connect to your OpenClaw gateway to unlock all features"
               onPress={() => router.push('/(tabs)/settings')}
-              priority="P2"
+              priority="P1"
             />
           </FadeInWidget>
         )}
 
-        {dueToday.length > 0 && (
-          <FadeInWidget delay={100}>
+        {visibleInsights.map((insight, idx) => (
+          <FadeInWidget key={insight.id} delay={50 + idx * 50}>
             <ProactiveAlert
-              type="info"
-              icon="flame"
-              message={`${dueToday.length} task${dueToday.length !== 1 ? 's' : ''} due today`}
-              onPress={() => router.push('/(tabs)/vault')}
-              priority={dueToday.length >= 3 ? 'P1' : 'P2'}
+              type={insightTypeToAlertType(insight)}
+              icon={insight.icon}
+              message={`${insight.title} — ${insight.message}`}
+              onPress={() => router.push(insight.actionRoute as any)}
+              priority={insight.priority}
             />
+          </FadeInWidget>
+        ))}
+
+        {hasMoreInsights && !showAllInsights && (
+          <FadeInWidget delay={200}>
+            <Pressable
+              onPress={() => setShowAllInsights(true)}
+              style={({ pressed }) => [styles.viewAllInsights, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.viewAllInsightsText}>
+                View {insights.length - 3} more insight{insights.length - 3 > 1 ? 's' : ''}
+              </Text>
+              <Ionicons name="chevron-down" size={14} color={C.accent} />
+            </Pressable>
           </FadeInWidget>
         )}
 
@@ -1640,4 +1662,7 @@ const styles = StyleSheet.create({
   workstreamStatus: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textSecondary },
   workstreamSparkline: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 14 },
   workstreamDot: { width: 4, borderRadius: 2 },
+
+  viewAllInsights: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, borderWidth: 1, borderColor: C.borderLight },
+  viewAllInsightsText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.accent },
 });
