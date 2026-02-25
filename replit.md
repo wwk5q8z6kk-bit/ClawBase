@@ -106,12 +106,12 @@ Preferred communication style: Simple, everyday language.
 ### Metadata Enrichment & Cross-Entity Intelligence
 
 - **Entity Link Registry** (`lib/entityLinks.ts`): Bi-directional links between entities (task↔conversation, memory↔contact, etc.) stored in AsyncStorage. Types: `conversation`, `task`, `memory`, `calendar`, `contact`. Relations: `created_from`, `mentions`, `related_to`, `spawned_by`.
-- **Proactive Insights Engine** (`lib/insights.ts`): Pure-logic module analyzing local data for actionable alerts (overdue tasks, stale contacts, unreviewed memory, busy day, task streaks). Insights shown on dashboard as ProactiveAlert cards.
+- **Proactive Insights Engine** (`lib/insights.ts`): Analyzes local data + entity links for actionable alerts. Insight types: overdue tasks, due today, blocked/stuck tasks, stale contacts, unreviewed memory, busy day, task streaks, meeting prep (cross-entity), follow-up needed (cross-entity). Dashboard loads entity links and passes them to the engine.
 - **Auto-Tagging**: All entities receive `from:<source>` tags on creation (e.g., `from:chat`, `from:gateway`, `from:manual`).
 - **Gateway Event → Entity Creation**: `message_complete` events from the gateway auto-create memory entries linked to the conversation.
-- **Cross-Entity Seed Links**: Seed data creates entity links between related items (memory↔task by shared tags, memory↔contact by name mentions).
+- **Cross-Entity Seed Links**: Seed data creates entity links between related items (memory↔task by shared tags, memory↔contact by name mentions, calendar↔contact by attendee name, calendar↔task by description keywords).
 - **Search Relevance Scoring** (`app/search.tsx`): Weighted multi-field scoring with recency boost, tag matching, priority/status bonuses, and pinned item boost. Results sorted by score with tag chips and timestamps.
-- **EntityLinksSection**: UI component in vault.tsx showing linked entities as tappable colored chips with 5-second polling refresh.
+- **EntityLinksSection**: UI components in vault.tsx, calendar.tsx, and crm.tsx showing linked entities as tappable colored chips with 5-second polling refresh. Resolved names for all entity types.
 - **Audit Log**: Persisted to PostgreSQL via `audit_log` table (Drizzle schema).
 
 ### Directory Structure

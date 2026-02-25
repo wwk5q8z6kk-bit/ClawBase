@@ -23,6 +23,7 @@ import { useApp } from '@/lib/AppContext';
 import { PulsingDot } from '@/components/PulsingDot';
 import type { TaskStatus, Task } from '@/lib/types';
 import { generateInsights, type Insight } from '@/lib/insights';
+import { getAllLinks, type EntityLink } from '@/lib/entityLinks';
 
 const C = Colors.dark;
 
@@ -1393,9 +1394,18 @@ export default function DashboardScreen() {
 
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
+  const [entityLinks, setEntityLinks] = useState<EntityLink[]>([]);
+  useEffect(() => {
+    getAllLinks().then(setEntityLinks).catch(() => {});
+    const interval = setInterval(() => {
+      getAllLinks().then(setEntityLinks).catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   const insights = useMemo(
-    () => generateInsights({ tasks, memoryEntries, calendarEvents, crmContacts }),
-    [tasks, memoryEntries, calendarEvents, crmContacts],
+    () => generateInsights({ tasks, memoryEntries, calendarEvents, crmContacts, entityLinks }),
+    [tasks, memoryEntries, calendarEvents, crmContacts, entityLinks],
   );
 
   const insightTypeToAlertType = (insight: Insight): 'info' | 'warn' | 'success' => {

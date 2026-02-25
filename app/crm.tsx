@@ -543,6 +543,8 @@ export default function CRMScreen() {
                   );
                 })()}
 
+                <ContactLinksSection contactId={selectedContact.id} />
+
                 <Text style={styles.timelineTitle}>Interaction Timeline</Text>
 
                 <ScrollView showsVerticalScrollIndicator={false} style={styles.timelineScroll}>
