@@ -457,7 +457,7 @@ const ENTITY_TYPE_CONFIG: Record<EntityType, { icon: string; color: string; labe
 
 function EntityLinksSection({ entityType, entityId }: { entityType: EntityType; entityId: string }) {
   const [links, setLinks] = useState<EntityLink[]>([]);
-  const { conversations } = useApp();
+  const { conversations, tasks, memoryEntries, calendarEvents, crmContacts } = useApp();
   const [refreshKey, setRefreshKey] = useState(0);
 
   React.useEffect(() => {
@@ -499,6 +499,22 @@ function EntityLinksSection({ entityType, entityId }: { entityType: EntityType; 
     if (otherType === 'conversation') {
       const conv = conversations.find((c) => c.id === otherId);
       return conv ? conv.title : config.label;
+    }
+    if (otherType === 'task') {
+      const t = tasks.find((t) => t.id === otherId);
+      return t ? t.title : config.label;
+    }
+    if (otherType === 'memory') {
+      const m = memoryEntries.find((m) => m.id === otherId);
+      return m ? m.title : config.label;
+    }
+    if (otherType === 'contact') {
+      const c = crmContacts.find((c) => c.id === otherId);
+      return c ? c.name : config.label;
+    }
+    if (otherType === 'calendar') {
+      const e = calendarEvents.find((e) => e.id === otherId);
+      return e ? e.title : config.label;
     }
     return `${config.label} (${link.relation.replace(/_/g, ' ')})`;
   };

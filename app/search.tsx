@@ -204,7 +204,10 @@ export default function SearchScreen() {
       }
     }
 
-    items.sort((a, b) => b.score - a.score);
+    items.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return (b.timestamp || 0) - (a.timestamp || 0);
+    });
     return items;
   }, [query, conversations, tasks, memoryEntries, calendarEvents, crmContacts]);
 

@@ -1280,7 +1280,7 @@ function CommandBar() {
       const startTime = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate(), hour, minute, 0, 0).getTime();
       const endTime = startTime + 3600000;
 
-      await createCalendarEvent({ title, startTime, endTime, color: C.coral, allDay: false, source: 'manual' });
+      await createCalendarEvent({ title, startTime, endTime, color: C.coral, allDay: false, source: 'manual', tags: ['from:chat'] });
       setFeedbackMsg(`✓ Event "${title}" scheduled`);
       return;
     }

@@ -216,6 +216,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         }
       }
+
+      const allEvents = await calendarStorage.getAll();
+      for (const event of allEvents) {
+        if (event.attendees && event.attendees.length > 0) {
+          for (const attendee of event.attendees) {
+            const attendeeLower = attendee.toLowerCase().trim();
+            const attendeeParts = attendeeLower.split(/\s+/);
+            const matchedContact = allContacts.find(c => {
+              const contactParts = c.name.toLowerCase().split(/\s+/);
+              if (contactParts[0] === attendeeParts[0] && attendeeParts.length > 1 && contactParts.length > 1 && contactParts[1][0] === attendeeParts[1][0]) return true;
+              if (contactParts[0] === attendeeParts[0] && contactParts.length === 1) return true;
+              return c.name.toLowerCase() === attendeeLower;
+            });
+            if (matchedContact) {
+              await addLink('calendar', event.id, 'contact', matchedContact.id, 'mentions');
+            }
+          }
+        }
+        if (event.description) {
+          const descLower = event.description.toLowerCase();
+          for (const task of allTasks) {
+            const taskKeywords = task.title.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+            const matchCount = taskKeywords.filter(w => descLower.includes(w)).length;
+            if (matchCount >= 2) {
+              await addLink('calendar', event.id, 'task', task.id, 'related_to');
+            }
+          }
+        }
+      }
     } catch {}
 
     await AsyncStorage.setItem('@clawbase:seeded', 'true');
@@ -627,6 +656,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!tags.includes(sourceTag)) tags.push(sourceTag);
     const created = await calendarStorage.create({ ...event, tags });
     setCalendarEvents((prev) => [...prev, created].sort((a, b) => a.startTime - b.startTime));
+
+    if (event.attendees && event.attendees.length > 0) {
+      try {
+        const { addLink } = await import('@/lib/entityLinks');
+        const allContacts = await crmStorage.getAll();
+        for (const attendee of event.attendees) {
+          const attendeeLower = attendee.toLowerCase().trim();
+          const attendeeParts = attendeeLower.split(/\s+/);
+          const matched = allContacts.find(c => {
+            const contactParts = c.name.toLowerCase().split(/\s+/);
+            if (contactParts[0] === attendeeParts[0] && attendeeParts.length > 1 && contactParts.length > 1 && contactParts[1][0] === attendeeParts[1][0]) return true;
+            if (contactParts[0] === attendeeParts[0] && contactParts.length === 1) return true;
+            return c.name.toLowerCase() === attendeeLower;
+          });
+          if (matched) {
+            await addLink('calendar', created.id, 'contact', matched.id, 'mentions');
+          }
+        }
+      } catch {}
+    }
   }, []);
 
   const updateCalendarEvent = useCallback(async (id: string, updates: Partial<CalendarEvent>) => {
