@@ -573,6 +573,143 @@ function DeferredPKMWidget() {
   );
 }
 
+function KnowledgeGraphWidget({ links }: { links: EntityLink[] }) {
+  const { tasks, memoryEntries, calendarEvents, crmContacts, conversations } = useApp();
+
+  const stats = useMemo(() => {
+    const typeCounts: Record<string, number> = {};
+    const entityConnections: Record<string, number> = {};
+
+    for (const link of links) {
+      const sKey = `${link.sourceType}:${link.sourceId}`;
+      const tKey = `${link.targetType}:${link.targetId}`;
+      entityConnections[sKey] = (entityConnections[sKey] || 0) + 1;
+      entityConnections[tKey] = (entityConnections[tKey] || 0) + 1;
+
+      typeCounts[link.sourceType] = (typeCounts[link.sourceType] || 0) + 1;
+      typeCounts[link.targetType] = (typeCounts[link.targetType] || 0) + 1;
+    }
+
+    let mostConnectedKey = '';
+    let mostConnectedCount = 0;
+    for (const [key, count] of Object.entries(entityConnections)) {
+      if (count > mostConnectedCount) {
+        mostConnectedKey = key;
+        mostConnectedCount = count;
+      }
+    }
+
+    let mostConnectedName = '';
+    if (mostConnectedKey) {
+      const [type, id] = mostConnectedKey.split(':');
+      if (type === 'task') mostConnectedName = tasks.find(t => t.id === id)?.title || 'Task';
+      else if (type === 'memory') mostConnectedName = memoryEntries.find(m => m.id === id)?.title || 'Memory';
+      else if (type === 'contact') mostConnectedName = crmContacts.find(c => c.id === id)?.name || 'Contact';
+      else if (type === 'calendar') mostConnectedName = calendarEvents.find(e => e.id === id)?.title || 'Event';
+      else if (type === 'conversation') mostConnectedName = conversations.find(c => c.id === id)?.title || 'Chat';
+    }
+
+    const uniqueEntities = new Set<string>();
+    for (const link of links) {
+      uniqueEntities.add(`${link.sourceType}:${link.sourceId}`);
+      uniqueEntities.add(`${link.targetType}:${link.targetId}`);
+    }
+
+    return {
+      totalLinks: links.length,
+      connectedEntities: uniqueEntities.size,
+      typeCounts,
+      mostConnectedName,
+      mostConnectedCount,
+    };
+  }, [links, tasks, memoryEntries, calendarEvents, crmContacts, conversations]);
+
+  if (stats.totalLinks === 0) return null;
+
+  const typeEntries = [
+    { type: 'memory', icon: 'book', color: C.purple, label: 'Memory' },
+    { type: 'task', icon: 'checkmark-circle', color: C.amber, label: 'Tasks' },
+    { type: 'calendar', icon: 'calendar', color: C.coral, label: 'Events' },
+    { type: 'contact', icon: 'person', color: C.secondary, label: 'Contacts' },
+    { type: 'conversation', icon: 'chatbubbles', color: C.accent, label: 'Chats' },
+  ].filter(t => (stats.typeCounts[t.type] || 0) > 0);
+
+  return (
+    <View>
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionTitleRow}>
+          <MaterialCommunityIcons name="graph-outline" size={16} color={C.accent} />
+          <Text style={styles.sectionTitle}>Knowledge Graph</Text>
+        </View>
+        <Pressable onPress={() => router.push('/connections' as any)}>
+          <Text style={styles.seeAll}>Explore</Text>
+        </Pressable>
+      </View>
+
+      <View style={kgStyles.statsRow}>
+        <View style={kgStyles.statBox}>
+          <Text style={kgStyles.statValue}>{stats.totalLinks}</Text>
+          <Text style={kgStyles.statLabel}>Connections</Text>
+        </View>
+        <View style={[kgStyles.statDivider]} />
+        <View style={kgStyles.statBox}>
+          <Text style={kgStyles.statValue}>{stats.connectedEntities}</Text>
+          <Text style={kgStyles.statLabel}>Linked Items</Text>
+        </View>
+        <View style={[kgStyles.statDivider]} />
+        <View style={kgStyles.statBox}>
+          <Text style={kgStyles.statValue}>{typeEntries.length}</Text>
+          <Text style={kgStyles.statLabel}>Entity Types</Text>
+        </View>
+      </View>
+
+      <View style={kgStyles.typeRow}>
+        {typeEntries.map(t => (
+          <View key={t.type} style={kgStyles.typeChip}>
+            <Ionicons name={t.icon as any} size={12} color={t.color} />
+            <Text style={[kgStyles.typeLabel, { color: t.color }]}>{stats.typeCounts[t.type]}</Text>
+          </View>
+        ))}
+      </View>
+
+      {stats.mostConnectedName ? (
+        <View style={kgStyles.hubRow}>
+          <MaterialCommunityIcons name="hub-outline" size={14} color={C.textSecondary} />
+          <Text style={kgStyles.hubText} numberOfLines={1}>
+            Hub: <Text style={{ color: C.text }}>{stats.mostConnectedName}</Text> ({stats.mostConnectedCount} links)
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const kgStyles = StyleSheet.create({
+  statsRow: {
+    flexDirection: 'row',
+    backgroundColor: C.card,
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+  },
+  statBox: { flex: 1, alignItems: 'center', gap: 2 },
+  statValue: { fontFamily: 'Inter_700Bold', fontSize: 20, color: C.text },
+  statLabel: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary },
+  statDivider: { width: 1, height: 28, backgroundColor: C.border, marginHorizontal: 4 },
+  typeRow: { flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' },
+  typeChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 5,
+  },
+  typeLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
+  hubRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 8, paddingHorizontal: 4,
+  },
+  hubText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textSecondary, flex: 1 },
+});
+
 function GatewayStatusWidget() {
   const { gatewayStatus, gatewayInfo, gatewaySessions, activeConnection } = useApp();
   if (!activeConnection) return null;
@@ -1508,6 +1645,10 @@ export default function DashboardScreen() {
 
         <FadeInWidget delay={1000}>
           <DeferredPKMWidget />
+        </FadeInWidget>
+
+        <FadeInWidget delay={1050}>
+          <KnowledgeGraphWidget links={entityLinks} />
         </FadeInWidget>
 
         <FadeInWidget delay={1100}>

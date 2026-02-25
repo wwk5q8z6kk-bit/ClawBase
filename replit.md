@@ -112,6 +112,8 @@ Preferred communication style: Simple, everyday language.
 - **Cross-Entity Seed Links**: Seed data creates entity links between related items (memory↔task by shared tags, memory↔contact by name mentions, calendar↔contact by attendee name, calendar↔task by description keywords).
 - **Search Relevance Scoring** (`app/search.tsx`): Weighted multi-field scoring with recency boost, tag matching, priority/status bonuses, and pinned item boost. Results sorted by score with tag chips and timestamps.
 - **EntityLinksSection**: UI components in vault.tsx, calendar.tsx, and crm.tsx showing linked entities as tappable colored chips with 5-second polling refresh. Resolved names for all entity types.
+- **Knowledge Graph Widget** (`app/(tabs)/index.tsx`): Dashboard widget showing total connections, linked items, entity type breakdown, and the "hub" entity with the most links. Links to the Connections explorer.
+- **Connections Explorer** (`app/connections.tsx`): Full-screen browser for all entity links with type filters, resolved names, relation labels, and navigation to linked entities. Refreshes on screen focus via `useFocusEffect`.
 - **Audit Log**: Persisted to PostgreSQL via `audit_log` table (Drizzle schema).
 
 ### Directory Structure
