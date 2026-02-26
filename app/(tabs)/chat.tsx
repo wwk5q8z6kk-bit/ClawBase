@@ -585,7 +585,7 @@ export default function ChatListScreen() {
         )}
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: insets.bottom + 100 },
+          { paddingBottom: insets.bottom + 20 },
           filteredAndSorted.length === 0 && styles.emptyListContent,
         ]}
         ItemSeparatorComponent={() => <View style={styles.separator} />}

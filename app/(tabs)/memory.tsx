@@ -906,7 +906,7 @@ export default function MemoryScreen() {
         }}
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: insets.bottom + 100 },
+          { paddingBottom: insets.bottom + 20 },
           flatData.length === 0 && styles.emptyContainer,
         ]}
         ListEmptyComponent={

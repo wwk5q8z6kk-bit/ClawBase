@@ -1884,7 +1884,7 @@ export default function VaultScreen() {
                 )}
                 contentContainerStyle={[
                   styles.listContent,
-                  { paddingBottom: insets.bottom + 100 },
+                  { paddingBottom: insets.bottom + 20 },
                   filteredTasks.length === 0 && styles.emptyContainer,
                 ]}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.coral} colors={[C.coral]} />}
@@ -2307,7 +2307,7 @@ export default function VaultScreen() {
             }}
             contentContainerStyle={[
               styles.listContent,
-              { paddingBottom: insets.bottom + 100 },
+              { paddingBottom: insets.bottom + 20 },
               flatData.length === 0 && styles.emptyContainer,
             ]}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.coral} colors={[C.coral]} />}
@@ -2521,7 +2521,7 @@ export default function VaultScreen() {
           </View>
 
           {gatewayMemoryFiles.length > 0 ? (
-            <ScrollView contentContainerStyle={[styles.filesListContent, { paddingBottom: insets.bottom + 100 }]}>
+            <ScrollView contentContainerStyle={[styles.filesListContent, { paddingBottom: insets.bottom + 20 }]}>
               <Text style={styles.gatewayMemoryTitle}>Gateway Memory Files</Text>
               {gatewayMemoryFiles.map((file) => (
                 <Pressable

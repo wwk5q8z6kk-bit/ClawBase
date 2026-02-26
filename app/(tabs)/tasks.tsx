@@ -850,7 +850,7 @@ export default function TasksScreen() {
             )}
             contentContainerStyle={[
               styles.listContent,
-              { paddingBottom: insets.bottom + 100 },
+              { paddingBottom: insets.bottom + 20 },
               filteredTasks.length === 0 && styles.emptyContainer,
             ]}
             ItemSeparatorComponent={() => <View style={{ height: 8 }} />}

@@ -1,37 +1,23 @@
 import { Tabs } from 'expo-router';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect } from 'react';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing } from 'react-native-reanimated';
+import React from 'react';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 
 const TabIcon = ({ name, color, size, focused }: { name: any; color: string; size: number; focused: boolean }) => {
-  const animatedScale = useSharedValue(focused ? 1 : 0.4);
-  const animatedOpacity = useSharedValue(focused ? 1 : 0);
-
-  useEffect(() => {
-    animatedScale.value = withSpring(focused ? 1 : 0.4, { damping: 14, stiffness: 120 });
-    animatedOpacity.value = withTiming(focused ? 1 : 0, { duration: 150, easing: Easing.out(Easing.ease) });
-  }, [focused, animatedScale, animatedOpacity]);
-
-  const style = useAnimatedStyle(() => ({
-    opacity: animatedOpacity.value,
-    transform: [{ scale: animatedScale.value }],
-  }));
-
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', width: 44, height: 44, marginTop: 4 }}>
-      <Animated.View style={[{
-        position: 'absolute',
-        top: 0,
-        width: 20,
-        height: 3,
-        borderRadius: 2,
-        backgroundColor: color,
-        boxShadow: `0px 2px 6px ${color}CC`,
-        elevation: 4,
-      }, style]} />
+    <View style={{ alignItems: 'center', justifyContent: 'center', width: 44, height: 44 }}>
+      {focused && (
+        <View style={{
+          position: 'absolute',
+          top: 2,
+          width: 20,
+          height: 3,
+          borderRadius: 2,
+          backgroundColor: color,
+        }} />
+      )}
       <Ionicons name={name} size={size} color={color} />
     </View>
   );
@@ -54,16 +40,13 @@ function ClassicTabLayout() {
         tabBarInactiveTintColor: Colors.dark.tabIconDefault,
         tabBarLabelStyle: { fontFamily: 'Inter_500Medium', fontSize: 11 },
         tabBarStyle: {
-          position: 'absolute',
           backgroundColor: Colors.dark.surface,
-          borderTopWidth: isWeb ? 1 : 0,
+          borderTopWidth: 1,
           borderTopColor: Colors.dark.border,
           elevation: 0,
-          ...(isWeb ? { height: 84 } : {}),
+          height: isWeb ? 84 : undefined,
+          paddingBottom: isWeb ? 34 : undefined,
         },
-        tabBarBackground: () => (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.dark.surface, opacity: 0.98 }]} />
-          ),
       }}
     >
       <Tabs.Screen
