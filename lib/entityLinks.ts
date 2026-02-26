@@ -15,6 +15,28 @@ export interface EntityLink {
 }
 
 const STORAGE_KEY = '@clawbase:entity_links';
+const DISMISSED_INSIGHTS_KEY = '@clawbase:dismissed_insights';
+
+export async function getDismissedInsights(): Promise<Set<string>> {
+  try {
+    const raw = await AsyncStorage.getItem(DISMISSED_INSIGHTS_KEY);
+    if (!raw) return new Set();
+    return new Set(JSON.parse(raw));
+  } catch {
+    return new Set();
+  }
+}
+
+export async function dismissInsight(insightId: string): Promise<void> {
+  const current = await getDismissedInsights();
+  current.add(insightId);
+  const arr = [...current].slice(-200);
+  await AsyncStorage.setItem(DISMISSED_INSIGHTS_KEY, JSON.stringify(arr));
+}
+
+export async function clearDismissedInsights(): Promise<void> {
+  await AsyncStorage.removeItem(DISMISSED_INSIGHTS_KEY);
+}
 
 async function getAll(): Promise<EntityLink[]> {
   try {

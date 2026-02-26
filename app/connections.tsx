@@ -65,6 +65,8 @@ export default function ConnectionsScreen() {
     else if (type === 'contact') router.push('/crm' as any);
   };
 
+  const [showHubs, setShowHubs] = useState(true);
+
   const filteredLinks = useMemo(() => {
     if (filter === 'all') return links;
     return links.filter(l => l.sourceType === filter || l.targetType === filter);
@@ -83,6 +85,22 @@ export default function ConnectionsScreen() {
       typeCounts[type] = set.size;
     }
     return typeCounts;
+  }, [links]);
+
+  const hubEntities = useMemo(() => {
+    const counts: Record<string, { type: EntityType; id: string; count: number }> = {};
+    for (const link of links) {
+      const sKey = `${link.sourceType}:${link.sourceId}`;
+      const tKey = `${link.targetType}:${link.targetId}`;
+      if (!counts[sKey]) counts[sKey] = { type: link.sourceType, id: link.sourceId, count: 0 };
+      if (!counts[tKey]) counts[tKey] = { type: link.targetType, id: link.targetId, count: 0 };
+      counts[sKey].count++;
+      counts[tKey].count++;
+    }
+    return Object.values(counts)
+      .filter(e => e.count >= 2)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
   }, [links]);
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
@@ -184,6 +202,46 @@ export default function ConnectionsScreen() {
         ))}
       </View>
 
+      {hubEntities.length > 0 && (
+        <View style={s.hubSection}>
+          <Pressable
+            style={s.hubHeader}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowHubs(!showHubs); }}
+          >
+            <MaterialCommunityIcons name="hubspot" size={14} color={C.accent} />
+            <Text style={s.hubTitle}>Hub Entities</Text>
+            <Ionicons name={showHubs ? 'chevron-up' : 'chevron-down'} size={14} color={C.textTertiary} />
+          </Pressable>
+          {showHubs && (
+            <View style={s.hubGrid}>
+              {hubEntities.map((hub) => {
+                const cfg = ENTITY_CONFIG[hub.type];
+                const name = resolveEntityName(hub.type, hub.id);
+                const barWidth = Math.min((hub.count / (hubEntities[0]?.count || 1)) * 100, 100);
+                return (
+                  <Pressable
+                    key={`${hub.type}:${hub.id}`}
+                    style={({ pressed }) => [s.hubCard, pressed && { opacity: 0.7 }]}
+                    onPress={() => navigateToEntity(hub.type, hub.id)}
+                  >
+                    <View style={[s.hubIcon, { backgroundColor: cfg.color + '18' }]}>
+                      <Ionicons name={cfg.icon as any} size={14} color={cfg.color} />
+                    </View>
+                    <View style={s.hubInfo}>
+                      <Text style={s.hubName} numberOfLines={1}>{name}</Text>
+                      <View style={s.hubBarTrack}>
+                        <View style={[s.hubBarFill, { width: `${barWidth}%`, backgroundColor: cfg.color }]} />
+                      </View>
+                    </View>
+                    <Text style={[s.hubCount, { color: cfg.color }]}>{hub.count}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      )}
+
       {filteredLinks.length === 0 ? (
         <View style={[s.empty, Platform.OS === 'web' && { paddingBottom: 34 }]}>
           <MaterialCommunityIcons name="graph-outline" size={48} color={C.textTertiary} />
@@ -255,6 +313,33 @@ const s = StyleSheet.create({
     fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary,
     textTransform: 'uppercase', letterSpacing: 0.5,
   },
+  hubSection: {
+    marginHorizontal: 16, marginBottom: 12,
+    backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.borderLight,
+    overflow: 'hidden',
+  },
+  hubHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 10,
+  },
+  hubTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.text, flex: 1 },
+  hubGrid: { paddingHorizontal: 12, paddingBottom: 10, gap: 6 },
+  hubCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 6, paddingHorizontal: 4,
+  },
+  hubIcon: {
+    width: 26, height: 26, borderRadius: 7,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  hubInfo: { flex: 1, gap: 3 },
+  hubName: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.text },
+  hubBarTrack: {
+    height: 3, borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  hubBarFill: { height: 3, borderRadius: 2, minWidth: 4 },
+  hubCount: { fontFamily: 'Inter_700Bold', fontSize: 14, minWidth: 20, textAlign: 'right' },
   empty: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 40, gap: 12,

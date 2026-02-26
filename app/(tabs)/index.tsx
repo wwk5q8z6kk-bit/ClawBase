@@ -23,7 +23,7 @@ import { useApp } from '@/lib/AppContext';
 import { PulsingDot } from '@/components/PulsingDot';
 import type { TaskStatus, Task } from '@/lib/types';
 import { generateInsights, generateLinkSuggestions, type Insight, type InlineAction, type LinkSuggestion } from '@/lib/insights';
-import { getAllLinks, addLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
+import { getAllLinks, addLink, getDismissedInsights, dismissInsight, type EntityLink, type EntityType } from '@/lib/entityLinks';
 
 const C = Colors.dark;
 
@@ -193,7 +193,7 @@ function AnimatedProgressBar({ segments, total }: { segments: { value: number; c
   );
 }
 
-function ProactiveAlert({ type, message, icon, onPress, priority = 'P2', inlineActions, onInlineAction }: { type: 'info' | 'warn' | 'success'; message: string; icon?: string; onPress: () => void; priority?: 'P1' | 'P2' | 'P3'; inlineActions?: InlineAction[]; onInlineAction?: (action: InlineAction) => void }) {
+function ProactiveAlert({ type, message, icon, onPress, priority = 'P2', inlineActions, onInlineAction, onDismiss }: { type: 'info' | 'warn' | 'success'; message: string; icon?: string; onPress: () => void; priority?: 'P1' | 'P2' | 'P3'; inlineActions?: InlineAction[]; onInlineAction?: (action: InlineAction) => void; onDismiss?: () => void }) {
   const glowAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -230,7 +230,17 @@ function ProactiveAlert({ type, message, icon, onPress, priority = 'P2', inlineA
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Ionicons name={config.icon as any} size={20} color={config.iconColor} />
           <Text style={[styles.alertText, { flex: 1 }]} numberOfLines={2}>{message}</Text>
-          <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
+          {onDismiss ? (
+            <Pressable
+              onPress={(e) => { e.stopPropagation?.(); onDismiss(); }}
+              hitSlop={8}
+              style={({ pressed }) => [{ padding: 2 }, pressed && { opacity: 0.5 }]}
+            >
+              <Ionicons name="close" size={16} color={C.textTertiary} />
+            </Pressable>
+          ) : (
+            <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
+          )}
         </View>
         {inlineActions && inlineActions.length > 0 && onInlineAction && (
           <View style={{ flexDirection: 'row', gap: 6, marginLeft: 30 }}>
@@ -1684,17 +1694,31 @@ export default function DashboardScreen() {
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   const [entityLinks, setEntityLinks] = useState<EntityLink[]>([]);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     getAllLinks().then(setEntityLinks).catch(() => {});
+    getDismissedInsights().then(setDismissedIds).catch(() => {});
     const interval = setInterval(() => {
       getAllLinks().then(setEntityLinks).catch(() => {});
     }, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  const insights = useMemo(
+  const handleDismissInsight = useCallback(async (insightId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDismissedIds(prev => new Set(prev).add(insightId));
+    await dismissInsight(insightId);
+  }, []);
+
+  const allInsights = useMemo(
     () => generateInsights({ tasks, memoryEntries, calendarEvents, crmContacts, entityLinks }),
     [tasks, memoryEntries, calendarEvents, crmContacts, entityLinks],
+  );
+
+  const insights = useMemo(
+    () => allInsights.filter(i => !dismissedIds.has(i.id)),
+    [allInsights, dismissedIds],
   );
 
   const insightTypeToAlertType = (insight: Insight): 'info' | 'warn' | 'success' => {
@@ -1772,6 +1796,7 @@ export default function DashboardScreen() {
               priority={insight.priority}
               inlineActions={insight.inlineActions}
               onInlineAction={handleInlineAction}
+              onDismiss={() => handleDismissInsight(insight.id)}
             />
           </FadeInWidget>
         ))}

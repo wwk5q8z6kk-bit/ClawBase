@@ -221,12 +221,22 @@ export default function SearchScreen() {
       }
     }
 
+    const categoryToType: Record<SearchResultCategory, string> = {
+      conversations: 'conversation', tasks: 'task', memory: 'memory',
+      calendar: 'calendar', contacts: 'contact',
+    };
+    for (const item of items) {
+      const entityType = categoryToType[item.category];
+      const connCount = linkCounts[`${entityType}:${item.entityId}`] || 0;
+      item.score += Math.min(connCount * 1.5, 6);
+    }
+
     items.sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
       return (b.timestamp || 0) - (a.timestamp || 0);
     });
     return items;
-  }, [query, conversations, tasks, memoryEntries, calendarEvents, crmContacts]);
+  }, [query, conversations, tasks, memoryEntries, calendarEvents, crmContacts, linkCounts]);
 
   const grouped = useMemo(() => {
     const sections: { category: SearchResultCategory; data: SearchResult[] }[] = [];
