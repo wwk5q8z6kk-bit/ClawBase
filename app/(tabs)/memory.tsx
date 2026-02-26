@@ -19,6 +19,8 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import { Card } from '@/components/Card';
 import type { MemoryEntry } from '@/lib/types';
+import { getLinksFor, type EntityLink, type EntityType } from '@/lib/entityLinks';
+import { router } from 'expo-router';
 
 const C = Colors.dark;
 
@@ -209,6 +211,85 @@ function MemoryItem({
   );
 }
 
+function MemoryLinksSection({ memoryId, legacyLinkedIds }: { memoryId: string; legacyLinkedIds?: string[] }) {
+  const { tasks, conversations, calendarEvents, crmContacts } = useApp();
+  const [links, setLinks] = React.useState<EntityLink[]>([]);
+
+  React.useEffect(() => {
+    getLinksFor('memory', memoryId).then(setLinks).catch(() => {});
+  }, [memoryId]);
+
+  const resolved = React.useMemo(() => {
+    const fromLinks = links.map(link => {
+      const isSource = link.sourceType === 'memory' && link.sourceId === memoryId;
+      const otherType = isSource ? link.targetType : link.sourceType;
+      const otherId = isSource ? link.targetId : link.sourceId;
+      let name = '';
+      if (otherType === 'task') name = tasks.find(t => t.id === otherId)?.title || 'Task';
+      else if (otherType === 'conversation') name = conversations.find(c => c.id === otherId)?.title || 'Chat';
+      else if (otherType === 'contact') name = crmContacts.find(c => c.id === otherId)?.name || 'Contact';
+      else if (otherType === 'calendar') name = calendarEvents.find(e => e.id === otherId)?.title || 'Event';
+      return { type: otherType as EntityType, id: otherId, name, relation: link.relation };
+    });
+    const linkedIdSet = new Set(fromLinks.map(l => l.id));
+    const fromLegacy = (legacyLinkedIds || [])
+      .filter(lid => !linkedIdSet.has(lid))
+      .map(lid => {
+        const task = tasks.find(t => t.id === lid);
+        if (task) return { type: 'task' as EntityType, id: lid, name: task.title, relation: 'related_to' };
+        const conv = conversations.find(c => c.id === lid);
+        if (conv) return { type: 'conversation' as EntityType, id: lid, name: conv.title || 'Chat', relation: 'related_to' };
+        const contact = crmContacts.find(c => c.id === lid);
+        if (contact) return { type: 'contact' as EntityType, id: lid, name: contact.name, relation: 'related_to' };
+        const evt = calendarEvents.find(e => e.id === lid);
+        if (evt) return { type: 'calendar' as EntityType, id: lid, name: evt.title, relation: 'related_to' };
+        return null;
+      })
+      .filter(Boolean) as { type: EntityType; id: string; name: string; relation: string }[];
+    return [...fromLinks, ...fromLegacy];
+  }, [links, memoryId, tasks, conversations, calendarEvents, crmContacts, legacyLinkedIds]);
+
+  if (resolved.length === 0) return null;
+
+  const typeConfig: Record<string, { icon: string; color: string }> = {
+    task: { icon: 'checkmark-circle', color: '#FFB020' },
+    conversation: { icon: 'chatbubble', color: C.accent },
+    calendar: { icon: 'calendar', color: '#FF7B5C' },
+    contact: { icon: 'person', color: '#9CA3AF' },
+  };
+
+  return (
+    <View style={modalStyles.section}>
+      <Text style={modalStyles.sectionLabel}>Linked Items</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        {resolved.map((e) => {
+          const cfg = typeConfig[e.type] || { icon: 'link', color: C.accent };
+          return (
+            <Pressable
+              key={`${e.type}:${e.id}`}
+              style={({ pressed }) => [{
+                flexDirection: 'row', alignItems: 'center', gap: 4,
+                paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6,
+                backgroundColor: cfg.color + '14', borderWidth: 1, borderColor: cfg.color + '30',
+              }, pressed && { opacity: 0.6 }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                if (e.type === 'conversation') router.push(`/chat/${e.id}` as any);
+                else if (e.type === 'task') router.push('/(tabs)/vault');
+                else if (e.type === 'calendar') router.push('/(tabs)/calendar');
+                else if (e.type === 'contact') router.push('/crm' as any);
+              }}
+            >
+              <Ionicons name={cfg.icon as any} size={12} color={cfg.color} />
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: cfg.color }} numberOfLines={1}>{e.name}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function MemoryDetailModal({
   item,
   visible,
@@ -335,17 +416,7 @@ function MemoryDetailModal({
               </View>
             )}
 
-            {item.linkedIds && item.linkedIds.length > 0 && (
-              <View style={modalStyles.section}>
-                <Text style={modalStyles.sectionLabel}>Linked Items</Text>
-                {item.linkedIds.map((lid, i) => (
-                  <View key={i} style={modalStyles.linkedItem}>
-                    <Ionicons name="link-outline" size={12} color={C.textTertiary} />
-                    <Text style={modalStyles.linkedText}>{lid}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+            <MemoryLinksSection memoryId={item.id} legacyLinkedIds={item.linkedIds} />
 
             <View style={modalStyles.section}>
               <Text style={modalStyles.sectionLabel}>Timestamp</Text>

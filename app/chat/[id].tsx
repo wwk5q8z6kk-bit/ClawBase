@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -26,6 +26,7 @@ import { PulsingDot } from '@/components/PulsingDot';
 import type { ChatMessage } from '@/lib/types';
 import VoiceModeOverlay from '@/components/VoiceModeOverlay';
 import { enqueue } from '@/lib/offlineQueue';
+import { getLinksFor, type EntityLink, type EntityType } from '@/lib/entityLinks';
 
 const C = Colors.dark;
 
@@ -547,6 +548,35 @@ export default function ChatDetailScreen() {
   const prevMessageCountRef = useRef(0);
 
   const conversation = conversations.find((c) => c.id === id);
+  const { tasks, memoryEntries, calendarEvents, crmContacts } = useApp();
+
+  const [chatLinks, setChatLinks] = useState<EntityLink[]>([]);
+  const [showContext, setShowContext] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    let active = true;
+    const fetchLinks = () => {
+      getLinksFor('conversation', id).then(l => { if (active) setChatLinks(l); }).catch(() => {});
+    };
+    fetchLinks();
+    const interval = setInterval(fetchLinks, 8000);
+    return () => { active = false; clearInterval(interval); };
+  }, [id]);
+
+  const linkedEntities = useMemo(() => {
+    return chatLinks.map(link => {
+      const isSource = link.sourceType === 'conversation' && link.sourceId === id;
+      const otherType = isSource ? link.targetType : link.sourceType;
+      const otherId = isSource ? link.targetId : link.sourceId;
+      let name = '';
+      if (otherType === 'task') name = tasks.find(t => t.id === otherId)?.title || 'Task';
+      else if (otherType === 'memory') name = memoryEntries.find(m => m.id === otherId)?.title || 'Memory';
+      else if (otherType === 'contact') name = crmContacts.find(c => c.id === otherId)?.name || 'Contact';
+      else if (otherType === 'calendar') name = calendarEvents.find(e => e.id === otherId)?.title || 'Event';
+      return { type: otherType as EntityType, id: otherId, name, relation: link.relation };
+    });
+  }, [chatLinks, id, tasks, memoryEntries, calendarEvents, crmContacts]);
 
   const loadMessages = useCallback(async () => {
     if (!id) return;
@@ -740,6 +770,46 @@ export default function ChatDetailScreen() {
           <Ionicons name="ellipsis-horizontal" size={22} color={C.textSecondary} />
         </Pressable>
       </LinearGradient>
+
+      {linkedEntities.length > 0 && (
+        <Pressable
+          style={styles.contextBar}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowContext(!showContext); }}
+        >
+          <Ionicons name="git-network-outline" size={13} color={C.accent} />
+          <Text style={styles.contextBarText}>{linkedEntities.length} linked {linkedEntities.length === 1 ? 'item' : 'items'}</Text>
+          <Ionicons name={showContext ? 'chevron-up' : 'chevron-down'} size={12} color={C.textTertiary} />
+        </Pressable>
+      )}
+
+      {showContext && linkedEntities.length > 0 && (
+        <View style={styles.contextPanel}>
+          {linkedEntities.slice(0, 6).map((e, i) => {
+            const typeConfig: Record<string, { icon: string; color: string }> = {
+              task: { icon: 'checkmark-circle', color: '#FFB020' },
+              memory: { icon: 'book', color: '#8B7FFF' },
+              calendar: { icon: 'calendar', color: '#FF7B5C' },
+              contact: { icon: 'person', color: '#9CA3AF' },
+            };
+            const cfg = typeConfig[e.type] || { icon: 'link', color: C.accent };
+            return (
+              <Pressable
+                key={`${e.type}:${e.id}`}
+                style={({ pressed }) => [styles.contextChip, pressed && { opacity: 0.6 }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  if (e.type === 'task' || e.type === 'memory') router.push('/(tabs)/vault');
+                  else if (e.type === 'calendar') router.push('/(tabs)/calendar');
+                  else if (e.type === 'contact') router.push('/crm' as any);
+                }}
+              >
+                <Ionicons name={cfg.icon as any} size={11} color={cfg.color} />
+                <Text style={[styles.contextChipText, { color: cfg.color }]} numberOfLines={1}>{e.name}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
         <LinearGradient
@@ -1348,4 +1418,22 @@ const styles = StyleSheet.create({
   actionItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 20, paddingVertical: 14 },
   actionIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
   actionLabel: { fontFamily: 'Inter_500Medium', fontSize: 15, color: C.text },
+  contextBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 16, paddingVertical: 7,
+    backgroundColor: C.card, borderBottomWidth: 1, borderBottomColor: C.borderLight,
+  },
+  contextBarText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary, flex: 1 },
+  contextPanel: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 8,
+    backgroundColor: C.card, borderBottomWidth: 1, borderBottomColor: C.borderLight,
+  },
+  contextChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+  },
+  contextChipText: { fontFamily: 'Inter_500Medium', fontSize: 11, maxWidth: 120 },
 });

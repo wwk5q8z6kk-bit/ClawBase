@@ -120,6 +120,8 @@ Preferred communication style: Simple, everyday language.
 - **Connections Explorer** (`app/connections.tsx`): Full-screen browser for all entity links with type filters, resolved names, relation labels, navigation to linked entities, and long-press to delete links. Includes a collapsible "Hub Entities" section showing the most connected entities with relative connection bars. Refreshes on screen focus via `useFocusEffect`.
 - **Persistent Insight Dismissal** (`lib/entityLinks.ts`): Dismissed insight IDs stored in AsyncStorage (capped at 200). Dashboard filters dismissed insights and shows a dismiss "X" button on each insight card. Persists across app restarts.
 - **CRM Contextual Insights** (`app/crm.tsx`): Contact detail view shows contextual insight banners for stale contacts (7+ days without interaction) and contacts with no recorded interactions. Alerts appear between health score and entity links section.
+- **Chat Entity Context Bar** (`app/chat/[id].tsx`): Collapsible bar below the chat header showing linked entities for the current conversation. Displays count badge that expands into tappable colored chips for tasks, memories, contacts, and events. Auto-refreshes every 8 seconds.
+- **Memory Links Section** (`app/(tabs)/memory.tsx`): Replaced dead-end plain text linked IDs in memory detail modals with interactive `MemoryLinksSection` component. Shows linked entities as tappable colored chips that navigate to the relevant screen (chat, vault, calendar, CRM).
 - **Audit Log**: Persisted to PostgreSQL via `audit_log` table (Drizzle schema).
 
 ### Directory Structure
