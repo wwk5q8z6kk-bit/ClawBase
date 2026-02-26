@@ -181,6 +181,14 @@ async function configureExpoAndLanding(app: express.Application) {
       changeOrigin: true,
       ws: true,
       logLevel: "warn",
+      timeout: 120000,
+      proxyTimeout: 120000,
+      onError: (err: any, req: any, res: any) => {
+        log(`Proxy error for ${req.url}: ${err.message}`);
+        if (!res.headersSent) {
+          res.status(502).json({ error: "Metro bundler unavailable" });
+        }
+      },
     });
 
     app.use((req: Request, res: Response, next: NextFunction) => {
