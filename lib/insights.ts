@@ -349,6 +349,174 @@ function getHighValueFollowUp(contacts: CRMContact[], events: CalendarEvent[], l
   ];
 }
 
+function getResourceConflicts(tasks: Task[], events: CalendarEvent[]): Insight[] {
+  const now = new Date();
+  const dayStart = startOfDay(now);
+  const dayEnd = endOfDay(now);
+
+  const todayEvents = events.filter(e => e.startTime >= dayStart && e.startTime <= dayEnd);
+  if (todayEvents.length < 3) return [];
+
+  const dueTodayTasks = tasks.filter(
+    t => t.dueDate && t.dueDate >= dayStart && t.dueDate <= dayEnd &&
+         t.status !== 'done' && t.status !== 'archived',
+  );
+  if (dueTodayTasks.length === 0) return [];
+
+  const totalMeetingMinutes = todayEvents.reduce((sum, e) => sum + (e.endTime - e.startTime) / 60000, 0);
+  const busyHours = Math.round(totalMeetingMinutes / 60);
+
+  return [
+    {
+      id: 'insight-resource-conflict',
+      type: 'resource_conflict',
+      priority: dueTodayTasks.length >= 2 ? 'P1' : 'P2',
+      title: 'Deadline vs Meeting Crunch',
+      message: `${dueTodayTasks.length} task${dueTodayTasks.length > 1 ? 's' : ''} due today with ${busyHours}h of meetings booked`,
+      actionLabel: 'View Calendar',
+      actionRoute: '/(tabs)/calendar',
+      icon: 'warning',
+      category: 'cross_entity',
+    },
+  ];
+}
+
+function getContextualMemory(events: CalendarEvent[], memories: MemoryEntry[], links: EntityLink[]): Insight[] {
+  const now = Date.now();
+  const twoHoursMs = 2 * 60 * 60 * 1000;
+
+  const upcoming = events.filter(e => e.startTime > now && e.startTime - now <= twoHoursMs);
+  if (upcoming.length === 0) return [];
+
+  const soonest = upcoming.reduce((a, b) => a.startTime < b.startTime ? a : b);
+
+  const eventLinks = links.filter(
+    l => (l.sourceType === 'calendar' && l.sourceId === soonest.id) ||
+         (l.targetType === 'calendar' && l.targetId === soonest.id),
+  );
+
+  const linkedMemoryIds = new Set<string>();
+  for (const link of eventLinks) {
+    const otherType = link.sourceType === 'calendar' ? link.targetType : link.sourceType;
+    const otherId = link.sourceType === 'calendar' ? link.targetId : link.sourceId;
+    if (otherType === 'memory') linkedMemoryIds.add(otherId);
+  }
+
+  const titleWords = soonest.title.toLowerCase().split(/\s+/).filter(w => w.length >= 4);
+  const keywordMatches = memories.filter(m => {
+    if (linkedMemoryIds.has(m.id)) return false;
+    const text = (m.title + ' ' + m.content).toLowerCase();
+    const matched = titleWords.filter(w => text.includes(w)).length;
+    return matched >= 2;
+  });
+
+  const relatedCount = linkedMemoryIds.size + keywordMatches.length;
+  if (relatedCount === 0) return [];
+
+  const minsUntil = Math.round((soonest.startTime - now) / 60000);
+
+  return [
+    {
+      id: 'insight-contextual-memory',
+      type: 'contextual_memory',
+      priority: 'P2',
+      title: `Notes for ${soonest.title}`,
+      message: `${relatedCount} related note${relatedCount > 1 ? 's' : ''} found — meeting in ${minsUntil}m`,
+      actionLabel: 'Review Notes',
+      actionRoute: '/(tabs)/vault',
+      icon: 'document-text',
+      category: 'cross_entity',
+    },
+  ];
+}
+
+function getContactProjectStall(contacts: CRMContact[], tasks: Task[], links: EntityLink[]): Insight[] {
+  const results: Insight[] = [];
+
+  for (const contact of contacts) {
+    if (contact.stage === 'archived') continue;
+
+    const contactLinks = links.filter(
+      l => (l.sourceType === 'contact' && l.sourceId === contact.id) ||
+           (l.targetType === 'contact' && l.targetId === contact.id),
+    );
+
+    const linkedTaskIds = new Set<string>();
+    for (const link of contactLinks) {
+      const otherType = link.sourceType === 'contact' ? link.targetType : link.sourceType;
+      const otherId = link.sourceType === 'contact' ? link.targetId : link.sourceId;
+      if (otherType === 'task') linkedTaskIds.add(otherId);
+    }
+
+    if (linkedTaskIds.size === 0) continue;
+
+    const linkedTasks = tasks.filter(t => linkedTaskIds.has(t.id));
+    const overdue = linkedTasks.filter(
+      t => t.dueDate && t.dueDate < Date.now() && t.status !== 'done' && t.status !== 'archived',
+    );
+
+    if (overdue.length >= 2) {
+      results.push({
+        id: `insight-contact-stall-${contact.id}`,
+        type: 'contact_project_stall',
+        priority: 'P2',
+        title: `${contact.name} — Progress Stalled`,
+        message: `${overdue.length} linked tasks are overdue`,
+        actionLabel: 'View Contact',
+        actionRoute: '/crm',
+        icon: 'person-circle',
+        category: 'cross_entity',
+      });
+      if (results.length >= 2) break;
+    }
+  }
+
+  return results;
+}
+
+function getPostMeetingActions(events: CalendarEvent[], tasks: Task[], memories: MemoryEntry[], links: EntityLink[]): Insight[] {
+  const now = Date.now();
+  const fourHoursMs = 4 * 60 * 60 * 1000;
+
+  const recentlyEnded = events.filter(
+    e => e.endTime < now && now - e.endTime < fourHoursMs && e.endTime > now - fourHoursMs,
+  );
+
+  for (const event of recentlyEnded) {
+    const eventLinks = links.filter(
+      l => (l.sourceType === 'calendar' && l.sourceId === event.id) ||
+           (l.targetType === 'calendar' && l.targetId === event.id),
+    );
+
+    const hasPostMeetingContent = eventLinks.some(link => {
+      const otherType = link.sourceType === 'calendar' ? link.targetType : link.sourceType;
+      return (otherType === 'task' || otherType === 'memory') && link.createdAt > event.startTime;
+    });
+
+    const hasRecentTask = tasks.some(t => t.createdAt > event.startTime && t.createdAt < now && now - t.createdAt < fourHoursMs);
+    const hasRecentMem = memories.some(m => m.timestamp > event.startTime && m.timestamp < now && now - m.timestamp < fourHoursMs);
+
+    if (!hasPostMeetingContent && !hasRecentTask && !hasRecentMem) {
+      const minsAgo = Math.round((now - event.endTime) / 60000);
+      return [
+        {
+          id: `insight-post-meeting-${event.id}`,
+          type: 'post_meeting',
+          priority: 'P3',
+          title: `Log Action Items?`,
+          message: `"${event.title}" ended ${minsAgo}m ago — no follow-up notes yet`,
+          actionLabel: 'Add Notes',
+          actionRoute: '/(tabs)/vault',
+          icon: 'create',
+          category: 'cross_entity',
+        },
+      ];
+    }
+  }
+
+  return [];
+}
+
 const PRIORITY_ORDER: Record<InsightPriority, number> = { P1: 0, P2: 1, P3: 2 };
 
 export function generateInsights(data: {
@@ -369,6 +537,10 @@ export function generateInsights(data: {
     ...getTaskStreak(data.tasks),
     ...getMeetingPrep(data.calendarEvents, data.crmContacts, data.tasks, links),
     ...getHighValueFollowUp(data.crmContacts, data.calendarEvents, links),
+    ...getResourceConflicts(data.tasks, data.calendarEvents),
+    ...getContextualMemory(data.calendarEvents, data.memoryEntries, links),
+    ...getContactProjectStall(data.crmContacts, data.tasks, links),
+    ...getPostMeetingActions(data.calendarEvents, data.tasks, data.memoryEntries, links),
   ];
 
   return all.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);

@@ -113,7 +113,7 @@ Preferred communication style: Simple, everyday language.
 - **Chat Mention Detection** (`lib/AppContext.tsx`): `simulateResponse` scans chat messages for mentions of CRM contacts (first name + last initial), tasks (2+ keyword matches), and calendar events (2+ keyword matches), then auto-creates `mentions` entity links.
 - **Search Relevance Scoring** (`app/search.tsx`): Weighted multi-field scoring with recency boost, tag matching, priority/status bonuses, and pinned item boost. Results show connection count badges from the knowledge graph.
 - **Timeline Connection Indicators** (`app/(tabs)/timeline.tsx`): Each timeline event shows a connection badge if the underlying entity has links in the knowledge graph.
-- **EntityLinksSection**: UI components in vault.tsx, calendar.tsx, and crm.tsx showing linked entities as tappable colored chips with 5-second polling refresh. Resolved names for all entity types.
+- **EntityLinksSection with Manual Linking**: UI components in vault.tsx, calendar.tsx, and crm.tsx showing linked entities as tappable colored chips with 5-second polling. Vault's EntityLinksSection includes a "+ Link" button that opens a searchable picker modal to manually create `related_to` links to any entity type.
 - **Knowledge Graph Widget** (`app/(tabs)/index.tsx`): Dashboard widget showing total connections, linked items, entity type breakdown, and the "hub" entity with the most links. Links to the Connections explorer.
 - **Connections Explorer** (`app/connections.tsx`): Full-screen browser for all entity links with type filters, resolved names, relation labels, and navigation to linked entities. Refreshes on screen focus via `useFocusEffect`.
 - **Audit Log**: Persisted to PostgreSQL via `audit_log` table (Drizzle schema).

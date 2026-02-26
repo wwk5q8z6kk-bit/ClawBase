@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,6 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -85,18 +86,20 @@ export default function SearchScreen() {
     return () => clearTimeout(timer);
   }, []);
 
-  useEffect(() => {
-    getAllLinks().then(links => {
-      const counts: Record<string, number> = {};
-      for (const link of links) {
-        const sKey = `${link.sourceType}:${link.sourceId}`;
-        const tKey = `${link.targetType}:${link.targetId}`;
-        counts[sKey] = (counts[sKey] || 0) + 1;
-        counts[tKey] = (counts[tKey] || 0) + 1;
-      }
-      setLinkCounts(counts);
-    }).catch(() => {});
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      getAllLinks().then(links => {
+        const counts: Record<string, number> = {};
+        for (const link of links) {
+          const sKey = `${link.sourceType}:${link.sourceId}`;
+          const tKey = `${link.targetType}:${link.targetId}`;
+          counts[sKey] = (counts[sKey] || 0) + 1;
+          counts[tKey] = (counts[tKey] || 0) + 1;
+        }
+        setLinkCounts(counts);
+      }).catch(() => {});
+    }, [])
+  );
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();

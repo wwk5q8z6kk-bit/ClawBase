@@ -22,7 +22,7 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { Task, TaskStatus, MemoryEntry } from '@/lib/types';
 import type { GatewayMemoryFile } from '@/lib/gateway';
-import { getLinksFor, type EntityLink, type EntityType } from '@/lib/entityLinks';
+import { getLinksFor, addLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
 import { router } from 'expo-router';
 
 const C = Colors.dark;
@@ -459,6 +459,9 @@ function EntityLinksSection({ entityType, entityId }: { entityType: EntityType; 
   const [links, setLinks] = useState<EntityLink[]>([]);
   const { conversations, tasks, memoryEntries, calendarEvents, crmContacts } = useApp();
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showLinkPicker, setShowLinkPicker] = useState(false);
+  const [pickerFilter, setPickerFilter] = useState<EntityType | ''>('');
+  const [pickerSearch, setPickerSearch] = useState('');
 
   React.useEffect(() => {
     getLinksFor(entityType, entityId).then(setLinks).catch(() => {});
@@ -468,8 +471,6 @@ function EntityLinksSection({ entityType, entityId }: { entityType: EntityType; 
     const interval = setInterval(() => setRefreshKey((k) => k + 1), 5000);
     return () => clearInterval(interval);
   }, []);
-
-  if (links.length === 0) return null;
 
   const handleLinkPress = (link: EntityLink) => {
     const targetType = link.sourceType === entityType && link.sourceId === entityId
@@ -519,28 +520,172 @@ function EntityLinksSection({ entityType, entityId }: { entityType: EntityType; 
     return `${config.label} (${link.relation.replace(/_/g, ' ')})`;
   };
 
+  const linkedIds = new Set(links.flatMap(l => [
+    `${l.sourceType}:${l.sourceId}`,
+    `${l.targetType}:${l.targetId}`,
+  ]));
+  linkedIds.delete(`${entityType}:${entityId}`);
+
+  const pickerItems = React.useMemo(() => {
+    const items: { type: EntityType; id: string; name: string }[] = [];
+    const q = pickerSearch.toLowerCase();
+    const filterType = pickerFilter || null;
+
+    if (!filterType || filterType === 'task') {
+      for (const t of tasks) {
+        if (t.id === entityId && entityType === 'task') continue;
+        if (linkedIds.has(`task:${t.id}`)) continue;
+        if (q && !t.title.toLowerCase().includes(q)) continue;
+        items.push({ type: 'task', id: t.id, name: t.title });
+      }
+    }
+    if (!filterType || filterType === 'memory') {
+      for (const m of memoryEntries) {
+        if (m.id === entityId && entityType === 'memory') continue;
+        if (linkedIds.has(`memory:${m.id}`)) continue;
+        if (q && !m.title.toLowerCase().includes(q)) continue;
+        items.push({ type: 'memory', id: m.id, name: m.title });
+      }
+    }
+    if (!filterType || filterType === 'contact') {
+      for (const c of crmContacts) {
+        if (c.id === entityId && entityType === 'contact') continue;
+        if (linkedIds.has(`contact:${c.id}`)) continue;
+        if (q && !c.name.toLowerCase().includes(q)) continue;
+        items.push({ type: 'contact', id: c.id, name: c.name });
+      }
+    }
+    if (!filterType || filterType === 'calendar') {
+      for (const e of calendarEvents) {
+        if (e.id === entityId && entityType === 'calendar') continue;
+        if (linkedIds.has(`calendar:${e.id}`)) continue;
+        if (q && !e.title.toLowerCase().includes(q)) continue;
+        items.push({ type: 'calendar', id: e.id, name: e.title });
+      }
+    }
+    if (!filterType || filterType === 'conversation') {
+      for (const c of conversations) {
+        if (c.id === entityId && entityType === 'conversation') continue;
+        if (linkedIds.has(`conversation:${c.id}`)) continue;
+        if (q && !c.title.toLowerCase().includes(q)) continue;
+        items.push({ type: 'conversation', id: c.id, name: c.title });
+      }
+    }
+    return items.slice(0, 20);
+  }, [pickerFilter, pickerSearch, tasks, memoryEntries, crmContacts, calendarEvents, conversations, linkedIds]);
+
+  const handleAddLink = async (targetType: EntityType, targetId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await addLink(entityType, entityId, targetType, targetId, 'related_to');
+    setRefreshKey(k => k + 1);
+    setShowLinkPicker(false);
+    setPickerSearch('');
+    setPickerFilter('');
+  };
+
+  const filterTypes: { key: EntityType | ''; label: string }[] = [
+    { key: '', label: 'All' },
+    { key: 'task', label: 'Tasks' },
+    { key: 'memory', label: 'Memory' },
+    { key: 'contact', label: 'Contacts' },
+    { key: 'calendar', label: 'Events' },
+  ];
+
   return (
     <View style={{ gap: 6 }}>
-      <Text style={linkStyles.sectionLabel}>Linked Items</Text>
-      <View style={linkStyles.chipsRow}>
-        {links.map((link) => {
-          const isSource = link.sourceType === entityType && link.sourceId === entityId;
-          const otherType = isSource ? link.targetType : link.sourceType;
-          const config = ENTITY_TYPE_CONFIG[otherType];
-          return (
-            <Pressable
-              key={link.id}
-              onPress={() => handleLinkPress(link)}
-              style={({ pressed }) => [linkStyles.chip, { borderColor: config.color + '40' }, pressed && { opacity: 0.7 }]}
-            >
-              <Ionicons name={config.icon as any} size={12} color={config.color} />
-              <Text style={[linkStyles.chipText, { color: config.color }]} numberOfLines={1}>
-                {getLinkLabel(link)}
-              </Text>
-            </Pressable>
-          );
-        })}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={linkStyles.sectionLabel}>Linked Items</Text>
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowLinkPicker(true);
+          }}
+          style={({ pressed }) => [linkStyles.addBtn, pressed && { opacity: 0.7 }]}
+        >
+          <Ionicons name="add" size={14} color={C.accent} />
+          <Text style={linkStyles.addBtnText}>Link</Text>
+        </Pressable>
       </View>
+      {links.length > 0 && (
+        <View style={linkStyles.chipsRow}>
+          {links.map((link) => {
+            const isSource = link.sourceType === entityType && link.sourceId === entityId;
+            const otherType = isSource ? link.targetType : link.sourceType;
+            const config = ENTITY_TYPE_CONFIG[otherType];
+            return (
+              <Pressable
+                key={link.id}
+                onPress={() => handleLinkPress(link)}
+                style={({ pressed }) => [linkStyles.chip, { borderColor: config.color + '40' }, pressed && { opacity: 0.7 }]}
+              >
+                <Ionicons name={config.icon as any} size={12} color={config.color} />
+                <Text style={[linkStyles.chipText, { color: config.color }]} numberOfLines={1}>
+                  {getLinkLabel(link)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
+      <Modal visible={showLinkPicker} transparent animationType="slide" onRequestClose={() => setShowLinkPicker(false)}>
+        <View style={linkStyles.pickerOverlay}>
+          <Pressable style={linkStyles.pickerBg} onPress={() => setShowLinkPicker(false)} />
+          <View style={linkStyles.pickerSheet}>
+            <View style={linkStyles.pickerHandle} />
+            <Text style={linkStyles.pickerTitle}>Link to...</Text>
+
+            <View style={linkStyles.pickerSearchBar}>
+              <Ionicons name="search" size={16} color={C.textTertiary} />
+              <TextInput
+                style={linkStyles.pickerSearchInput}
+                placeholder="Search items..."
+                placeholderTextColor={C.textTertiary}
+                value={pickerSearch}
+                onChangeText={setPickerSearch}
+                autoCapitalize="none"
+                selectionColor={C.primary}
+              />
+            </View>
+
+            <View style={linkStyles.pickerFilters}>
+              {filterTypes.map(ft => (
+                <Pressable
+                  key={ft.key}
+                  style={[linkStyles.pickerFilterChip, pickerFilter === ft.key && linkStyles.pickerFilterActive]}
+                  onPress={() => setPickerFilter(ft.key)}
+                >
+                  <Text style={[linkStyles.pickerFilterText, pickerFilter === ft.key && { color: C.accent }]}>{ft.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <FlatList
+              data={pickerItems}
+              keyExtractor={item => `${item.type}:${item.id}`}
+              style={{ maxHeight: 300 }}
+              renderItem={({ item }) => {
+                const config = ENTITY_TYPE_CONFIG[item.type];
+                return (
+                  <Pressable
+                    style={({ pressed }) => [linkStyles.pickerItem, pressed && { backgroundColor: C.surface }]}
+                    onPress={() => handleAddLink(item.type, item.id)}
+                  >
+                    <View style={[linkStyles.pickerItemIcon, { backgroundColor: config.color + '18' }]}>
+                      <Ionicons name={config.icon as any} size={14} color={config.color} />
+                    </View>
+                    <Text style={linkStyles.pickerItemName} numberOfLines={1}>{item.name}</Text>
+                    <Ionicons name="add-circle-outline" size={18} color={C.textTertiary} />
+                  </Pressable>
+                );
+              }}
+              ListEmptyComponent={
+                <Text style={linkStyles.pickerEmpty}>No items found</Text>
+              }
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -559,6 +704,50 @@ const linkStyles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.03)',
   },
   chipText: { fontFamily: 'Inter_500Medium', fontSize: 11, maxWidth: 140 },
+  addBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
+    backgroundColor: 'rgba(91,127,255,0.1)',
+  },
+  addBtnText: { fontFamily: 'Inter_500Medium', fontSize: 11, color: C.accent },
+  pickerOverlay: { flex: 1, justifyContent: 'flex-end' },
+  pickerBg: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  pickerSheet: {
+    backgroundColor: C.card, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: 20, paddingBottom: 40, maxHeight: '70%',
+  },
+  pickerHandle: {
+    width: 36, height: 4, borderRadius: 2, backgroundColor: C.border,
+    alignSelf: 'center', marginTop: 10, marginBottom: 16,
+  },
+  pickerTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 18, color: C.text, marginBottom: 12 },
+  pickerSearchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: C.surface, borderRadius: 10, paddingHorizontal: 12, height: 40,
+    marginBottom: 10,
+  },
+  pickerSearchInput: {
+    flex: 1, fontFamily: 'Inter_400Regular', fontSize: 14, color: C.text, height: 40,
+  },
+  pickerFilters: { flexDirection: 'row', gap: 6, marginBottom: 12 },
+  pickerFilterChip: {
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6,
+    borderWidth: 1, borderColor: C.border,
+  },
+  pickerFilterActive: { borderColor: C.accent, backgroundColor: 'rgba(91,127,255,0.1)' },
+  pickerFilterText: { fontFamily: 'Inter_500Medium', fontSize: 11, color: C.textSecondary },
+  pickerItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 10, paddingHorizontal: 4, borderRadius: 8,
+  },
+  pickerItemIcon: {
+    width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
+  },
+  pickerItemName: { fontFamily: 'Inter_400Regular', fontSize: 14, color: C.text, flex: 1 },
+  pickerEmpty: {
+    fontFamily: 'Inter_400Regular', fontSize: 14, color: C.textTertiary,
+    textAlign: 'center', paddingVertical: 20,
+  },
 });
 
 function TaskDetailModal({
