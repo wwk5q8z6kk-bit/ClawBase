@@ -20,7 +20,7 @@ import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { CalendarEvent } from '@/lib/types';
-import { getLinksFor, type EntityLink, type EntityType } from '@/lib/entityLinks';
+import { getLinksFor, addLink, removeLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
 import { router } from 'expo-router';
 
 const C = Colors.dark;
@@ -35,33 +35,29 @@ const LINK_TYPE_CONFIG: Record<string, { icon: string; color: string; label: str
 
 function EventLinksSection({ eventId }: { eventId: string }) {
   const [links, setLinks] = React.useState<EntityLink[]>([]);
-  const { tasks, crmContacts } = useApp();
+  const { tasks, memoryEntries, crmContacts, conversations } = useApp();
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  const [showPicker, setShowPicker] = React.useState(false);
+  const [pickerSearch, setPickerSearch] = React.useState('');
+  const [pickerFilter, setPickerFilter] = React.useState<EntityType | ''>('');
 
   React.useEffect(() => {
     getLinksFor('calendar', eventId).then(setLinks).catch(() => {});
-  }, [eventId]);
+  }, [eventId, refreshKey]);
 
   React.useEffect(() => {
-    const interval = setInterval(() => {
-      getLinksFor('calendar', eventId).then(setLinks).catch(() => {});
-    }, 5000);
+    const interval = setInterval(() => setRefreshKey(k => k + 1), 5000);
     return () => clearInterval(interval);
   }, [eventId]);
-
-  if (links.length === 0) return null;
 
   const getLinkLabel = (link: EntityLink): string => {
     const isSource = link.sourceType === 'calendar' && link.sourceId === eventId;
     const otherType = isSource ? link.targetType : link.sourceType;
     const otherId = isSource ? link.targetId : link.sourceId;
-    if (otherType === 'task') {
-      const t = tasks.find(t => t.id === otherId);
-      return t ? t.title : 'Task';
-    }
-    if (otherType === 'contact') {
-      const c = crmContacts.find(c => c.id === otherId);
-      return c ? c.name : 'Contact';
-    }
+    if (otherType === 'task') return tasks.find(t => t.id === otherId)?.title || 'Task';
+    if (otherType === 'contact') return crmContacts.find(c => c.id === otherId)?.name || 'Contact';
+    if (otherType === 'memory') return memoryEntries.find(m => m.id === otherId)?.title || 'Memory';
+    if (otherType === 'conversation') return conversations.find(c => c.id === otherId)?.title || 'Chat';
     return LINK_TYPE_CONFIG[otherType]?.label || otherType;
   };
 
@@ -75,33 +71,118 @@ function EventLinksSection({ eventId }: { eventId: string }) {
     else if (otherType === 'contact') router.push('/crm' as any);
   };
 
+  const handleLongPress = (link: EntityLink) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    Alert.alert('Remove Link', 'Remove this connection?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: async () => {
+        await removeLink(link.id);
+        setRefreshKey(k => k + 1);
+      }},
+    ]);
+  };
+
+  const linkedIds = new Set(links.flatMap(l => [`${l.sourceType}:${l.sourceId}`, `${l.targetType}:${l.targetId}`]));
+  linkedIds.delete(`calendar:${eventId}`);
+
+  const pickerItems = React.useMemo(() => {
+    const items: { type: EntityType; id: string; name: string }[] = [];
+    const q = pickerSearch.toLowerCase();
+    const ft = pickerFilter || null;
+    if (!ft || ft === 'task') tasks.filter(t => !linkedIds.has(`task:${t.id}`) && (!q || t.title.toLowerCase().includes(q))).slice(0, 10).forEach(t => items.push({ type: 'task', id: t.id, name: t.title }));
+    if (!ft || ft === 'contact') crmContacts.filter(c => !linkedIds.has(`contact:${c.id}`) && (!q || c.name.toLowerCase().includes(q))).slice(0, 10).forEach(c => items.push({ type: 'contact', id: c.id, name: c.name }));
+    if (!ft || ft === 'memory') memoryEntries.filter(m => !linkedIds.has(`memory:${m.id}`) && (!q || m.title.toLowerCase().includes(q))).slice(0, 10).forEach(m => items.push({ type: 'memory', id: m.id, name: m.title }));
+    if (!ft || ft === 'conversation') conversations.filter(c => !linkedIds.has(`conversation:${c.id}`) && (!q || c.title.toLowerCase().includes(q))).slice(0, 10).forEach(c => items.push({ type: 'conversation', id: c.id, name: c.title }));
+    return items;
+  }, [pickerSearch, pickerFilter, tasks, crmContacts, memoryEntries, conversations, linkedIds]);
+
+  const handleAddLink = async (targetType: EntityType, targetId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await addLink('calendar', eventId, targetType, targetId, 'related_to');
+    setRefreshKey(k => k + 1);
+    setShowPicker(false);
+    setPickerSearch('');
+    setPickerFilter('');
+  };
+
   return (
     <View style={{ gap: 6, marginTop: 12 }}>
-      <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary }}>Linked Items</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-        {links.map(link => {
-          const isSource = link.sourceType === 'calendar' && link.sourceId === eventId;
-          const otherType = isSource ? link.targetType : link.sourceType;
-          const cfg = LINK_TYPE_CONFIG[otherType] || LINK_TYPE_CONFIG.task;
-          return (
-            <Pressable
-              key={link.id}
-              onPress={() => handlePress(link)}
-              style={({ pressed }) => [{
-                flexDirection: 'row', alignItems: 'center', gap: 4,
-                paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
-                borderWidth: 1, borderColor: cfg.color + '40',
-                backgroundColor: 'rgba(255,255,255,0.03)',
-              }, pressed && { opacity: 0.7 }]}
-            >
-              <Ionicons name={cfg.icon as any} size={12} color={cfg.color} />
-              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: cfg.color, maxWidth: 140 }} numberOfLines={1}>
-                {getLinkLabel(link)}
-              </Text>
-            </Pressable>
-          );
-        })}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary }}>Linked Items</Text>
+        <Pressable
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowPicker(true); }}
+          style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(91,127,255,0.1)' }, pressed && { opacity: 0.7 }]}
+        >
+          <Ionicons name="add" size={14} color={C.accent} />
+          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: C.accent }}>Link</Text>
+        </Pressable>
       </View>
+      {links.length > 0 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {links.map(link => {
+            const isSource = link.sourceType === 'calendar' && link.sourceId === eventId;
+            const otherType = isSource ? link.targetType : link.sourceType;
+            const cfg = LINK_TYPE_CONFIG[otherType] || LINK_TYPE_CONFIG.task;
+            return (
+              <Pressable
+                key={link.id}
+                onPress={() => handlePress(link)}
+                onLongPress={() => handleLongPress(link)}
+                style={({ pressed }) => [{
+                  flexDirection: 'row', alignItems: 'center', gap: 4,
+                  paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
+                  borderWidth: 1, borderColor: cfg.color + '40',
+                  backgroundColor: 'rgba(255,255,255,0.03)',
+                }, pressed && { opacity: 0.7 }]}
+              >
+                <Ionicons name={cfg.icon as any} size={12} color={cfg.color} />
+                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: cfg.color, maxWidth: 140 }} numberOfLines={1}>
+                  {getLinkLabel(link)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
+      <Modal visible={showPicker} transparent animationType="slide" onRequestClose={() => setShowPicker(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' }} onPress={() => setShowPicker(false)} />
+          <View style={{ backgroundColor: C.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingBottom: 40, maxHeight: '70%' }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginTop: 10, marginBottom: 16 }} />
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 18, color: C.text, marginBottom: 12 }}>Link to...</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surface, borderRadius: 10, paddingHorizontal: 12, height: 40, marginBottom: 10 }}>
+              <Ionicons name="search" size={16} color={C.textTertiary} />
+              <TextInput style={{ flex: 1, fontFamily: 'Inter_400Regular', fontSize: 14, color: C.text, height: 40 }} placeholder="Search..." placeholderTextColor={C.textTertiary} value={pickerSearch} onChangeText={setPickerSearch} autoCapitalize="none" selectionColor={C.primary} />
+            </View>
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
+              {[{ key: '' as EntityType | '', label: 'All' }, { key: 'task' as EntityType, label: 'Tasks' }, { key: 'contact' as EntityType, label: 'Contacts' }, { key: 'memory' as EntityType, label: 'Memory' }, { key: 'conversation' as EntityType, label: 'Chats' }].map(ft => (
+                <Pressable key={ft.key} style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: pickerFilter === ft.key ? C.accent : C.border, backgroundColor: pickerFilter === ft.key ? 'rgba(91,127,255,0.1)' : 'transparent' }} onPress={() => setPickerFilter(ft.key)}>
+                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: pickerFilter === ft.key ? C.accent : C.textSecondary }}>{ft.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <FlatList
+              data={pickerItems}
+              keyExtractor={item => `${item.type}:${item.id}`}
+              style={{ maxHeight: 300 }}
+              renderItem={({ item }) => {
+                const cfg = LINK_TYPE_CONFIG[item.type] || LINK_TYPE_CONFIG.task;
+                return (
+                  <Pressable style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 4, borderRadius: 8 }, pressed && { backgroundColor: C.surface }]} onPress={() => handleAddLink(item.type, item.id)}>
+                    <View style={{ width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: cfg.color + '18' }}>
+                      <Ionicons name={cfg.icon as any} size={14} color={cfg.color} />
+                    </View>
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: C.text, flex: 1 }} numberOfLines={1}>{item.name}</Text>
+                    <Ionicons name="add-circle-outline" size={18} color={C.textTertiary} />
+                  </Pressable>
+                );
+              }}
+              ListEmptyComponent={<Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: C.textTertiary, textAlign: 'center', paddingVertical: 20 }}>No items found</Text>}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

@@ -22,7 +22,7 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { Task, TaskStatus, MemoryEntry } from '@/lib/types';
 import type { GatewayMemoryFile } from '@/lib/gateway';
-import { getLinksFor, addLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
+import { getLinksFor, addLink, removeLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
 import { router } from 'expo-router';
 
 const C = Colors.dark;
@@ -616,6 +616,16 @@ function EntityLinksSection({ entityType, entityId }: { entityType: EntityType; 
               <Pressable
                 key={link.id}
                 onPress={() => handleLinkPress(link)}
+                onLongPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  Alert.alert('Remove Link', 'Remove this connection?', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Remove', style: 'destructive', onPress: async () => {
+                      await removeLink(link.id);
+                      setRefreshKey(k => k + 1);
+                    }},
+                  ]);
+                }}
                 style={({ pressed }) => [linkStyles.chip, { borderColor: config.color + '40' }, pressed && { opacity: 0.7 }]}
               >
                 <Ionicons name={config.icon as any} size={12} color={config.color} />

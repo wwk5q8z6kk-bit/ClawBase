@@ -484,6 +484,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteConversation = useCallback(async (id: string) => {
     await conversationStorage.remove(id);
     setConversations((prev) => prev.filter((c) => c.id !== id));
+    try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('conversation', id); } catch {}
   }, []);
 
   const getMessages = useCallback(async (conversationId: string) => {
@@ -651,6 +652,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteTask = useCallback(async (id: string) => {
     await taskStorage.remove(id);
     setTasks((prev) => prev.filter((t) => t.id !== id));
+    try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('task', id); } catch {}
   }, []);
 
   const createMemoryEntry = useCallback(async (entry: Omit<MemoryEntry, 'id' | 'timestamp'>) => {
@@ -665,6 +667,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteMemoryEntry = useCallback(async (id: string) => {
     await memoryStorage.remove(id);
     setMemoryEntries((prev) => prev.filter((m) => m.id !== id));
+    try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('memory', id); } catch {}
   }, []);
 
   const searchMemory = useCallback(async (query: string) => {
@@ -718,6 +721,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteCalendarEvent = useCallback(async (id: string) => {
     await calendarStorage.remove(id);
     setCalendarEvents((prev) => prev.filter((e) => e.id !== id));
+    try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('calendar', id); } catch {}
   }, []);
 
   const createCRMContact = useCallback(async (contact: Omit<CRMContact, 'id' | 'createdAt' | 'interactions'>) => {
@@ -735,6 +739,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteCRMContact = useCallback(async (id: string) => {
     await crmStorage.remove(id);
     setCrmContacts((prev) => prev.filter((c) => c.id !== id));
+    try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('contact', id); } catch {}
   }, []);
 
   const addCRMInteraction = useCallback(async (contactId: string, interaction: Omit<CRMInteraction, 'id' | 'contactId'>) => {

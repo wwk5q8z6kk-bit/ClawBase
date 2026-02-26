@@ -6,6 +6,7 @@ import {
   FlatList,
   Pressable,
   Platform,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -14,7 +15,7 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
-import { getAllLinks, type EntityLink, type EntityType } from '@/lib/entityLinks';
+import { getAllLinks, removeLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
 
 const C = Colors.dark;
 
@@ -94,7 +95,19 @@ export default function ConnectionsScreen() {
     const relation = RELATION_LABELS[item.relation] || item.relation;
 
     return (
-      <View style={s.linkCard}>
+      <Pressable
+        style={({ pressed }) => [s.linkCard, pressed && { opacity: 0.85 }]}
+        onLongPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          Alert.alert('Remove Link', `Remove "${sourceName} → ${targetName}"?`, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Remove', style: 'destructive', onPress: async () => {
+              await removeLink(item.id);
+              getAllLinks().then(setLinks).catch(() => {});
+            }},
+          ]);
+        }}
+      >
         <Pressable
           style={({ pressed }) => [s.entityRow, pressed && { opacity: 0.7 }]}
           onPress={() => navigateToEntity(item.sourceType, item.sourceId)}
@@ -121,7 +134,7 @@ export default function ConnectionsScreen() {
           </View>
           <Text style={[s.entityName, { color: targetConfig.color }]} numberOfLines={1}>{targetName}</Text>
         </Pressable>
-      </View>
+      </Pressable>
     );
   };
 
