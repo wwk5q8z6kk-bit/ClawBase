@@ -1,167 +1,73 @@
 # ClawBase
 
 ## Overview
-
-ClawBase is a React Native (Expo) mobile companion app for self-hosted OpenClaw AI gateways. It provides a secure interface for managing AI agent interactions, including real-time chat, task/Kanban boards, memory browsing, and gateway connection management. The app connects directly to the user's own OpenClaw Gateway via WebSocket, ensuring data privacy. It targets iOS, Android, and web platforms, with an Express backend server for API support and static serving. The app follows a "lobster" dark theme and is designed for building and deployment from Replit, utilizing Expo cloud builds for native app store distribution.
+ClawBase is a React Native (Expo) mobile companion app designed for self-hosted OpenClaw AI gateways. It provides a secure, privacy-focused interface for managing AI agent interactions, including real-time chat, task management (Kanban), memory browsing, and gateway connection handling. The app connects directly to the user's OpenClaw Gateway via WebSocket and supports iOS, Android, and web platforms. It features an Express backend for API support and static serving, utilizes a "lobster" dark theme, and is built for deployment from Replit, with Expo cloud builds enabling native app store distribution. The project aims to empower users with full control over their AI interactions and data.
 
 ## User Preferences
-
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
 ### Frontend (Mobile App)
-
 - **Framework**: React Native with Expo SDK 54 and Expo Router v6 for file-based routing.
-- **Navigation**: Tab-based layout featuring Home, Chat, Workspace (Tasks + Memory), Calendar (Calendar + Activity), and Settings. Hidden routes exist for granular features.
-- **State Management**: React Context (`AppContext`) for global state and React Query (`@tanstack/react-query`) for server-state management.
-- **Local Storage**: AsyncStorage (`@react-native-async-storage/async-storage`) for persisting local data with a key-prefixed pattern.
-- **UI Libraries**: Utilizes `expo-linear-gradient`, `expo-haptics`, `react-native-reanimated`, `react-native-gesture-handler`, and `react-native-keyboard-controller`.
-- **Fonts**: Inter font family is used.
-- **Security**: `expo-local-authentication` for biometric/PIN lock and `expo-secure-store` for sensitive data.
+- **Navigation**: Tab-based layout (Home, Chat, Workspace, Calendar, Settings) with hidden granular routes.
+- **State Management**: React Context for global state and React Query for server-state.
+- **Local Storage**: AsyncStorage for persisting local data, `expo-secure-store` for sensitive data.
+- **UI/UX**: "Lobster" dark theme, Inter font family, `expo-linear-gradient` for visual effects, `expo-haptics` for feedback, `react-native-reanimated` and `react-native-gesture-handler` for animations and gestures. Features include a connection status banner, toast notification system, swipe actions, and data export.
+- **Security**: `expo-local-authentication` for biometric/PIN lock.
 
 ### Backend (Express Server + Relay)
-
-- **Framework**: Express 5 (TypeScript) acts as a relay server, API proxy, and static file server.
-- **Relay Server**: Manages a WebSocket bridge between mobile clients and the OpenClaw gateway, handling JWT authentication, gateway connection management with exponential backoff, message bridging, and streaming. It exposes 16 REST API endpoints, implements rate limiting, and maintains an in-memory audit trail.
-- **Storage**: Currently uses in-memory storage, with Drizzle ORM configured for PostgreSQL, though database usage is optional and minimal.
+- **Framework**: Express 5 (TypeScript) acting as a relay server, API proxy, and static file server.
+- **Relay Server**: Manages WebSocket bridging between mobile clients and the OpenClaw gateway, handling JWT authentication, connection management with exponential backoff, message bridging, and streaming. It exposes REST API endpoints, implements rate limiting, and maintains an in-memory audit trail.
+- **Storage**: Primarily uses in-memory storage, with Drizzle ORM configured for PostgreSQL for optional database usage, particularly for an audit log.
 
 ### Database
-
-- **ORM**: Drizzle ORM with PostgreSQL dialect, schema defined in `shared/schema.ts` using `drizzle-zod` for validation. Migrations are handled via `drizzle-kit`. Primarily, app data resides in client-side AsyncStorage.
+- **ORM**: Drizzle ORM with PostgreSQL dialect, schema defined using `drizzle-zod` for validation. Migrations via `drizzle-kit`. Primarily, app data resides in client-side AsyncStorage.
 
 ### Gateway Integration (Protocol v3)
-
-- **WebSocket Client**: `OpenClawGateway` class connects to the user's self-hosted OpenClaw Gateway on port 18789 using Protocol v3. The client sends a connect request as the first WebSocket frame on open, using `{ type: "req", id, method: "connect", params: {...} }` format with `minProtocol: 3, maxProtocol: 3`.
-- **Message Format**: All RPC requests use `{ type: "req", id, method, params }`. Responses come as `{ type: "res", id, ok, payload }`. Server events come as `{ type: "event", event, payload }`.
-- **Authentication**: Supports gateway token and device token auth. Device tokens are persisted via SecureStore/AsyncStorage and reused on reconnect.
-- **RPC Methods**: `sessions.list`, `sessions.history`, `sessions.send` (chat), `agent.cancel` (abort), `config.get`, `system.health`, `automations.list`, `events.list`, `ping`.
-- **Health Check**: Uses `/health` endpoint (HTTP GET) for reachability testing.
-- **Features**: Supports real-time streaming, session browsing, memory synchronization, automatic re-connection with exponential backoff, an event system, and dashboard widgets for status display.
-- **Orchestration**: The app can command the gateway to start/stop tunnels, generate pairing codes, rebind settings, and invoke arbitrary commands.
-- **Automations & Events RPC**: Provides methods for managing heartbeat/cron automations and fetching unified timeline events.
-- **Zero Relay Architecture**: Direct communication between app and gateway, with pairing codes handled directly by the gateway.
-- **Node Registration**: The app registers as a "node" with specific capabilities, and handles `node.invoke` commands from the gateway.
-
-### Pairing System
-
-- **Connection Methods**: Supports QR code scanning, Tailscale/remote URL, gateway pairing code, and manual URL entry.
-- **Reachability**: Tests gateway via Protocol v3 WebSocket handshake (sends connect request, waits for hello-ok) before saving connections.
-- **Deep Links**: Supports `clawbase://` and `openclaw://` URL schemes.
-- **Auto-discovery**: Scans local networks for gateways on port 18789 by probing via Protocol v3 WebSocket handshake.
-
-### Network Discovery
-
-- **Gateway Scanning**: HTTP-based subnet scanning (192.168.x.x, 10.0.x.x) is used to discover OpenClaw gateways on port 18789.
+- **Protocol**: Connects to self-hosted OpenClaw Gateways via WebSocket on port 18789 using Protocol v3 for secure, direct communication.
+- **Authentication**: Supports gateway token and device token authentication.
+- **RPC Methods**: Provides comprehensive control over AI agents, including `sessions.list`, `sessions.history`, `sessions.send`, `agent.cancel`, `config.get`, `system.health`, `automations.list`, `events.list`, and `ping`.
+- **Features**: Real-time streaming, session browsing, memory synchronization, automatic re-connection, event system, and dashboard widgets.
+- **Orchestration**: Commands gateway for tunnel management, pairing code generation, settings rebinding, and arbitrary command invocation.
+- **Pairing System**: Supports QR code scanning, Tailscale/remote URL, gateway pairing code, and manual URL entry. Includes gateway reachability testing via WebSocket handshake and deep linking (`clawbase://`, `openclaw://`).
+- **Network Discovery**: Scans local networks (192.168.x.x, 10.0.x.x) for OpenClaw gateways on port 18789.
 
 ### Key Design Patterns
-
-- **Local-first architecture**: All user data is stored locally via AsyncStorage.
+- **Local-first architecture**: User data primarily stored locally in AsyncStorage.
 - **Zero-dependency design**: Direct app-to-gateway connection without intermediary services.
-- **Gateway connection model**: Supports various connection methods including local discovery, manual URL, Tailscale, and Cloudflare Tunnel.
-- **Smart URL Scheme Detection**: Automatically selects `http/ws` for local IPs and `https/wss` for public domains.
-- **Shared Types**: TypeScript interfaces for data models are defined in `lib/types.ts` and `lib/gateway.ts`.
-- **Onboarding Flow**: Guides users through initial gateway connection.
-- **Error Boundaries**: For graceful error handling.
-- **Platform-aware Components**: Components adapt behavior for web vs. native.
-- **Connection Status Banner**: Animated banner displays gateway connection status.
-- **Toast Notification System**: Reusable provider for various notification types.
-- **Swipe Actions**: For list items, with long-press fallback on web.
-- **Data Export**: Full JSON backup of app data.
-- **Performance Optimizations**: Heavy components are memoized to prevent unnecessary re-renders.
-
-### Entity Link Registry (`lib/entityLinks.ts`)
-
-- **Bi-directional entity linking**: Connects any two entities (task↔conversation, memory↔contact, etc.) stored in AsyncStorage under `@clawbase:entity_links`.
-- **Link structure**: `{ id, sourceType, sourceId, targetType, targetId, relation, createdAt }`.
-- **Entity types**: `conversation`, `task`, `memory`, `calendar`, `contact`.
-- **Relations**: `created_from`, `mentions`, `related_to`, `spawned_by`.
-- **Auto-linking**: Memory entries created from chat are automatically linked to their source conversation. Tasks created via CommandBar are auto-tagged with `from:chat`.
-- **UI display**: `EntityLinksSection` component in vault.tsx renders linked items as tappable chips in task and memory detail modals.
-
-### Proactive Insights Engine (`lib/insights.ts`)
-
-- **Pure-logic insights**: Analyzes local data (tasks, CRM contacts, memory, calendar) without AI to generate actionable alerts.
-- **Insight types**: Overdue tasks, tasks due today, stale CRM contacts (7+ days), unreviewed memory items (24+ hours), busy day (3+ events), task completion streaks.
-- **Priority system**: P1 (critical, animated glow), P2 (normal), P3 (low, dimmed).
-- **Dashboard integration**: Insights replace hardcoded alerts on the home screen, showing top 3 with a "View All" option.
-
-### Auto-Tagging
-
-- **Source-based tags**: All entities automatically receive `from:<source>` tags when created (e.g., `from:chat`, `from:manual`, `from:gateway`).
-- **Applied to**: Tasks, memory entries, and calendar events via their respective `create` functions in `AppContext.tsx`.
-
-### Persistent Audit Log
-
-- **Database table**: `audit_log` in PostgreSQL (via Drizzle ORM) with fields: `id`, `timestamp`, `deviceId`, `action`, `result`, `details`.
-- **Dual storage**: Audit entries are persisted to DB and kept in-memory (last 1000) for fast API access.
-- **DB connection**: `server/db.ts` provides Drizzle connection to PostgreSQL when `DATABASE_URL` is available.
-
-### Build & Deployment
-
-- **Development**: Parallel `expo:dev` (Metro bundler) and `server:dev` (Express server) processes.
-- **Production**: `expo:static:build` for web assets, `server:build` for bundled server, `server:prod` for production server execution.
-- **Database Migrations**: `db:push` for schema changes via drizzle-kit.
-
-### Metadata Enrichment & Cross-Entity Intelligence
-
-- **Entity Link Registry** (`lib/entityLinks.ts`): Bi-directional links between entities (task↔conversation, memory↔contact, etc.) stored in AsyncStorage. Types: `conversation`, `task`, `memory`, `calendar`, `contact`. Relations: `created_from`, `mentions`, `related_to`, `spawned_by`.
-- **Proactive Insights Engine** (`lib/insights.ts`): Analyzes local data + entity links for actionable alerts. 15 insight types including cross-entity analysis (orphan entities, hub entities). Insights now support `inlineActions` — quick action buttons directly on insight cards (e.g., "Done" to complete overdue tasks, "Log Touch" for stale contacts, "Review" for unreviewed memory). Actions handled by `handleInlineAction` in the dashboard.
-- **Link Suggestions Engine** (`lib/insights.ts` → `generateLinkSuggestions`): Scans entities for shared keywords, tags, and name mentions to suggest unlinked relationships. Scores suggestions by confidence and returns top 5. Dashboard shows a `LinkSuggestionsWidget` with accept/dismiss per suggestion.
-- **Auto-Tagging**: All entities receive `from:<source>` tags on creation (e.g., `from:chat`, `from:gateway`, `from:manual`).
-- **Gateway Event → Entity Creation**: `message_complete` events from the gateway auto-create memory entries linked to the conversation.
-- **Cross-Entity Seed Links**: Seed data creates entity links between related items (memory↔task by shared tags, memory↔contact by name mentions, calendar↔contact by attendee name, calendar↔task by description keywords).
-- **Chat Mention Detection** (`lib/AppContext.tsx`): `simulateResponse` scans chat messages for mentions of CRM contacts (first name + last initial), tasks (2+ keyword matches), and calendar events (2+ keyword matches), then auto-creates `mentions` entity links.
-- **Search Relevance Scoring** (`app/search.tsx`): Weighted multi-field scoring with recency boost, tag matching, priority/status bonuses, pinned item boost, and graph-aware ranking (entities with more connections score higher, capped at +6). Results show connection count badges from the knowledge graph.
-- **Timeline Connection Indicators** (`app/(tabs)/timeline.tsx`): Each timeline event shows a connection badge if the underlying entity has links in the knowledge graph.
-- **EntityLinksSection with Manual Linking**: UI components in vault.tsx, calendar.tsx, and crm.tsx showing linked entities as tappable colored chips with 5-second polling. All three include a "+ Link" button that opens a searchable picker modal (with entity type filters) to manually create `related_to` links to any entity type including conversations.
-- **Link Deletion**: Long-press on any entity link chip (in vault, CRM, calendar, or Connections Explorer) shows a confirmation dialog to remove the link. All entity delete functions (`deleteTask`, `deleteMemoryEntry`, `deleteCalendarEvent`, `deleteCRMContact`, `deleteConversation`) automatically clean up orphaned links via `removeLinksFor()`.
-- **Knowledge Graph Widget** (`app/(tabs)/index.tsx`): Dashboard widget showing total connections, linked items, entity type breakdown, relationship type breakdown (Created/Mentions/Related/Spawned with counts), and the "hub" entity with the most links. Links to the Connections explorer.
-- **Connections Explorer** (`app/connections.tsx`): Full-screen browser for all entity links with type filters, resolved names, relation labels, navigation to linked entities, and long-press to delete links. Includes a collapsible "Hub Entities" section showing the most connected entities with relative connection bars. Refreshes on screen focus via `useFocusEffect`.
-- **Persistent Insight Dismissal** (`lib/entityLinks.ts`): Dismissed insight IDs stored in AsyncStorage (capped at 200). Dashboard filters dismissed insights and shows a dismiss "X" button on each insight card. Persists across app restarts.
-- **CRM Contextual Insights** (`app/crm.tsx`): Contact detail view shows contextual insight banners for stale contacts (7+ days without interaction) and contacts with no recorded interactions. Alerts appear between health score and entity links section.
-- **Chat Entity Context Bar** (`app/chat/[id].tsx`): Collapsible bar below the chat header showing linked entities for the current conversation. Displays count badge that expands into tappable colored chips for tasks, memories, contacts, and events. Auto-refreshes every 8 seconds.
-- **Memory Links Section** (`app/(tabs)/memory.tsx`): Replaced dead-end plain text linked IDs in memory detail modals with interactive `MemoryLinksSection` component. Shows linked entities as tappable colored chips that navigate to the relevant screen (chat, vault, calendar, CRM).
-- **Deep-Link Navigation**: Tapping entity link chips across the app now opens the specific item detail (not just the generic tab). Uses `useLocalSearchParams` with `openTaskId`/`openMemoryId`/`openEventId`/`openContactId` query params to auto-open detail modals in vault, calendar, and CRM screens. Applied consistently in vault, calendar, CRM, memory, chat, connections explorer, and search results.
-- **Orphan Entity Insights**: Alerts when 3+ active tasks or 5+ memory items have zero connections in the knowledge graph, encouraging users to build context.
-- **Hub Entity Insights**: Identifies the most-connected entity (4+ links) and surfaces it as a "hub" insight, suggesting it may represent a key project or stakeholder.
-- **Audit Log**: Persisted to PostgreSQL via `audit_log` table (Drizzle schema).
-
-### Directory Structure
-
-- `app/`: Expo Router screens and layouts.
-- `components/`: Reusable UI components.
-- `constants/`: Theme colors and design tokens.
-- `lib/`: Core logic and utilities.
-- `server/`: Express backend.
-- `shared/`: Shared frontend/backend code.
-- `scripts/`: Build scripts.
-- `assets/`: Media and fonts.
+- **Intelligent Connection Model**: Supports local discovery, manual URL, Tailscale, and Cloudflare Tunnel, with smart `http/ws` vs. `https/wss` URL scheme detection.
+- **Shared Types**: TypeScript interfaces for data models in `lib/types.ts` and `lib/gateway.ts`.
+- **Onboarding Flow**: Guides new users through initial gateway connection.
+- **Cross-Entity Intelligence**:
+    - **Entity Link Registry**: Bi-directional linking between `conversation`, `task`, `memory`, `calendar`, `contact` entities, stored locally. Supports relations like `created_from`, `mentions`, `related_to`, `spawned_by`.
+    - **Proactive Insights Engine**: Analyzes local data and entity links to generate actionable alerts (e.g., overdue tasks, stale contacts, unreviewed memory). Insights are prioritized and displayed on the dashboard with inline actions.
+    - **Link Suggestions Engine**: Suggests unlinked relationships based on shared keywords, tags, and mentions.
+    - **Auto-Tagging**: Entities receive `from:<source>` tags upon creation (e.g., `from:chat`).
+    - **Chat Mention Detection**: Scans chat messages to auto-create `mentions` entity links to CRM contacts, tasks, and calendar events.
+    - **Knowledge Graph Widget/Explorer**: Visualizes and allows browsing of entity links, identifying "hub" entities.
+    - **Search Relevance Scoring**: Weighted multi-field scoring with recency boost, tag matching, priority/status bonuses, and graph-aware ranking.
+- **Persistent Audit Log**: Logs device actions to PostgreSQL via Drizzle ORM and keeps the last 1000 entries in-memory.
 
 ## External Dependencies
 
 ### Core Services
-
--   **PostgreSQL**: Configured via `DATABASE_URL` and used by Drizzle ORM, currently with minimal usage for a `users` table.
--   **OpenClaw Gateway**: The primary self-hosted AI gateway that the app connects to via WebSocket on port 18789.
+- **PostgreSQL**: Used for audit logging and minimal other data via Drizzle ORM.
+- **OpenClaw Gateway**: The primary self-hosted AI gateway (via WebSocket on port 18789).
 
 ### Key npm Packages
-
--   **expo** (~54.0.33): Core mobile framework.
--   **expo-dev-client** (~6.0.20): Development build client.
--   **expo-router** (~6.0.23): File-based navigation.
--   **express** (^5.0.1): Backend HTTP server.
--   **drizzle-orm** (^0.39.3) + **pg** (^8.16.3): Database ORM and PostgreSQL driver.
--   **@tanstack/react-query** (^5.83.0): Server state management.
--   **react-native-reanimated** (~4.1.1): Animations.
--   **react-native-gesture-handler** (~2.28.0): Touch gestures.
--   **expo-secure-store**: Secure credential storage.
--   **expo-local-authentication**: Biometric authentication.
--   **http-proxy-middleware**: Dev server proxy.
+- **expo**: Core mobile development framework.
+- **expo-router**: File-based navigation for Expo.
+- **express**: Backend HTTP server.
+- **drizzle-orm** + **pg**: PostgreSQL ORM and driver.
+- **@tanstack/react-query**: Server state management.
+- **react-native-reanimated**: Animations library.
+- **react-native-gesture-handler**: Touch gesture handling.
+- **expo-secure-store**: Secure credential storage.
+- **expo-local-authentication**: Biometric/PIN authentication.
 
 ### Environment Variables
-
--   `DATABASE_URL`: PostgreSQL connection string.
--   `REPLIT_DEV_DOMAIN`: Replit development domain.
--   `REPLIT_INTERNAL_APP_DOMAIN`: Replit deployment domain.
--   `EXPO_PUBLIC_DOMAIN`: Public domain for API URL construction.
+- `DATABASE_URL`: PostgreSQL connection string.
+- `REPLIT_DEV_DOMAIN`: Replit development domain.
+- `REPLIT_INTERNAL_APP_DOMAIN`: Replit deployment domain.
+- `EXPO_PUBLIC_DOMAIN`: Public domain for API URL construction.
