@@ -5,7 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as QuickActions from 'expo-quick-actions';
 import React, { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { KeyboardProvider } from 'react-native-keyboard-controller';
+import { KeyboardAvoidingView, Platform } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import ConnectionBanner from '@/components/ConnectionBanner';
 import { ToastProvider } from '@/components/Toast';
@@ -142,12 +142,10 @@ export default function RootLayout() {
         <AppProvider>
           <AppLockWrapper>
             <GestureHandlerRootView>
-              <KeyboardProvider>
-                <ToastProvider>
-                  <RootLayoutNav />
-                  <ConnectionBanner />
-                </ToastProvider>
-              </KeyboardProvider>
+              <ToastProvider>
+                <RootLayoutNav />
+                <ConnectionBanner />
+              </ToastProvider>
             </GestureHandlerRootView>
           </AppLockWrapper>
         </AppProvider>
