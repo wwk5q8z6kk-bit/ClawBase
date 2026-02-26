@@ -1847,28 +1847,30 @@ export default function VaultScreen() {
 
           {viewMode === 'list' && (
             <>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-                {([
-                  { key: 'all', label: 'All' },
-                  { key: 'todo', label: 'To Do' },
-                  { key: 'in_progress', label: 'Active' },
-                  { key: 'done', label: 'Done' },
-                  { key: 'deferred', label: 'Deferred' },
-                  { key: 'archived', label: 'Archived' },
-                ] as const).map((f) => (
-                  <Pressable
-                    key={f.key}
-                    style={[styles.filterChip, statusFilter === f.key && styles.filterChipActive]}
-                    onPress={() => setStatusFilter(f.key)}
-                  >
-                    <Text
-                      style={[styles.filterChipText, statusFilter === f.key && styles.filterChipTextActive]}
+              <View style={styles.filterRowWrapper}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+                  {([
+                    { key: 'all', label: 'All' },
+                    { key: 'todo', label: 'To Do' },
+                    { key: 'in_progress', label: 'Active' },
+                    { key: 'done', label: 'Done' },
+                    { key: 'deferred', label: 'Deferred' },
+                    { key: 'archived', label: 'Archived' },
+                  ] as const).map((f) => (
+                    <Pressable
+                      key={f.key}
+                      style={[styles.filterChip, statusFilter === f.key && styles.filterChipActive]}
+                      onPress={() => setStatusFilter(f.key)}
                     >
-                      {f.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
+                      <Text
+                        style={[styles.filterChipText, statusFilter === f.key && styles.filterChipTextActive]}
+                      >
+                        {f.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
 
               <FlatList
                 data={filteredTasks}
@@ -2224,25 +2226,27 @@ export default function VaultScreen() {
             ))}
           </ScrollView>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.memFilterRow}>
-            {([
-              { key: 'all', label: 'All' },
-              { key: 'conversation', label: 'Chats' },
-              { key: 'note', label: 'Notes' },
-              { key: 'task', label: 'Tasks' },
-              { key: 'event', label: 'Events' },
-              { key: 'summary', label: 'Summaries' },
-              { key: 'document', label: 'Docs' },
-            ] as const).map((f) => (
-              <Pressable
-                key={f.key}
-                style={[styles.filterChip, memFilter === f.key && styles.filterChipActive]}
-                onPress={() => setMemFilter(f.key)}
-              >
-                <Text style={[styles.filterChipText, memFilter === f.key && styles.filterChipTextActive]}>{f.label}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+          <View style={styles.filterRowWrapper}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.memFilterRow}>
+              {([
+                { key: 'all', label: 'All' },
+                { key: 'conversation', label: 'Chats' },
+                { key: 'note', label: 'Notes' },
+                { key: 'task', label: 'Tasks' },
+                { key: 'event', label: 'Events' },
+                { key: 'summary', label: 'Summaries' },
+                { key: 'document', label: 'Docs' },
+              ] as const).map((f) => (
+                <Pressable
+                  key={f.key}
+                  style={[styles.filterChip, memFilter === f.key && styles.filterChipActive]}
+                  onPress={() => setMemFilter(f.key)}
+                >
+                  <Text style={[styles.filterChipText, memFilter === f.key && styles.filterChipTextActive]}>{f.label}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
 
           {showTagBrowser && allTags.length > 0 && (
             <View style={styles.tagBrowser}>
@@ -2889,8 +2893,9 @@ const styles = StyleSheet.create({
     color: C.text,
     padding: 0,
   },
-  filterRow: { paddingHorizontal: 20, paddingVertical: 12, gap: 8 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: C.card, borderWidth: 1, borderColor: C.borderLight },
+  filterRowWrapper: { height: 52, flexShrink: 0 },
+  filterRow: { paddingHorizontal: 20, paddingVertical: 12, gap: 8, alignItems: 'center' as const },
+  filterChip: { height: 32, paddingHorizontal: 14, borderRadius: 20, backgroundColor: C.card, borderWidth: 1, borderColor: C.borderLight, justifyContent: 'center' as const, alignItems: 'center' as const },
   filterChipActive: { backgroundColor: C.primaryMuted, borderColor: C.primary },
   filterChipText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.textSecondary },
   filterChipTextActive: { color: C.primary },
@@ -3019,7 +3024,7 @@ const styles = StyleSheet.create({
   reviewChipActive: { backgroundColor: C.coral + '15' },
   reviewChipText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary },
   reviewChipTextActive: { color: C.coral },
-  memFilterRow: { paddingHorizontal: 20, paddingVertical: 8, gap: 8 },
+  memFilterRow: { paddingHorizontal: 20, paddingVertical: 8, gap: 8, alignItems: 'center' as const },
   dateHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   dateLine: { flex: 1, height: 1, backgroundColor: C.borderLight },
   dateLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 12, color: C.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },

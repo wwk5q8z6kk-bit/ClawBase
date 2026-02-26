@@ -301,13 +301,30 @@ function setupErrorHandler(app: express.Application) {
   setupErrorHandler(app);
 
   const port = parseInt(process.env.PORT || "5000", 10);
-  server.on("error", (err: NodeJS.ErrnoException) => {
+  let retryCount = 0;
+  const MAX_RETRIES = 5;
+
+  async function killPortHolder(p: number) {
+    try {
+      const { execSync } = await import("child_process");
+      execSync(`fuser -k ${p}/tcp 2>/dev/null || true`, { stdio: "ignore" });
+      log(`Killed stale process on port ${p}`);
+    } catch {}
+  }
+
+  server.on("error", async (err: NodeJS.ErrnoException) => {
     if (err.code === "EADDRINUSE") {
-      log(`Port ${port} is in use, retrying in 1s...`);
+      retryCount++;
+      if (retryCount > MAX_RETRIES) {
+        log(`Port ${port} still in use after ${MAX_RETRIES} retries, exiting`);
+        process.exit(1);
+      }
+      log(`Port ${port} is in use, killing stale process and retrying (${retryCount}/${MAX_RETRIES})...`);
+      await killPortHolder(port);
       setTimeout(() => {
         server.close();
         server.listen({ port, host: "0.0.0.0", reusePort: true });
-      }, 1000);
+      }, 1500);
     } else {
       throw err;
     }

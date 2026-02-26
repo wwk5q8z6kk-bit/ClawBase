@@ -814,28 +814,30 @@ export default function TasksScreen() {
 
       {viewMode === 'list' && (
         <>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-            {([
-              { key: 'all', label: 'All' },
-              { key: 'todo', label: 'To Do' },
-              { key: 'in_progress', label: 'Active' },
-              { key: 'done', label: 'Done' },
-              { key: 'deferred', label: 'Deferred' },
-              { key: 'archived', label: 'Archived' },
-            ] as const).map((f) => (
-              <Pressable
-                key={f.key}
-                style={[styles.filterChip, statusFilter === f.key && styles.filterChipActive]}
-                onPress={() => setStatusFilter(f.key)}
-              >
-                <Text
-                  style={[styles.filterChipText, statusFilter === f.key && styles.filterChipTextActive]}
+          <View style={styles.filterRowWrapper}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+              {([
+                { key: 'all', label: 'All' },
+                { key: 'todo', label: 'To Do' },
+                { key: 'in_progress', label: 'Active' },
+                { key: 'done', label: 'Done' },
+                { key: 'deferred', label: 'Deferred' },
+                { key: 'archived', label: 'Archived' },
+              ] as const).map((f) => (
+                <Pressable
+                  key={f.key}
+                  style={[styles.filterChip, statusFilter === f.key && styles.filterChipActive]}
+                  onPress={() => setStatusFilter(f.key)}
                 >
-                  {f.label}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+                  <Text
+                    style={[styles.filterChipText, statusFilter === f.key && styles.filterChipTextActive]}
+                  >
+                    {f.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
 
           <FlatList
             data={filteredTasks}
@@ -1095,8 +1097,9 @@ const styles = StyleSheet.create({
     color: C.text,
     padding: 0,
   },
-  filterRow: { paddingHorizontal: 20, paddingVertical: 12, gap: 8 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: C.card, borderWidth: 1, borderColor: C.borderLight },
+  filterRow: { paddingHorizontal: 20, paddingVertical: 12, gap: 8, alignItems: 'center' as const },
+  filterRowWrapper: { height: 52, flexShrink: 0 },
+  filterChip: { height: 32, paddingHorizontal: 14, borderRadius: 20, backgroundColor: C.card, borderWidth: 1, borderColor: C.borderLight, justifyContent: 'center' as const, alignItems: 'center' as const },
   filterChipActive: { backgroundColor: C.primaryMuted, borderColor: C.primary },
   filterChipText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.textSecondary },
   filterChipTextActive: { color: C.primary },
