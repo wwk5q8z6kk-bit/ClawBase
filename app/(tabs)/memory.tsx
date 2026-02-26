@@ -275,9 +275,10 @@ function MemoryLinksSection({ memoryId, legacyLinkedIds }: { memoryId: string; l
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 if (e.type === 'conversation') router.push(`/chat/${e.id}` as any);
-                else if (e.type === 'task') router.push('/(tabs)/vault');
-                else if (e.type === 'calendar') router.push('/(tabs)/calendar');
-                else if (e.type === 'contact') router.push('/crm' as any);
+                else if (e.type === 'task') router.push({ pathname: '/(tabs)/vault', params: { openTaskId: e.id } } as any);
+                else if (e.type === 'memory') router.push({ pathname: '/(tabs)/vault', params: { openMemoryId: e.id } } as any);
+                else if (e.type === 'calendar') router.push({ pathname: '/(tabs)/calendar', params: { openEventId: e.id } } as any);
+                else if (e.type === 'contact') router.push({ pathname: '/crm', params: { openContactId: e.id } } as any);
               }}
             >
               <Ionicons name={cfg.icon as any} size={12} color={cfg.color} />

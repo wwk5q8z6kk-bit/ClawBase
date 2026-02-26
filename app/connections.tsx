@@ -60,9 +60,10 @@ export default function ConnectionsScreen() {
   const navigateToEntity = (type: EntityType, id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (type === 'conversation') router.push(`/chat/${id}`);
-    else if (type === 'task' || type === 'memory') router.push('/(tabs)/vault');
-    else if (type === 'calendar') router.push('/(tabs)/calendar');
-    else if (type === 'contact') router.push('/crm' as any);
+    else if (type === 'task') router.push({ pathname: '/(tabs)/vault', params: { openTaskId: id } });
+    else if (type === 'memory') router.push({ pathname: '/(tabs)/vault', params: { openMemoryId: id } });
+    else if (type === 'calendar') router.push({ pathname: '/(tabs)/calendar', params: { openEventId: id } });
+    else if (type === 'contact') router.push({ pathname: '/crm', params: { openContactId: id } } as any);
   };
 
   const [showHubs, setShowHubs] = useState(true);

@@ -654,6 +654,96 @@ export function generateLinkSuggestions(data: {
   return suggestions.sort((a, b) => b.confidence - a.confidence).slice(0, 5);
 }
 
+function getOrphanEntities(
+  tasks: Task[],
+  memoryEntries: MemoryEntry[],
+  links: EntityLink[],
+): Insight[] {
+  const linkedIds = new Set<string>();
+  for (const link of links) {
+    linkedIds.add(`${link.sourceType}:${link.sourceId}`);
+    linkedIds.add(`${link.targetType}:${link.targetId}`);
+  }
+
+  const orphanTasks = tasks.filter(t =>
+    t.status !== 'done' && t.status !== 'archived' && !linkedIds.has(`task:${t.id}`)
+  );
+  const orphanMems = memoryEntries.filter(m =>
+    !linkedIds.has(`memory:${m.id}`)
+  );
+
+  const insights: Insight[] = [];
+  if (orphanTasks.length >= 3) {
+    insights.push({
+      id: 'orphan_tasks',
+      type: 'orphan_entities',
+      priority: 'P3',
+      title: `${orphanTasks.length} unlinked tasks`,
+      message: `These tasks aren't connected to any contacts, chats, or events. Linking them adds context and makes search smarter.`,
+      actionLabel: 'View in Vault',
+      actionRoute: '/(tabs)/vault',
+      icon: 'git-network-outline',
+      category: 'cross_entity',
+    });
+  }
+  if (orphanMems.length >= 5) {
+    insights.push({
+      id: 'orphan_memories',
+      type: 'orphan_entities',
+      priority: 'P3',
+      title: `${orphanMems.length} unlinked knowledge items`,
+      message: `Some notes and memories could be linked to tasks or contacts for better cross-referencing.`,
+      actionLabel: 'View in Vault',
+      actionRoute: '/(tabs)/vault',
+      icon: 'book-outline',
+      category: 'cross_entity',
+    });
+  }
+  return insights;
+}
+
+function getHubEntities(
+  tasks: Task[],
+  memoryEntries: MemoryEntry[],
+  crmContacts: CRMContact[],
+  calendarEvents: CalendarEvent[],
+  links: EntityLink[],
+): Insight[] {
+  if (links.length < 5) return [];
+
+  const counts: Record<string, number> = {};
+  for (const link of links) {
+    const sk = `${link.sourceType}:${link.sourceId}`;
+    const tk = `${link.targetType}:${link.targetId}`;
+    counts[sk] = (counts[sk] || 0) + 1;
+    counts[tk] = (counts[tk] || 0) + 1;
+  }
+
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const top = sorted[0];
+  if (!top || top[1] < 4) return [];
+
+  const [key, count] = top;
+  const [type, id] = key.split(':');
+  let name = id.slice(0, 8);
+  if (type === 'task') name = tasks.find(t => t.id === id)?.title || name;
+  else if (type === 'memory') name = memoryEntries.find(m => m.id === id)?.title || name;
+  else if (type === 'contact') name = crmContacts.find(c => c.id === id)?.name || name;
+  else if (type === 'calendar') name = calendarEvents.find(e => e.id === id)?.title || name;
+
+  return [{
+    id: `hub_entity_${id}`,
+    type: 'hub_entity',
+    priority: 'P3',
+    title: `"${name}" is a hub`,
+    message: `This ${type} has ${count} connections — it might represent a key project or stakeholder worth tracking closely.`,
+    actionLabel: 'View Connections',
+    actionRoute: '/connections',
+    icon: 'star-outline',
+    category: 'cross_entity',
+  }];
+}
+
 const PRIORITY_ORDER: Record<InsightPriority, number> = { P1: 0, P2: 1, P3: 2 };
 
 export function generateInsights(data: {
@@ -678,6 +768,8 @@ export function generateInsights(data: {
     ...getContextualMemory(data.calendarEvents, data.memoryEntries, links),
     ...getContactProjectStall(data.crmContacts, data.tasks, links),
     ...getPostMeetingActions(data.calendarEvents, data.tasks, data.memoryEntries, links),
+    ...getOrphanEntities(data.tasks, data.memoryEntries, links),
+    ...getHubEntities(data.tasks, data.memoryEntries, data.crmContacts, data.calendarEvents, links),
   ];
 
   return all.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);

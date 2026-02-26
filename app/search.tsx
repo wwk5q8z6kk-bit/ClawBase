@@ -145,7 +145,7 @@ export default function SearchScreen() {
           score: s,
           tags: t.tags,
           timestamp: t.updatedAt,
-          onPress: () => router.push('/(tabs)/vault'),
+          onPress: () => router.push({ pathname: '/(tabs)/vault', params: { openTaskId: t.id } }),
         });
       }
     }
@@ -169,7 +169,7 @@ export default function SearchScreen() {
           score: s,
           tags: m.tags,
           timestamp: m.timestamp,
-          onPress: () => router.push('/(tabs)/vault'),
+          onPress: () => router.push({ pathname: '/(tabs)/vault', params: { openMemoryId: m.id } }),
         });
       }
     }
@@ -192,7 +192,7 @@ export default function SearchScreen() {
           score: s,
           tags: e.tags,
           timestamp: e.startTime,
-          onPress: () => router.push('/(tabs)/calendar'),
+          onPress: () => router.push({ pathname: '/(tabs)/calendar', params: { openEventId: e.id } }),
         });
       }
     }
@@ -216,7 +216,7 @@ export default function SearchScreen() {
           score: s,
           tags: c.tags,
           timestamp: c.lastInteraction,
-          onPress: () => router.push('/crm' as any),
+          onPress: () => router.push({ pathname: '/crm', params: { openContactId: c.id } } as any),
         });
       }
     }

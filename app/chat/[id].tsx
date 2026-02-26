@@ -798,9 +798,10 @@ export default function ChatDetailScreen() {
                 style={({ pressed }) => [styles.contextChip, pressed && { opacity: 0.6 }]}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  if (e.type === 'task' || e.type === 'memory') router.push('/(tabs)/vault');
-                  else if (e.type === 'calendar') router.push('/(tabs)/calendar');
-                  else if (e.type === 'contact') router.push('/crm' as any);
+                  if (e.type === 'task') router.push({ pathname: '/(tabs)/vault', params: { openTaskId: e.id } });
+                  else if (e.type === 'memory') router.push({ pathname: '/(tabs)/vault', params: { openMemoryId: e.id } });
+                  else if (e.type === 'calendar') router.push({ pathname: '/(tabs)/calendar', params: { openEventId: e.id } });
+                  else if (e.type === 'contact') router.push({ pathname: '/crm', params: { openContactId: e.id } } as any);
                 }}
               >
                 <Ionicons name={cfg.icon as any} size={11} color={cfg.color} />

@@ -21,7 +21,7 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { CalendarEvent } from '@/lib/types';
 import { getLinksFor, addLink, removeLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 
 const C = Colors.dark;
 
@@ -67,8 +67,9 @@ function EventLinksSection({ eventId }: { eventId: string }) {
     const otherId = isSource ? link.targetId : link.sourceId;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (otherType === 'conversation') router.push(`/chat/${otherId}`);
-    else if (otherType === 'task' || otherType === 'memory') router.push('/(tabs)/vault');
-    else if (otherType === 'contact') router.push('/crm' as any);
+    else if (otherType === 'task') router.push({ pathname: '/(tabs)/vault', params: { openTaskId: otherId } });
+    else if (otherType === 'memory') router.push({ pathname: '/(tabs)/vault', params: { openMemoryId: otherId } });
+    else if (otherType === 'contact') router.push({ pathname: '/crm', params: { openContactId: otherId } } as any);
   };
 
   const handleLongPress = (link: EntityLink) => {
@@ -353,6 +354,7 @@ function EmptyState() {
 }
 
 export default function CalendarTab() {
+  const { openEventId } = useLocalSearchParams<{ openEventId?: string }>();
   const insets = useSafeAreaInsets();
   const { calendarEvents, createCalendarEvent, deleteCalendarEvent, conversations, tasks, memoryEntries, gateway, gatewayStatus } = useApp();
 
@@ -384,6 +386,25 @@ export default function CalendarTab() {
   const [refreshing, setRefreshing] = useState(false);
   const [gatewayEvents, setGatewayEvents] = useState<TimelineEvent[]>([]);
   const [showFilters, setShowFilters] = useState(true);
+
+  const handledEventDeepLink = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!openEventId || handledEventDeepLink.current === openEventId) return;
+    const event = calendarEvents.find(e => e.id === openEventId);
+    if (event) {
+      handledEventDeepLink.current = openEventId;
+      setSelectedEvent(event);
+      setShowDetailModal(true);
+      setEditMode(false);
+      setEditTitle(event.title);
+      setEditDescription(event.description || '');
+      const d = new Date(event.startTime);
+      setEditHour(d.getHours().toString());
+      setEditDuration(((event.endTime - event.startTime) / 3600000).toString());
+      setEditAllDay(event.allDay || false);
+      setEditColor(event.color || C.coral);
+    }
+  }, [openEventId, calendarEvents]);
 
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 

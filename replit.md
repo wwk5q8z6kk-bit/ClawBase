@@ -106,7 +106,7 @@ Preferred communication style: Simple, everyday language.
 ### Metadata Enrichment & Cross-Entity Intelligence
 
 - **Entity Link Registry** (`lib/entityLinks.ts`): Bi-directional links between entities (task↔conversation, memory↔contact, etc.) stored in AsyncStorage. Types: `conversation`, `task`, `memory`, `calendar`, `contact`. Relations: `created_from`, `mentions`, `related_to`, `spawned_by`.
-- **Proactive Insights Engine** (`lib/insights.ts`): Analyzes local data + entity links for actionable alerts. 13 insight types including cross-entity analysis. Insights now support `inlineActions` — quick action buttons directly on insight cards (e.g., "Done" to complete overdue tasks, "Log Touch" for stale contacts, "Review" for unreviewed memory). Actions handled by `handleInlineAction` in the dashboard.
+- **Proactive Insights Engine** (`lib/insights.ts`): Analyzes local data + entity links for actionable alerts. 15 insight types including cross-entity analysis (orphan entities, hub entities). Insights now support `inlineActions` — quick action buttons directly on insight cards (e.g., "Done" to complete overdue tasks, "Log Touch" for stale contacts, "Review" for unreviewed memory). Actions handled by `handleInlineAction` in the dashboard.
 - **Link Suggestions Engine** (`lib/insights.ts` → `generateLinkSuggestions`): Scans entities for shared keywords, tags, and name mentions to suggest unlinked relationships. Scores suggestions by confidence and returns top 5. Dashboard shows a `LinkSuggestionsWidget` with accept/dismiss per suggestion.
 - **Auto-Tagging**: All entities receive `from:<source>` tags on creation (e.g., `from:chat`, `from:gateway`, `from:manual`).
 - **Gateway Event → Entity Creation**: `message_complete` events from the gateway auto-create memory entries linked to the conversation.
@@ -122,6 +122,9 @@ Preferred communication style: Simple, everyday language.
 - **CRM Contextual Insights** (`app/crm.tsx`): Contact detail view shows contextual insight banners for stale contacts (7+ days without interaction) and contacts with no recorded interactions. Alerts appear between health score and entity links section.
 - **Chat Entity Context Bar** (`app/chat/[id].tsx`): Collapsible bar below the chat header showing linked entities for the current conversation. Displays count badge that expands into tappable colored chips for tasks, memories, contacts, and events. Auto-refreshes every 8 seconds.
 - **Memory Links Section** (`app/(tabs)/memory.tsx`): Replaced dead-end plain text linked IDs in memory detail modals with interactive `MemoryLinksSection` component. Shows linked entities as tappable colored chips that navigate to the relevant screen (chat, vault, calendar, CRM).
+- **Deep-Link Navigation**: Tapping entity link chips across the app now opens the specific item detail (not just the generic tab). Uses `useLocalSearchParams` with `openTaskId`/`openMemoryId`/`openEventId`/`openContactId` query params to auto-open detail modals in vault, calendar, and CRM screens. Applied consistently in vault, calendar, CRM, memory, chat, connections explorer, and search results.
+- **Orphan Entity Insights**: Alerts when 3+ active tasks or 5+ memory items have zero connections in the knowledge graph, encouraging users to build context.
+- **Hub Entity Insights**: Identifies the most-connected entity (4+ links) and surfaces it as a "hub" insight, suggesting it may represent a key project or stakeholder.
 - **Audit Log**: Persisted to PostgreSQL via `audit_log` table (Drizzle schema).
 
 ### Directory Structure

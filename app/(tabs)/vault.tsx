@@ -23,7 +23,7 @@ import { useApp } from '@/lib/AppContext';
 import type { Task, TaskStatus, MemoryEntry } from '@/lib/types';
 import type { GatewayMemoryFile } from '@/lib/gateway';
 import { getLinksFor, addLink, removeLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 
 const C = Colors.dark;
 
@@ -483,12 +483,14 @@ function EntityLinksSection({ entityType, entityId }: { entityType: EntityType; 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (targetType === 'conversation') {
       router.push(`/chat/${targetId}`);
-    } else if (targetType === 'task' || targetType === 'memory') {
-      router.push('/(tabs)/vault');
+    } else if (targetType === 'task') {
+      router.push({ pathname: '/(tabs)/vault', params: { openTaskId: targetId } });
+    } else if (targetType === 'memory') {
+      router.push({ pathname: '/(tabs)/vault', params: { openMemoryId: targetId } });
     } else if (targetType === 'calendar') {
-      router.push('/(tabs)/calendar');
+      router.push({ pathname: '/(tabs)/calendar', params: { openEventId: targetId } });
     } else if (targetType === 'contact') {
-      router.push('/crm');
+      router.push({ pathname: '/crm', params: { openContactId: targetId } } as any);
     }
   };
 
@@ -1440,6 +1442,7 @@ function AnimatedSegmentSwitcher({
 
 export default function VaultScreen() {
   const insets = useSafeAreaInsets();
+  const { openTaskId, openMemoryId } = useLocalSearchParams<{ openTaskId?: string; openMemoryId?: string }>();
   const {
     tasks, createTask, updateTask, deleteTask,
     memoryEntries, updateMemoryEntry, createMemoryEntry, deleteMemoryEntry,
@@ -1483,6 +1486,29 @@ export default function VaultScreen() {
 
   const [syncingMemory, setSyncingMemory] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  const handledDeepLink = useRef<string | null>(null);
+  useEffect(() => {
+    const key = openTaskId || openMemoryId || null;
+    if (!key || handledDeepLink.current === key) return;
+    if (openTaskId) {
+      const task = tasks.find(t => t.id === openTaskId);
+      if (task) {
+        handledDeepLink.current = key;
+        setActiveSegment('tasks');
+        setDetailTask(task);
+        setShowTaskDetailModal(true);
+      }
+    } else if (openMemoryId) {
+      const mem = memoryEntries.find(m => m.id === openMemoryId);
+      if (mem) {
+        handledDeepLink.current = key;
+        setActiveSegment('knowledge');
+        setSelectedMemory(mem);
+        setShowMemDetailModal(true);
+      }
+    }
+  }, [openTaskId, openMemoryId, tasks, memoryEntries]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

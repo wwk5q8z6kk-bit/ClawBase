@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { CRMContact, CRMInteraction } from '@/lib/types';
@@ -65,8 +65,9 @@ function ContactLinksSection({ contactId }: { contactId: string }) {
     const otherId = isSource ? link.targetId : link.sourceId;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (otherType === 'conversation') router.push(`/chat/${otherId}`);
-    else if (otherType === 'task' || otherType === 'memory') router.push('/(tabs)/vault');
-    else if (otherType === 'calendar') router.push('/(tabs)/calendar');
+    else if (otherType === 'task') router.push({ pathname: '/(tabs)/vault', params: { openTaskId: otherId } });
+    else if (otherType === 'memory') router.push({ pathname: '/(tabs)/vault', params: { openMemoryId: otherId } });
+    else if (otherType === 'calendar') router.push({ pathname: '/(tabs)/calendar', params: { openEventId: otherId } });
   };
 
   const handleLongPress = (link: EntityLink) => {
@@ -254,6 +255,7 @@ function ContactAvatar({ name, color, size = 42 }: { name: string; color: string
 
 export default function CRMScreen() {
   const insets = useSafeAreaInsets();
+  const { openContactId } = useLocalSearchParams<{ openContactId?: string }>();
   const { crmContacts, createCRMContact, updateCRMContact, deleteCRMContact, addCRMInteraction } = useApp();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
@@ -275,6 +277,16 @@ export default function CRMScreen() {
   const [editCompany, setEditCompany] = useState('');
   const [editRole, setEditRole] = useState('');
   const [editStage, setEditStage] = useState<CRMContact['stage']>('lead');
+
+  const handledContactDeepLink = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!openContactId || handledContactDeepLink.current === openContactId) return;
+    const contact = crmContacts.find(c => c.id === openContactId);
+    if (contact) {
+      handledContactDeepLink.current = openContactId;
+      setSelectedContact(contact);
+    }
+  }, [openContactId, crmContacts]);
 
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
