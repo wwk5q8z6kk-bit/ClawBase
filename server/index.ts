@@ -188,18 +188,6 @@ async function configureExpoAndLanding(app: express.Application) {
         return next();
       }
 
-      if (req.path === "/" || req.path === "/manifest") {
-        const platform = req.header("expo-platform");
-        if (platform && (platform === "ios" || platform === "android")) {
-          return serveExpoManifest(platform, res);
-        }
-      }
-
-      const isApiOrStatic = req.path.startsWith("/api");
-      if (isApiOrStatic) {
-        return next();
-      }
-
       return metroProxy(req, res, next);
     });
 
