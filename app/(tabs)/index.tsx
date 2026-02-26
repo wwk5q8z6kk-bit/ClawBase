@@ -22,8 +22,8 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import { PulsingDot } from '@/components/PulsingDot';
 import type { TaskStatus, Task } from '@/lib/types';
-import { generateInsights, type Insight } from '@/lib/insights';
-import { getAllLinks, type EntityLink } from '@/lib/entityLinks';
+import { generateInsights, generateLinkSuggestions, type Insight, type InlineAction, type LinkSuggestion } from '@/lib/insights';
+import { getAllLinks, addLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
 
 const C = Colors.dark;
 
@@ -193,7 +193,7 @@ function AnimatedProgressBar({ segments, total }: { segments: { value: number; c
   );
 }
 
-function ProactiveAlert({ type, message, icon, onPress, priority = 'P2' }: { type: 'info' | 'warn' | 'success'; message: string; icon?: string; onPress: () => void; priority?: 'P1' | 'P2' | 'P3' }) {
+function ProactiveAlert({ type, message, icon, onPress, priority = 'P2', inlineActions, onInlineAction }: { type: 'info' | 'warn' | 'success'; message: string; icon?: string; onPress: () => void; priority?: 'P1' | 'P2' | 'P3'; inlineActions?: InlineAction[]; onInlineAction?: (action: InlineAction) => void }) {
   const glowAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -224,11 +224,34 @@ function ProactiveAlert({ type, message, icon, onPress, priority = 'P2' }: { typ
       colors={config.colors}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={[styles.alertCard, { borderColor: config.borderColor }, priority === 'P1' && styles.alertP1]}
+      style={[styles.alertCard, { borderColor: config.borderColor }, priority === 'P1' && styles.alertP1, inlineActions && inlineActions.length > 0 && { paddingBottom: 10 }]}
     >
-      <Ionicons name={config.icon as any} size={20} color={config.iconColor} />
-      <Text style={styles.alertText} numberOfLines={2}>{message}</Text>
-      <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
+      <View style={{ flex: 1, gap: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Ionicons name={config.icon as any} size={20} color={config.iconColor} />
+          <Text style={[styles.alertText, { flex: 1 }]} numberOfLines={2}>{message}</Text>
+          <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
+        </View>
+        {inlineActions && inlineActions.length > 0 && onInlineAction && (
+          <View style={{ flexDirection: 'row', gap: 6, marginLeft: 30 }}>
+            {inlineActions.map((action, i) => (
+              <Pressable
+                key={i}
+                onPress={(e) => { e.stopPropagation?.(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onInlineAction(action); }}
+                style={({ pressed }) => [{
+                  flexDirection: 'row', alignItems: 'center', gap: 4,
+                  paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
+                  backgroundColor: 'rgba(255,255,255,0.08)',
+                  borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+                }, pressed && { opacity: 0.6, backgroundColor: 'rgba(255,255,255,0.15)' }]}
+              >
+                <Ionicons name={action.icon as any} size={12} color={config.iconColor} />
+                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: config.iconColor }} numberOfLines={1}>{action.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
     </LinearGradient>
   );
 
@@ -708,6 +731,135 @@ const kgStyles = StyleSheet.create({
     marginTop: 8, paddingHorizontal: 4,
   },
   hubText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textSecondary, flex: 1 },
+});
+
+const SUGGESTION_TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
+  task: { icon: 'checkmark-circle', color: '#FFB020' },
+  memory: { icon: 'book', color: '#8B7FFF' },
+  calendar: { icon: 'calendar', color: '#FF7B5C' },
+  contact: { icon: 'person', color: '#9CA3AF' },
+  conversation: { icon: 'chatbubbles', color: '#5B7FFF' },
+};
+
+function LinkSuggestionsWidget({ suggestions, onAccept }: { suggestions: LinkSuggestion[]; onAccept: (s: LinkSuggestion) => void }) {
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  const visible = suggestions.filter(s => !dismissed.has(s.id));
+  if (visible.length === 0) return null;
+
+  return (
+    <View>
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionTitleRow}>
+          <Ionicons name="git-merge" size={16} color={C.purple} />
+          <Text style={styles.sectionTitle}>Suggested Links</Text>
+        </View>
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary }}>{visible.length} found</Text>
+      </View>
+      {visible.slice(0, 3).map(s => {
+        const srcCfg = SUGGESTION_TYPE_CONFIG[s.sourceType] || SUGGESTION_TYPE_CONFIG.task;
+        const tgtCfg = SUGGESTION_TYPE_CONFIG[s.targetType] || SUGGESTION_TYPE_CONFIG.task;
+        return (
+          <View key={s.id} style={lsStyles.card}>
+            <View style={lsStyles.entities}>
+              <View style={lsStyles.entityRow}>
+                <Ionicons name={srcCfg.icon as any} size={13} color={srcCfg.color} />
+                <Text style={[lsStyles.entityName, { color: srcCfg.color }]} numberOfLines={1}>{s.sourceName}</Text>
+              </View>
+              <View style={lsStyles.arrow}>
+                <Ionicons name="link" size={12} color={C.textTertiary} />
+              </View>
+              <View style={lsStyles.entityRow}>
+                <Ionicons name={tgtCfg.icon as any} size={13} color={tgtCfg.color} />
+                <Text style={[lsStyles.entityName, { color: tgtCfg.color }]} numberOfLines={1}>{s.targetName}</Text>
+              </View>
+            </View>
+            <Text style={lsStyles.reason}>{s.reason}</Text>
+            <View style={lsStyles.actions}>
+              <Pressable
+                onPress={() => { onAccept(s); setDismissed(prev => new Set(prev).add(s.id)); }}
+                style={({ pressed }) => [lsStyles.acceptBtn, pressed && { opacity: 0.7 }]}
+              >
+                <Ionicons name="checkmark" size={14} color={C.success} />
+                <Text style={lsStyles.acceptText}>Link</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setDismissed(prev => new Set(prev).add(s.id)); }}
+                style={({ pressed }) => [lsStyles.dismissBtn, pressed && { opacity: 0.7 }]}
+              >
+                <Ionicons name="close" size={14} color={C.textTertiary} />
+              </Pressable>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+const lsStyles = StyleSheet.create({
+  card: {
+    backgroundColor: C.card,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+    gap: 8,
+  },
+  entities: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  entityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+  },
+  entityName: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    flex: 1,
+  },
+  arrow: {
+    paddingHorizontal: 4,
+  },
+  reason: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: C.textTertiary,
+    marginLeft: 2,
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  acceptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: 'rgba(34,197,94,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.2)',
+  },
+  acceptText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: C.success,
+  },
+  dismissBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
 });
 
 function GatewayStatusWidget() {
@@ -1518,7 +1670,7 @@ function CommandBar() {
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
-  const { refreshAll, activeConnection, tasks, memoryEntries, calendarEvents, crmContacts, fetchGatewaySessions } = useApp();
+  const { refreshAll, activeConnection, tasks, memoryEntries, calendarEvents, crmContacts, fetchGatewaySessions, updateTask, addCRMInteraction, updateMemoryEntry } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
   const [showAllInsights, setShowAllInsights] = useState(false);
 
@@ -1550,6 +1702,35 @@ export default function DashboardScreen() {
     if (insight.category === 'streak') return 'success';
     return 'info';
   };
+
+  const linkSuggestions = useMemo(
+    () => generateLinkSuggestions({ tasks, memoryEntries, calendarEvents, crmContacts, existingLinks: entityLinks }),
+    [tasks, memoryEntries, calendarEvents, crmContacts, entityLinks],
+  );
+
+  const handleInlineAction = useCallback(async (action: InlineAction) => {
+    if (action.type === 'complete_task' && action.entityId) {
+      await updateTask(action.entityId, { status: 'done' as TaskStatus });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else if (action.type === 'log_interaction' && action.entityId) {
+      await addCRMInteraction(action.entityId, { type: 'note', notes: 'Quick check-in logged from dashboard' });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else if (action.type === 'review_memory' && action.entityId) {
+      await updateMemoryEntry(action.entityId, { reviewStatus: 'reviewed' });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else if (action.type === 'create_task') {
+      router.push('/(tabs)/vault');
+    }
+  }, [updateTask, addCRMInteraction, updateMemoryEntry]);
+
+  const [acceptedSuggestionIds, setAcceptedSuggestionIds] = useState<Set<string>>(new Set());
+
+  const handleAcceptSuggestion = useCallback(async (suggestion: LinkSuggestion) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setAcceptedSuggestionIds(prev => new Set(prev).add(suggestion.id));
+    await addLink(suggestion.sourceType as EntityType, suggestion.sourceId, suggestion.targetType as EntityType, suggestion.targetId, 'related_to');
+    getAllLinks().then(setEntityLinks).catch(() => {});
+  }, []);
 
   const visibleInsights = showAllInsights ? insights : insights.slice(0, 3);
   const hasMoreInsights = insights.length > 3;
@@ -1589,6 +1770,8 @@ export default function DashboardScreen() {
               message={`${insight.title} — ${insight.message}`}
               onPress={() => router.push(insight.actionRoute as any)}
               priority={insight.priority}
+              inlineActions={insight.inlineActions}
+              onInlineAction={handleInlineAction}
             />
           </FadeInWidget>
         ))}
@@ -1649,6 +1832,10 @@ export default function DashboardScreen() {
 
         <FadeInWidget delay={1050}>
           <KnowledgeGraphWidget links={entityLinks} />
+        </FadeInWidget>
+
+        <FadeInWidget delay={1075}>
+          <LinkSuggestionsWidget suggestions={linkSuggestions.filter(s => !acceptedSuggestionIds.has(s.id))} onAccept={handleAcceptSuggestion} />
         </FadeInWidget>
 
         <FadeInWidget delay={1100}>

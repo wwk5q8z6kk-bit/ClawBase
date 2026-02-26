@@ -4,6 +4,13 @@ import type { EntityLink } from './entityLinks';
 export type InsightPriority = 'P1' | 'P2' | 'P3';
 export type InsightCategory = 'tasks' | 'contacts' | 'memory' | 'calendar' | 'streak' | 'cross_entity';
 
+export interface InlineAction {
+  label: string;
+  icon: string;
+  type: 'complete_task' | 'log_interaction' | 'review_memory' | 'create_task' | 'dismiss';
+  entityId?: string;
+}
+
 export interface Insight {
   id: string;
   type: string;
@@ -14,6 +21,7 @@ export interface Insight {
   actionRoute: string;
   icon: string;
   category: InsightCategory;
+  inlineActions?: InlineAction[];
 }
 
 function startOfDay(date: Date): number {
@@ -50,6 +58,10 @@ function getOverdueTasks(tasks: Task[]): Insight[] {
   );
   const oldestDays = daysAgo(oldest.dueDate!);
 
+  const inlineActions: InlineAction[] = overdue.length === 1
+    ? [{ label: 'Done', icon: 'checkmark', type: 'complete_task', entityId: overdue[0].id }]
+    : overdue.slice(0, 2).map(t => ({ label: t.title.slice(0, 12), icon: 'checkmark', type: 'complete_task' as const, entityId: t.id }));
+
   return [
     {
       id: 'insight-overdue-tasks',
@@ -64,6 +76,7 @@ function getOverdueTasks(tasks: Task[]): Insight[] {
       actionRoute: '/(tabs)/vault',
       icon: 'alert-circle',
       category: 'tasks',
+      inlineActions,
     },
   ];
 }
@@ -129,6 +142,7 @@ function getStaleContacts(contacts: CRMContact[]): Insight[] {
       actionRoute: '/crm',
       icon: 'people',
       category: 'contacts',
+      inlineActions: [{ label: 'Log Touch', icon: 'chatbubble-ellipses', type: 'log_interaction', entityId: mostStale.id }],
     },
   ];
 }
@@ -143,6 +157,7 @@ function getUnreviewedMemory(entries: MemoryEntry[]): Insight[] {
 
   if (unreviewed.length === 0) return [];
 
+  const topItem = unreviewed[0];
   return [
     {
       id: 'insight-unreviewed-memory',
@@ -154,6 +169,7 @@ function getUnreviewedMemory(entries: MemoryEntry[]): Insight[] {
       actionRoute: '/(tabs)/vault',
       icon: 'book',
       category: 'memory',
+      inlineActions: [{ label: 'Review', icon: 'eye', type: 'review_memory', entityId: topItem.id }],
     },
   ];
 }
@@ -509,12 +525,133 @@ function getPostMeetingActions(events: CalendarEvent[], tasks: Task[], memories:
           actionRoute: '/(tabs)/vault',
           icon: 'create',
           category: 'cross_entity',
+          inlineActions: [{ label: 'Create Task', icon: 'add-circle', type: 'create_task', entityId: event.id }],
         },
       ];
     }
   }
 
   return [];
+}
+
+export interface LinkSuggestion {
+  id: string;
+  sourceType: string;
+  sourceId: string;
+  sourceName: string;
+  targetType: string;
+  targetId: string;
+  targetName: string;
+  reason: string;
+  confidence: number;
+}
+
+export function generateLinkSuggestions(data: {
+  tasks: Task[];
+  memoryEntries: MemoryEntry[];
+  calendarEvents: CalendarEvent[];
+  crmContacts: CRMContact[];
+  existingLinks: EntityLink[];
+}): LinkSuggestion[] {
+  const { tasks, memoryEntries, calendarEvents, crmContacts, existingLinks } = data;
+  const suggestions: LinkSuggestion[] = [];
+  const existingPairs = new Set(
+    existingLinks.flatMap(l => [
+      `${l.sourceType}:${l.sourceId}|${l.targetType}:${l.targetId}`,
+      `${l.targetType}:${l.targetId}|${l.sourceType}:${l.sourceId}`,
+    ]),
+  );
+  const alreadyExists = (t1: string, i1: string, t2: string, i2: string) =>
+    existingPairs.has(`${t1}:${i1}|${t2}:${i2}`);
+  const seenSuggestions = new Set<string>();
+
+  for (const task of tasks) {
+    if (task.status === 'archived') continue;
+    const titleWords = new Set(task.title.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+
+    for (const mem of memoryEntries) {
+      if (alreadyExists('task', task.id, 'memory', mem.id)) continue;
+      const memWords = mem.title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+      const shared = memWords.filter(w => titleWords.has(w));
+      const tagOverlap = task.tags?.filter(t => mem.tags?.includes(t)).length || 0;
+      const score = shared.length * 0.4 + tagOverlap * 0.6;
+      if (score >= 0.8) {
+        const key = `task:${task.id}|memory:${mem.id}`;
+        if (!seenSuggestions.has(key)) {
+          seenSuggestions.add(key);
+          suggestions.push({
+            id: key,
+            sourceType: 'task', sourceId: task.id, sourceName: task.title,
+            targetType: 'memory', targetId: mem.id, targetName: mem.title,
+            reason: tagOverlap > 0 ? `${tagOverlap} shared tag${tagOverlap > 1 ? 's' : ''}` : `"${shared[0]}" in common`,
+            confidence: Math.min(score / 2, 1),
+          });
+        }
+      }
+    }
+
+    for (const contact of crmContacts) {
+      if (alreadyExists('task', task.id, 'contact', contact.id)) continue;
+      const nameParts = contact.name.toLowerCase().split(/\s+/);
+      const titleLower = task.title.toLowerCase();
+      if (nameParts.some(p => p.length > 2 && titleLower.includes(p))) {
+        const key = `task:${task.id}|contact:${contact.id}`;
+        if (!seenSuggestions.has(key)) {
+          seenSuggestions.add(key);
+          suggestions.push({
+            id: key,
+            sourceType: 'task', sourceId: task.id, sourceName: task.title,
+            targetType: 'contact', targetId: contact.id, targetName: contact.name,
+            reason: `Name mentioned in task title`,
+            confidence: 0.7,
+          });
+        }
+      }
+    }
+  }
+
+  for (const event of calendarEvents) {
+    const titleLower = event.title.toLowerCase();
+    for (const contact of crmContacts) {
+      if (alreadyExists('calendar', event.id, 'contact', contact.id)) continue;
+      const nameParts = contact.name.toLowerCase().split(/\s+/);
+      if (nameParts.some(p => p.length > 2 && titleLower.includes(p))) {
+        const key = `calendar:${event.id}|contact:${contact.id}`;
+        if (!seenSuggestions.has(key)) {
+          seenSuggestions.add(key);
+          suggestions.push({
+            id: key,
+            sourceType: 'calendar', sourceId: event.id, sourceName: event.title,
+            targetType: 'contact', targetId: contact.id, targetName: contact.name,
+            reason: `Name mentioned in event`,
+            confidence: 0.75,
+          });
+        }
+      }
+    }
+
+    for (const task of tasks) {
+      if (task.status === 'archived' || alreadyExists('calendar', event.id, 'task', task.id)) continue;
+      const taskWords = task.title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+      const eventWords = new Set(titleLower.split(/\s+/).filter(w => w.length > 3));
+      const shared = taskWords.filter(w => eventWords.has(w));
+      if (shared.length >= 2) {
+        const key = `calendar:${event.id}|task:${task.id}`;
+        if (!seenSuggestions.has(key)) {
+          seenSuggestions.add(key);
+          suggestions.push({
+            id: key,
+            sourceType: 'calendar', sourceId: event.id, sourceName: event.title,
+            targetType: 'task', targetId: task.id, targetName: task.title,
+            reason: `${shared.length} keywords in common`,
+            confidence: 0.6,
+          });
+        }
+      }
+    }
+  }
+
+  return suggestions.sort((a, b) => b.confidence - a.confidence).slice(0, 5);
 }
 
 const PRIORITY_ORDER: Record<InsightPriority, number> = { P1: 0, P2: 1, P3: 2 };
