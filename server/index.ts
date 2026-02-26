@@ -175,9 +175,32 @@ async function configureExpoAndLanding(app: express.Application) {
   // Development-only proxy to Metro bundler
   if (process.env.NODE_ENV === "development") {
     const { createProxyMiddleware } = await import("http-proxy-middleware");
+    const http = await import("http");
 
-    const metroProxy = createProxyMiddleware({
-      target: "http://127.0.0.1:8081",
+    const metroPorts = [8081, 8082];
+
+    async function findMetroPort(): Promise<number> {
+      for (const port of metroPorts) {
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const req = http.get(`http://127.0.0.1:${port}/status`, (res: any) => {
+              res.resume();
+              resolve();
+            });
+            req.on("error", reject);
+            req.setTimeout(500, () => { req.destroy(); reject(new Error("timeout")); });
+          });
+          return port;
+        } catch {}
+      }
+      return 8081;
+    }
+
+    let metroPort = await findMetroPort();
+    log(`Detected Metro bundler on port ${metroPort}`);
+
+    const createMetroProxy = (port: number) => createProxyMiddleware({
+      target: `http://127.0.0.1:${port}`,
       changeOrigin: true,
       ws: true,
       logLevel: "warn",
@@ -191,6 +214,17 @@ async function configureExpoAndLanding(app: express.Application) {
       },
     });
 
+    let metroProxy = createMetroProxy(metroPort);
+
+    setInterval(async () => {
+      const newPort = await findMetroPort();
+      if (newPort !== metroPort) {
+        log(`Metro port changed: ${metroPort} -> ${newPort}`);
+        metroPort = newPort;
+        metroProxy = createMetroProxy(newPort);
+      }
+    }, 5000);
+
     app.use((req: Request, res: Response, next: NextFunction) => {
       if (req.path.startsWith("/api")) {
         return next();
@@ -199,7 +233,7 @@ async function configureExpoAndLanding(app: express.Application) {
       return metroProxy(req, res, next);
     });
 
-    log("Development proxy to Metro bundler (port 8081) enabled — web app available at /");
+    log(`Development proxy to Metro bundler (port ${metroPort}) enabled — web app available at /`);
   } else {
     app.use((req: Request, res: Response, next: NextFunction) => {
       if (req.path.startsWith("/api")) {
