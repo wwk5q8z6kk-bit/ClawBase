@@ -184,50 +184,53 @@ async function configureExpoAndLanding(app: express.Application) {
     });
 
     app.use((req: Request, res: Response, next: NextFunction) => {
-      const isMetroRequest =
-        req.path.includes(".bundle") ||
-        req.path.includes(".map") ||
-        req.path.startsWith("/hot") ||
-        req.path.startsWith("/status") ||
-        req.path.startsWith("/symbolicate") ||
-        req.path.startsWith("/logs") ||
-        req.path.startsWith("/__metro") ||
-        req.path.startsWith("/debugger-frontend");
-
-      if (isMetroRequest) {
-        return metroProxy(req, res, next);
+      if (req.path.startsWith("/api")) {
+        return next();
       }
-      next();
+
+      if (req.path === "/" || req.path === "/manifest") {
+        const platform = req.header("expo-platform");
+        if (platform && (platform === "ios" || platform === "android")) {
+          return serveExpoManifest(platform, res);
+        }
+      }
+
+      const isApiOrStatic = req.path.startsWith("/api");
+      if (isApiOrStatic) {
+        return next();
+      }
+
+      return metroProxy(req, res, next);
     });
 
-    log("Development proxy to Metro bundler (port 8081) enabled");
+    log("Development proxy to Metro bundler (port 8081) enabled — web app available at /");
+  } else {
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.path.startsWith("/api")) {
+        return next();
+      }
+
+      if (req.path !== "/" && req.path !== "/manifest") {
+        return next();
+      }
+
+      const platform = req.header("expo-platform");
+      if (platform && (platform === "ios" || platform === "android")) {
+        return serveExpoManifest(platform, res);
+      }
+
+      if (req.path === "/") {
+        return serveLandingPage({
+          req,
+          res,
+          landingPageTemplate,
+          appName,
+        });
+      }
+
+      next();
+    });
   }
-
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.path.startsWith("/api")) {
-      return next();
-    }
-
-    if (req.path !== "/" && req.path !== "/manifest") {
-      return next();
-    }
-
-    const platform = req.header("expo-platform");
-    if (platform && (platform === "ios" || platform === "android")) {
-      return serveExpoManifest(platform, res);
-    }
-
-    if (req.path === "/") {
-      return serveLandingPage({
-        req,
-        res,
-        landingPageTemplate,
-        appName,
-      });
-    }
-
-    next();
-  });
 
   app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
   app.use(express.static(path.resolve(process.cwd(), "static-build")));
