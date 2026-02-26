@@ -611,6 +611,7 @@ function KnowledgeGraphWidget({ links }: { links: EntityLink[] }) {
 
   const stats = useMemo(() => {
     const typeCounts: Record<string, number> = {};
+    const relationCounts: Record<string, number> = {};
     const entityConnections: Record<string, number> = {};
 
     for (const link of links) {
@@ -621,6 +622,8 @@ function KnowledgeGraphWidget({ links }: { links: EntityLink[] }) {
 
       typeCounts[link.sourceType] = (typeCounts[link.sourceType] || 0) + 1;
       typeCounts[link.targetType] = (typeCounts[link.targetType] || 0) + 1;
+
+      relationCounts[link.relation] = (relationCounts[link.relation] || 0) + 1;
     }
 
     let mostConnectedKey = '';
@@ -652,6 +655,7 @@ function KnowledgeGraphWidget({ links }: { links: EntityLink[] }) {
       totalLinks: links.length,
       connectedEntities: uniqueEntities.size,
       typeCounts,
+      relationCounts,
       mostConnectedName,
       mostConnectedCount,
     };
@@ -705,6 +709,23 @@ function KnowledgeGraphWidget({ links }: { links: EntityLink[] }) {
         ))}
       </View>
 
+      {Object.keys(stats.relationCounts).length > 0 && (
+        <View style={kgStyles.relationRow}>
+          {[
+            { key: 'created_from', label: 'Created', icon: 'git-branch-outline' },
+            { key: 'mentions', label: 'Mentions', icon: 'at-outline' },
+            { key: 'related_to', label: 'Related', icon: 'link-outline' },
+            { key: 'spawned_by', label: 'Spawned', icon: 'flash-outline' },
+          ].filter(r => (stats.relationCounts[r.key] || 0) > 0).map(r => (
+            <View key={r.key} style={kgStyles.relationChip}>
+              <Ionicons name={r.icon as any} size={10} color={C.textSecondary} />
+              <Text style={kgStyles.relationLabel}>{r.label}</Text>
+              <Text style={kgStyles.relationCount}>{stats.relationCounts[r.key]}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       {stats.mostConnectedName ? (
         <View style={kgStyles.hubRow}>
           <MaterialCommunityIcons name="hub-outline" size={14} color={C.textSecondary} />
@@ -736,6 +757,15 @@ const kgStyles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 5,
   },
   typeLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
+  relationRow: { flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' },
+  relationChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 6,
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+  },
+  relationLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary },
+  relationCount: { fontFamily: 'Inter_600SemiBold', fontSize: 10, color: C.textSecondary },
   hubRow: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     marginTop: 8, paddingHorizontal: 4,

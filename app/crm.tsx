@@ -620,6 +620,29 @@ export default function CRMScreen() {
                   );
                 })()}
 
+                {(() => {
+                  const alerts: { icon: string; color: string; text: string }[] = [];
+                  const daysSinceContact = selectedContact.lastInteraction
+                    ? Math.floor((Date.now() - selectedContact.lastInteraction) / 86400000) : 999;
+                  if (daysSinceContact >= 7 && selectedContact.stage !== 'archived') {
+                    alerts.push({ icon: 'time-outline', color: C.amber, text: `No interaction in ${daysSinceContact} day${daysSinceContact !== 1 ? 's' : ''} — consider reaching out` });
+                  }
+                  if (selectedContact.interactions.length === 0 && selectedContact.stage !== 'archived') {
+                    alerts.push({ icon: 'alert-circle-outline', color: C.coral, text: 'No interactions recorded yet — log your first touchpoint' });
+                  }
+                  if (alerts.length === 0) return null;
+                  return (
+                    <View style={{ gap: 6, marginBottom: 4 }}>
+                      {alerts.map((a, i) => (
+                        <View key={i} style={styles.contactInsightBanner}>
+                          <Ionicons name={a.icon as any} size={14} color={a.color} />
+                          <Text style={[styles.contactInsightText, { color: a.color }]}>{a.text}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })()}
+
                 <ContactLinksSection contactId={selectedContact.id} />
 
                 <Text style={styles.timelineTitle}>Interaction Timeline</Text>
@@ -1014,4 +1037,10 @@ const styles = StyleSheet.create({
   healthBarLarge: { height: 6, borderRadius: 3, backgroundColor: C.border },
   healthBarLargeFill: { height: 6, borderRadius: 3 },
   pipelineHealthDot: { width: 8, height: 8, borderRadius: 4 },
+  contactInsightBanner: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 10,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+  },
+  contactInsightText: { fontFamily: 'Inter_400Regular', fontSize: 12, flex: 1, lineHeight: 16 },
 });
