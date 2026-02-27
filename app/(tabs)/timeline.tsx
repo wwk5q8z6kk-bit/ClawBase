@@ -159,7 +159,7 @@ export default function TimelineScreen() {
   const [gatewayEvents, setGatewayEvents] = useState<TimelineEvent[]>([]);
   const [showFilters, setShowFilters] = useState(true);
 
-  const webTopPad = Platform.OS === 'web' ? 67 : 0;
+  const webTopPad = Platform.OS === 'web' ? 47 : 0;
 
   const [linkCounts, setLinkCounts] = useState<Record<string, number>>({});
 
@@ -339,6 +339,7 @@ export default function TimelineScreen() {
         }}
         contentContainerStyle={[
           styles.listContent,
+          { paddingBottom: insets.bottom + 20 },
           allEvents.length === 0 && styles.listContentEmpty,
         ]}
         ListEmptyComponent={
@@ -409,7 +410,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 100,
   },
   listContentEmpty: {
     flex: 1,

@@ -327,7 +327,7 @@ export default function SearchScreen() {
     );
   };
 
-  const webTopPad = Platform.OS === 'web' ? 67 : 0;
+  const webTopPad = Platform.OS === 'web' ? 47 : 0;
   const totalCount = results.length;
 
   return (
@@ -379,7 +379,7 @@ export default function SearchScreen() {
             data={flatData}
             renderItem={renderItem}
             keyExtractor={(item, index) => ('type' in item ? `header-${item.category}` : (item as SearchResult).id)}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
           />
@@ -524,9 +524,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     color: C.textTertiary,
   },
-  listContent: {
-    paddingBottom: 100,
-  },
+  listContent: {},
   emptyState: {
     flex: 1,
     alignItems: 'center',

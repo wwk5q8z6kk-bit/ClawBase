@@ -734,7 +734,7 @@ export default function ChatDetailScreen() {
     prevMessageCountRef.current = messages.length;
   }, [messages.length]);
 
-  const webTopPad = Platform.OS === 'web' ? 67 : 0;
+  const webTopPad = Platform.OS === 'web' ? 47 : 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>

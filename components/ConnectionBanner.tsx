@@ -1,7 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View, Pressable, Platform, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,14 +13,23 @@ const ConnectionBanner = React.memo(function ConnectionBanner() {
   const { gatewayStatus, activeConnection, connectGateway } = useApp();
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(-80)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const [dismissed, setDismissed] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   const shouldShow =
+    !dismissed &&
     activeConnection &&
     gatewayStatus !== 'connected' &&
     gatewayStatus !== 'connecting' &&
     gatewayStatus !== 'authenticating' &&
     gatewayStatus !== 'pairing';
+
+  useEffect(() => {
+    if (gatewayStatus === 'connected') {
+      setDismissed(false);
+      setReconnecting(false);
+    }
+  }, [gatewayStatus]);
 
   useEffect(() => {
     Animated.spring(slideAnim, {
@@ -32,32 +40,20 @@ const ConnectionBanner = React.memo(function ConnectionBanner() {
     }).start();
   }, [shouldShow, slideAnim]);
 
-  useEffect(() => {
-    if (!shouldShow) return;
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 0.6, duration: 1200, useNativeDriver: Platform.OS !== 'web' }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: Platform.OS !== 'web' }),
-      ]),
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, [shouldShow, pulseAnim]);
-
   const handleReconnect = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (activeConnection) {
+      setReconnecting(true);
       connectGateway(activeConnection.url, activeConnection.token || '');
     }
   };
 
-  const handleSettings = () => {
+  const handleDismiss = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/(tabs)/settings');
+    setDismissed(true);
   };
 
-  const isError = gatewayStatus === 'error';
-  const webTopPad = Platform.OS === 'web' ? 67 : 0;
+  const webTopPad = Platform.OS === 'web' ? 47 : 0;
 
   return (
     <Animated.View
@@ -70,38 +66,31 @@ const ConnectionBanner = React.memo(function ConnectionBanner() {
         },
       ]}
     >
-      <LinearGradient
-        colors={isError ? ['#3A1515', '#2A1010'] : ['#2A2010', '#201810']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.banner}
-      >
-        <Animated.View style={{ opacity: pulseAnim }}>
-          <View style={[styles.statusDot, { backgroundColor: isError ? C.error : C.amber }]} />
-        </Animated.View>
-        <View style={styles.textContainer}>
-          <Text style={styles.title}>
-            {isError ? 'Connection Error' : 'Gateway Disconnected'}
-          </Text>
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {isError
-              ? 'Check your gateway URL and try again'
-              : 'Tap reconnect to restore connection'}
-          </Text>
-        </View>
+      <View style={styles.banner}>
+        <View style={[styles.statusDot, { backgroundColor: gatewayStatus === 'error' ? C.error : C.amber }]} />
+        <Text style={styles.title} numberOfLines={1}>
+          {gatewayStatus === 'error' ? 'Connection error' : 'Gateway offline'}
+        </Text>
         <Pressable
           onPress={handleReconnect}
-          style={({ pressed }) => [styles.reconnectBtn, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.7 }]}
+          disabled={reconnecting}
         >
-          <Ionicons name="refresh" size={16} color={C.secondary} />
+          <Ionicons name={reconnecting ? 'hourglass' : 'refresh'} size={14} color={C.text} />
         </Pressable>
         <Pressable
-          onPress={handleSettings}
-          style={({ pressed }) => [styles.settingsBtn, pressed && { opacity: 0.7 }]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/settings'); }}
+          style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.7 }]}
         >
-          <Ionicons name="settings-outline" size={16} color={C.textSecondary} />
+          <Ionicons name="settings-outline" size={14} color={C.textSecondary} />
         </Pressable>
-      </LinearGradient>
+        <Pressable
+          onPress={handleDismiss}
+          style={({ pressed }) => [styles.dismissBtn, pressed && { opacity: 0.7 }]}
+        >
+          <Ionicons name="close" size={14} color={C.textTertiary} />
+        </Pressable>
+      </View>
     </Animated.View>
   );
 });
@@ -116,46 +105,37 @@ const styles = StyleSheet.create({
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 10,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+    backgroundColor: C.card,
     borderWidth: 1,
-    borderColor: C.amber + '30',
-    ...C.shadow.card,
+    borderColor: C.border,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  textContainer: {
-    flex: 1,
-    gap: 2,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   title: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: C.text,
-  },
-  subtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
     color: C.textSecondary,
   },
-  reconnectBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: C.secondaryMuted,
+  actionBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: C.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  settingsBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+  dismissBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },

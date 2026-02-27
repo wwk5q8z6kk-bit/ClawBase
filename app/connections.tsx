@@ -104,7 +104,7 @@ export default function ConnectionsScreen() {
       .slice(0, 8);
   }, [links]);
 
-  const webTopPad = Platform.OS === 'web' ? 67 : 0;
+  const webTopPad = Platform.OS === 'web' ? 47 : 0;
 
   const renderLink = ({ item }: { item: EntityLink }) => {
     const sourceConfig = ENTITY_CONFIG[item.sourceType];
@@ -254,7 +254,7 @@ export default function ConnectionsScreen() {
           data={filteredLinks}
           renderItem={renderLink}
           keyExtractor={item => item.id}
-          contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 40 }]}
+          contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 20 }]}
           showsVerticalScrollIndicator={false}
         />
       )}

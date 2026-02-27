@@ -224,7 +224,7 @@ export default function SessionsScreen() {
     return groups;
   }, [gatewaySessions]);
 
-  const webTopPad = Platform.OS === 'web' ? 67 : 0;
+  const webTopPad = Platform.OS === 'web' ? 47 : 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
@@ -263,7 +263,7 @@ export default function SessionsScreen() {
         )}
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: insets.bottom + 100 },
+          { paddingBottom: insets.bottom + 20 },
           sortedSessions.length === 0 && styles.emptyListContent,
         ]}
         ItemSeparatorComponent={() => <View style={styles.separator} />}

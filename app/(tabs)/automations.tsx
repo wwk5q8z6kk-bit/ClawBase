@@ -627,7 +627,7 @@ function AnalyticsCard({ cronOutputs }: { cronOutputs: CronOutput[] }) {
 
 export default function AutomationsScreen() {
   const insets = useSafeAreaInsets();
-  const webTopPad = Platform.OS === 'web' ? 67 : 0;
+  const webTopPad = Platform.OS === 'web' ? 47 : 0;
   const { gatewayStatus } = useApp();
 
   const [refreshing, setRefreshing] = useState(false);

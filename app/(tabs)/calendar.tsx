@@ -406,7 +406,7 @@ export default function CalendarTab() {
     }
   }, [openEventId, calendarEvents]);
 
-  const webTopPad = Platform.OS === 'web' ? 67 : 0;
+  const webTopPad = Platform.OS === 'web' ? 47 : 0;
 
   const today = new Date();
   const isViewingCurrentMonth = currentMonth === today.getMonth() && currentYear === today.getFullYear();
@@ -1230,6 +1230,7 @@ export default function CalendarTab() {
         )}
         contentContainerStyle={[
           styles.listContent,
+          { paddingBottom: insets.bottom + 20 },
           allTimelineEvents.length === 0 && styles.listContentEmpty,
         ]}
         ListEmptyComponent={<EmptyState />}
@@ -1382,7 +1383,7 @@ const styles = StyleSheet.create({
   filterBar: { paddingHorizontal: 16, paddingBottom: 12, gap: 8, alignItems: 'center' as const },
   filterPill: { height: 32, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1, justifyContent: 'center' as const, alignItems: 'center' as const },
   filterPillText: { fontFamily: 'Inter_500Medium', fontSize: 13 },
-  listContent: { paddingHorizontal: 16, paddingBottom: 100 },
+  listContent: { paddingHorizontal: 16 },
   listContentEmpty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   timelineRow: { flexDirection: 'row', marginBottom: 2 },
   railCol: { width: 28, alignItems: 'center', paddingTop: 4 },

@@ -67,7 +67,7 @@ export default function OnboardingScreen() {
     router.replace('/(tabs)');
   }, [gatewayName, gatewayUrl, addConnection, setHasOnboarded]);
 
-  const webTopPad = Platform.OS === 'web' ? 67 : 0;
+  const webTopPad = Platform.OS === 'web' ? 47 : 0;
 
   if (step === 0) {
     return (

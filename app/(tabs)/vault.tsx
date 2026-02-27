@@ -973,7 +973,7 @@ function BoardColumn({ title, tasks: columnTasks, color, onMove, onDelete }: {
           <Text style={styles.boardColCountText}>{columnTasks.length}</Text>
         </View>
       </LinearGradient>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 100 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 40 }}>
         {columnTasks.map((task) => {
           const progress = STATUS_PROGRESS[task.status];
           const statusColor = STATUS_CONFIG[task.status].color;
@@ -1760,7 +1760,7 @@ export default function VaultScreen() {
     return memoryEntries.find((e) => e.id === selectedMemory.id) || selectedMemory;
   }, [selectedMemory, memoryEntries]);
 
-  const webTopPad = Platform.OS === 'web' ? 67 : 0;
+  const webTopPad = Platform.OS === 'web' ? 47 : 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
@@ -2850,7 +2850,7 @@ const createStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   headerGradient: { paddingBottom: 2 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
-  headerTitle: { fontFamily: 'Inter_700Bold', fontSize: 26, color: C.text },
+  headerTitle: { fontFamily: 'Inter_700Bold', fontSize: 22, color: C.text },
   segmentContainer: { marginHorizontal: 20, marginVertical: 8 },
   segmentRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: C.borderLight, position: 'relative' as const },
   segmentBtn: { flex: 1, paddingVertical: 12, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', position: 'relative' as const },

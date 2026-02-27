@@ -288,7 +288,7 @@ export default function CRMScreen() {
     }
   }, [openContactId, crmContacts]);
 
-  const webTopPad = Platform.OS === 'web' ? 67 : 0;
+  const webTopPad = Platform.OS === 'web' ? 47 : 0;
 
   const filteredContacts = useMemo(() => {
     let contacts = crmContacts;
@@ -795,7 +795,7 @@ export default function CRMScreen() {
 
       {viewMode === 'list' ? (
         <ScrollView
-          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
+          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
           showsVerticalScrollIndicator={false}
           scrollEnabled={!!filteredContacts.length}
         >
@@ -970,7 +970,7 @@ const styles = StyleSheet.create({
   contactTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textTertiary },
   stageBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   stageText: { fontFamily: 'Inter_500Medium', fontSize: 11, textTransform: 'capitalize' as const },
-  pipelineScroll: { paddingHorizontal: 12, gap: 8, paddingBottom: 100 },
+  pipelineScroll: { paddingHorizontal: 12, gap: 8, paddingBottom: 40 },
   pipelineColumn: { width: 220, backgroundColor: C.card, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: C.borderLight },
   pipelineHeaderGradient: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingBottom: 8, paddingHorizontal: 4, paddingTop: 4, borderRadius: 8 },
   pipelineDot: { width: 8, height: 8, borderRadius: 4 },

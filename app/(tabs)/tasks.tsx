@@ -530,7 +530,7 @@ function BoardColumn({ title, tasks: columnTasks, color, onMove, onDelete }: {
           <Text style={styles.boardColCountText}>{columnTasks.length}</Text>
         </View>
       </LinearGradient>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 100 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 40 }}>
         {columnTasks.map((task) => {
           const progress = STATUS_PROGRESS[task.status];
           const statusColor = STATUS_CONFIG[task.status].color;
@@ -741,7 +741,7 @@ export default function TasksScreen() {
     sendMessage('agent:main:main', message);
   }, [updateTask, sendMessage]);
 
-  const webTopPad = Platform.OS === 'web' ? 67 : 0;
+  const webTopPad = Platform.OS === 'web' ? 47 : 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>

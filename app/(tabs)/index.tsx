@@ -279,9 +279,6 @@ function ProactiveAlert({ type, message, icon, onPress, priority = 'P2', inlineA
 function HeroHeader() {
   const { tasks, memoryEntries, gatewayStatus } = useApp();
   const connected = gatewayStatus === 'connected';
-  const now = new Date();
-  const hour = now.getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   const activeTasks = tasks.filter((t) => t.status === 'in_progress').length;
   const unreadMemories = memoryEntries.filter((m) => m.reviewStatus === 'unread').length;
@@ -289,18 +286,17 @@ function HeroHeader() {
   return (
     <View style={styles.heroHeader}>
       <View style={styles.heroTopRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.greeting}>{greeting}</Text>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Text style={styles.heroTitle}>ClawBase</Text>
-        </View>
-        <View style={styles.heroRight}>
           <View style={[styles.heartbeatDot, connected ? styles.heartbeatActive : styles.heartbeatInactive]}>
             {connected ? (
-              <PulsingDot color={C.success} size={10} />
+              <PulsingDot color={C.success} size={7} />
             ) : (
-              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: C.textTertiary }} />
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.textTertiary }} />
             )}
           </View>
+        </View>
+        <View style={styles.heroRight}>
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -308,19 +304,8 @@ function HeroHeader() {
             }}
             style={({ pressed }) => [pressed && { opacity: 0.7 }]}
           >
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.borderLight }}>
-              <Ionicons name="search" size={18} color={C.textSecondary} />
-            </View>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/(tabs)/settings' as any);
-            }}
-            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
-          >
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.borderLight }}>
-              <Ionicons name="settings-outline" size={18} color={C.textSecondary} />
+            <View style={styles.heroIconBtn}>
+              <Ionicons name="search" size={17} color={C.textSecondary} />
             </View>
           </Pressable>
           <Pressable
@@ -331,7 +316,7 @@ function HeroHeader() {
             style={({ pressed }) => [styles.heroActionBtn, pressed && { opacity: 0.7 }]}
           >
             <LinearGradient colors={C.gradient.lobster} style={styles.heroActionGrad}>
-              <Ionicons name="add" size={22} color="#fff" />
+              <Ionicons name="add" size={20} color="#fff" />
             </LinearGradient>
           </Pressable>
         </View>
@@ -1721,7 +1706,7 @@ export default function DashboardScreen() {
     setRefreshing(false);
   }, [refreshAll, fetchGatewaySessions]);
 
-  const webTopPad = Platform.OS === 'web' ? 67 : 0;
+  const webTopPad = Platform.OS === 'web' ? 47 : 0;
 
   const [entityLinks, setEntityLinks] = useState<EntityLink[]>([]);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
@@ -1904,16 +1889,16 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background },
   scrollContent: { paddingHorizontal: 20, gap: 16, paddingTop: 4 },
-  heroHeader: { gap: 8 },
+  heroHeader: { gap: 4 },
   heroTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  greeting: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textSecondary },
-  heroTitle: { fontFamily: 'Inter_700Bold', fontSize: 28, color: C.text },
-  heroRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  heroTitle: { fontFamily: 'Inter_700Bold', fontSize: 22, color: C.text },
+  heroRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  heroIconBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.borderLight },
   heartbeatDot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   heartbeatActive: { backgroundColor: C.successMuted },
   heartbeatInactive: { backgroundColor: 'rgba(255,255,255,0.06)' },
-  heroActionBtn: { borderRadius: 20, overflow: 'hidden' },
-  heroActionGrad: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  heroActionBtn: { borderRadius: 17, overflow: 'hidden' },
+  heroActionGrad: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   heroBadgeRow: { flexDirection: 'row', gap: 8 },
   heroBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   heroBadgeDot: { width: 6, height: 6, borderRadius: 3 },
