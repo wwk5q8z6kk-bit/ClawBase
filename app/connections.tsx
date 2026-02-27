@@ -104,7 +104,7 @@ export default function ConnectionsScreen() {
       .slice(0, 8);
   }, [links]);
 
-  const topInset = Platform.OS === 'web' ? 67 : insets.top;
+  const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   const renderLink = ({ item }: { item: EntityLink }) => {
     const sourceConfig = ENTITY_CONFIG[item.sourceType];
@@ -165,7 +165,7 @@ export default function ConnectionsScreen() {
   ];
 
   return (
-    <View style={[s.container, { paddingTop: topInset }]}>
+    <View style={[s.container, { paddingTop: insets.top + webTopPad }]}>
       <View style={s.header}>
         <Pressable onPress={() => router.back()} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={C.textSecondary} />
@@ -285,9 +285,10 @@ const s = StyleSheet.create({
     flexWrap: 'wrap',
   },
   filterChip: {
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
+    height: 32, paddingHorizontal: 12, borderRadius: 8,
     borderWidth: 1, borderColor: C.border,
     backgroundColor: 'rgba(255,255,255,0.02)',
+    justifyContent: 'center' as const, alignItems: 'center' as const,
   },
   filterChipText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.textSecondary },
   list: { paddingHorizontal: 16, gap: 8 },

@@ -4,6 +4,7 @@ import {
   Text,
   View,
   FlatList,
+  ScrollView,
   Pressable,
   Platform,
   RefreshControl,
@@ -288,39 +289,37 @@ export default function TimelineScreen() {
       </View>
 
       {showFilters && (
-        <FlatList
-          data={FILTERS}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item.key}
-          contentContainerStyle={styles.filterBar}
-          renderItem={({ item }) => {
-            const isActive = activeFilter === item.key;
-            return (
-              <Pressable
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setActiveFilter(item.key);
-                }}
-                style={[
-                  styles.filterPill,
-                  isActive
-                    ? { backgroundColor: item.color + '20', borderColor: item.color }
-                    : { borderColor: C.border },
-                ]}
-              >
-                <Text
+        <View style={{ height: 52, flexShrink: 0 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBar}>
+            {FILTERS.map((item) => {
+              const isActive = activeFilter === item.key;
+              return (
+                <Pressable
+                  key={item.key}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setActiveFilter(item.key);
+                  }}
                   style={[
-                    styles.filterPillText,
-                    { color: isActive ? item.color : C.textSecondary },
+                    styles.filterPill,
+                    isActive
+                      ? { backgroundColor: item.color + '20', borderColor: item.color }
+                      : { borderColor: C.border },
                   ]}
                 >
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          }}
-        />
+                  <Text
+                    style={[
+                      styles.filterPillText,
+                      { color: isActive ? item.color : C.textSecondary },
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
       )}
 
       <FlatList
@@ -397,9 +396,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   filterPill: {
+    height: 32,
     paddingHorizontal: 14,
-    paddingVertical: 6,
     borderRadius: 16,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
     borderWidth: 1,
   },
   filterPillText: {

@@ -776,24 +776,21 @@ export default function CRMScreen() {
       </View>
 
       {viewMode === 'list' && (
-        <FlatList
-          horizontal
-          data={[{ key: 'all', label: 'All', color: C.text }, ...STAGES]}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-          keyExtractor={(item) => item.key}
-          renderItem={({ item }) => (
-            <Pressable
-              style={[styles.filterChip, stageFilter === item.key && { backgroundColor: (item.color || C.coral) + '20' }]}
-              onPress={() => { setStageFilter(item.key as StageFilter); Haptics.selectionAsync(); }}
-            >
-              <Text style={[styles.filterChipText, stageFilter === item.key && { color: item.color || C.coral }]}>
-                {item.label}
-              </Text>
-            </Pressable>
-          )}
-          scrollEnabled={true}
-        />
+        <View style={{ height: 52, flexShrink: 0 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+            {[{ key: 'all', label: 'All', color: C.text }, ...STAGES].map((item) => (
+              <Pressable
+                key={item.key}
+                style={[styles.filterChip, stageFilter === item.key && { backgroundColor: (item.color || C.coral) + '20' }]}
+                onPress={() => { setStageFilter(item.key as StageFilter); Haptics.selectionAsync(); }}
+              >
+                <Text style={[styles.filterChipText, stageFilter === item.key && { color: item.color || C.coral }]}>
+                  {item.label}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
       )}
 
       {viewMode === 'list' ? (
@@ -961,7 +958,7 @@ const styles = StyleSheet.create({
   searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 8, backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.borderLight, height: 44, paddingHorizontal: 12, gap: 8 },
   searchInput: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 14, color: C.text, height: 44 },
   filterScroll: { paddingHorizontal: 16, gap: 6, marginBottom: 8 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: C.card },
+  filterChip: { height: 32, paddingHorizontal: 14, borderRadius: 8, backgroundColor: C.card, justifyContent: 'center' as const, alignItems: 'center' as const },
   filterChipText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: C.textSecondary },
   listContent: { paddingHorizontal: 16 },
   contactCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: C.borderLight, gap: 12 },

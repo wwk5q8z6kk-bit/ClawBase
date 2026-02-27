@@ -327,11 +327,11 @@ export default function SearchScreen() {
     );
   };
 
-  const topInset = Platform.OS === 'web' ? 67 : insets.top;
+  const webTopPad = Platform.OS === 'web' ? 67 : 0;
   const totalCount = results.length;
 
   return (
-    <View style={[styles.container, { paddingTop: topInset }]}>
+    <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
       <View style={styles.header}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={18} color={C.textTertiary} />
@@ -371,7 +371,7 @@ export default function SearchScreen() {
           <Text style={styles.emptySubtitle}>Try a different search term</Text>
         </View>
       ) : (
-        <>
+        <View style={{ flex: 1 }}>
           <View style={styles.resultsSummary}>
             <Text style={styles.resultsSummaryText}>{totalCount} result{totalCount !== 1 ? 's' : ''}</Text>
           </View>
@@ -383,7 +383,7 @@ export default function SearchScreen() {
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
           />
-        </>
+        </View>
       )}
     </View>
   );
@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
     color: C.textTertiary,
   },
   listContent: {
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   emptyState: {
     flex: 1,
