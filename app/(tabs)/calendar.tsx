@@ -944,6 +944,7 @@ export default function CalendarTab() {
 
   const renderCalendarView = () => (
     <View style={{ flex: 1 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
       <View style={styles.calHeader}>
         <View style={styles.calHeaderLeft}>
           <Text style={styles.headerTitle}>{MONTHS[currentMonth]} {currentYear}</Text>
@@ -1022,7 +1023,7 @@ export default function CalendarTab() {
       </View>
 
       {viewMode === 'day' ? renderDayTimeline() : (
-        <ScrollView style={styles.eventsList} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }} showsVerticalScrollIndicator={false}>
+        <View style={styles.eventsList}>
           {selectedDayEvents.length === 0 ? (
             <View style={styles.emptyDay}>
               <View style={[styles.emptyIconWrap, { backgroundColor: C.accent + '15' }]}>
@@ -1069,8 +1070,10 @@ export default function CalendarTab() {
               </Pressable>
             ))
           )}
-        </ScrollView>
+        </View>
       )}
+
+      </ScrollView>
 
       <Modal visible={showAddModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
@@ -1168,39 +1171,41 @@ export default function CalendarTab() {
       </View>
 
       {showFilters && (
-        <FlatList
-          data={FILTERS}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item.key}
-          contentContainerStyle={styles.filterBar}
-          renderItem={({ item }) => {
-            const isActive = activeFilter === item.key;
-            return (
-              <Pressable
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setActiveFilter(item.key);
-                }}
-                style={[
-                  styles.filterPill,
-                  isActive
-                    ? { backgroundColor: item.color + '20', borderColor: item.color }
-                    : { borderColor: C.border },
-                ]}
-              >
-                <Text
+        <View style={{ height: 52, flexShrink: 0 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterBar}
+          >
+            {FILTERS.map((item) => {
+              const isActive = activeFilter === item.key;
+              return (
+                <Pressable
+                  key={item.key}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setActiveFilter(item.key);
+                  }}
                   style={[
-                    styles.filterPillText,
-                    { color: isActive ? item.color : C.textSecondary },
+                    styles.filterPill,
+                    isActive
+                      ? { backgroundColor: item.color + '20', borderColor: item.color }
+                      : { borderColor: C.border },
                   ]}
                 >
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          }}
-        />
+                  <Text
+                    style={[
+                      styles.filterPillText,
+                      { color: isActive ? item.color : C.textSecondary },
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
       )}
 
       <FlatList
@@ -1228,7 +1233,7 @@ export default function CalendarTab() {
           />
         }
         showsVerticalScrollIndicator={false}
-        scrollEnabled={allTimelineEvents.length > 0}
+        scrollEnabled={true}
       />
     </View>
   );
@@ -1303,7 +1308,7 @@ const styles = StyleSheet.create({
   selectedDateHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10 },
   selectedDateText: { fontFamily: 'Inter_600SemiBold', fontSize: 15, color: C.text },
   eventCount: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary },
-  eventsList: { flex: 1, paddingHorizontal: 16 },
+  eventsList: { paddingHorizontal: 16 },
   emptyDay: { alignItems: 'center', paddingVertical: 48, gap: 10 },
   emptyIconWrap: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   emptyDayTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 16, color: C.text },
@@ -1365,8 +1370,8 @@ const styles = StyleSheet.create({
   detailDeleteText: { fontFamily: 'Inter_500Medium', fontSize: 14, color: C.error },
   activityHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
   filterToggle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: C.surface },
-  filterBar: { paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
-  filterPill: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
+  filterBar: { paddingHorizontal: 16, paddingBottom: 12, gap: 8, alignItems: 'center' as const },
+  filterPill: { height: 32, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1, justifyContent: 'center' as const, alignItems: 'center' as const },
   filterPillText: { fontFamily: 'Inter_500Medium', fontSize: 13 },
   listContent: { paddingHorizontal: 16, paddingBottom: 100 },
   listContentEmpty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
