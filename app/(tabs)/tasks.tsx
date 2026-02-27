@@ -813,7 +813,7 @@ export default function TasksScreen() {
       })()}
 
       {viewMode === 'list' && (
-        <>
+        <View style={{ flex: 1 }}>
           <View style={styles.filterRowWrapper}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
               {([
@@ -867,7 +867,7 @@ export default function TasksScreen() {
               </View>
             }
           />
-        </>
+        </View>
       )}
 
       {viewMode === 'board' && (

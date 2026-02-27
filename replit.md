@@ -11,6 +11,7 @@ Preferred communication style: Simple, everyday language.
 ### Frontend (Mobile App)
 - **Framework**: React Native with Expo SDK 54 and Expo Router v6 for file-based routing.
 - **Navigation**: Tab-based layout (Home, Chat, Workspace, Calendar, Settings) with hidden granular routes. Tab bar uses static positioning (not absolute) with 84px height on web (includes 34px bottom inset). Content screens use `paddingBottom: insets.bottom + 20`.
+- **Layout Pattern**: Scrollable content (FlatList/ScrollView) must be wrapped in `<View style={{ flex: 1 }}>`, never in React Fragments (`<>...</>`). Fragments don't propagate flex height, which prevents scrolling.
 - **State Management**: React Context for global state and React Query for server-state.
 - **Local Storage**: AsyncStorage for persisting local data, `expo-secure-store` for sensitive data.
 - **UI/UX**: "Lobster" dark theme, Inter font family, `expo-linear-gradient` for visual effects, `expo-haptics` for feedback, `react-native-reanimated` and `react-native-gesture-handler` for animations and gestures. Features include a connection status banner, toast notification system, swipe actions, and data export.

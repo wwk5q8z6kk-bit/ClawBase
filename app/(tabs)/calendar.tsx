@@ -943,7 +943,7 @@ export default function CalendarTab() {
   };
 
   const renderCalendarView = () => (
-    <>
+    <View style={{ flex: 1 }}>
       <View style={styles.calHeader}>
         <View style={styles.calHeaderLeft}>
           <Text style={styles.headerTitle}>{MONTHS[currentMonth]} {currentYear}</Text>
@@ -1145,11 +1145,11 @@ export default function CalendarTab() {
       </Modal>
 
       {renderDetailModal()}
-    </>
+    </View>
   );
 
   const renderActivityView = () => (
-    <>
+    <View style={{ flex: 1 }}>
       <View style={styles.activityHeader}>
         <Text style={styles.headerTitle}>Activity</Text>
         <Pressable
@@ -1230,7 +1230,7 @@ export default function CalendarTab() {
         showsVerticalScrollIndicator={false}
         scrollEnabled={allTimelineEvents.length > 0}
       />
-    </>
+    </View>
   );
 
   return (

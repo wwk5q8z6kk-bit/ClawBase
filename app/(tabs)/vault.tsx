@@ -1782,7 +1782,7 @@ export default function VaultScreen() {
       />
 
       {activeSegment === 'tasks' && (
-        <>
+        <View style={{ flex: 1 }}>
           <View style={styles.taskSubHeader}>
             <View style={styles.viewToggle}>
               <Pressable
@@ -1846,7 +1846,7 @@ export default function VaultScreen() {
           })()}
 
           {viewMode === 'list' && (
-            <>
+            <View style={{ flex: 1 }}>
               <View style={styles.filterRowWrapper}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
                   {([
@@ -1902,7 +1902,7 @@ export default function VaultScreen() {
                   </View>
                 }
               />
-            </>
+            </View>
           )}
 
           {viewMode === 'board' && (
@@ -2090,11 +2090,11 @@ export default function VaultScreen() {
               </View>
             </View>
           </Modal>
-        </>
+        </View>
       )}
 
       {activeSegment === 'knowledge' && (
-        <>
+        <View style={{ flex: 1 }}>
           <View style={styles.knowledgeSubHeader}>
             <View style={styles.countBadge}>
               <Text style={styles.countText}>{memoryEntries.length}</Text>
@@ -2504,7 +2504,7 @@ export default function VaultScreen() {
               </View>
             </View>
           </Modal>
-        </>
+        </View>
       )}
 
       {activeSegment === 'files' && (
