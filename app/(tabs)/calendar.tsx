@@ -944,136 +944,145 @@ export default function CalendarTab() {
 
   const renderCalendarView = () => (
     <View style={{ flex: 1 }}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
-      <View style={styles.calHeader}>
-        <View style={styles.calHeaderLeft}>
-          <Text style={styles.headerTitle}>{MONTHS[currentMonth]} {currentYear}</Text>
-        </View>
-        <View style={styles.calHeaderRight}>
-          {!isViewingCurrentMonth && (
-            <Pressable onPress={jumpToToday} style={styles.todayBtn}>
-              <Text style={styles.todayBtnText}>Today</Text>
+      <View style={{ flexShrink: 0 }}>
+        <View style={styles.calHeader}>
+          <View style={styles.calHeaderLeft}>
+            <Text style={styles.headerTitle}>{MONTHS[currentMonth]} {currentYear}</Text>
+          </View>
+          <View style={styles.calHeaderRight}>
+            {!isViewingCurrentMonth && (
+              <Pressable onPress={jumpToToday} style={styles.todayBtn}>
+                <Text style={styles.todayBtnText}>Today</Text>
+              </Pressable>
+            )}
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setShowAddModal(true);
+              }}
+              testID="calendar-add"
+            >
+              <LinearGradient colors={C.gradient.lobster} style={styles.addBtn}>
+                <Ionicons name="add" size={20} color="#fff" />
+              </LinearGradient>
             </Pressable>
-          )}
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              setShowAddModal(true);
-            }}
-            testID="calendar-add"
-          >
-            <LinearGradient colors={C.gradient.lobster} style={styles.addBtn}>
-              <Ionicons name="add" size={20} color="#fff" />
-            </LinearGradient>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.calViewToggle}>
-        {(['month', 'week', 'day'] as ViewMode[]).map((mode) => (
-          <Pressable
-            key={mode}
-            style={[styles.calViewToggleBtn, viewMode === mode && styles.calViewToggleBtnActive]}
-            onPress={() => {
-              setViewMode(mode);
-              Haptics.selectionAsync();
-            }}
-          >
-            <Text style={[styles.calViewToggleText, viewMode === mode && styles.calViewToggleTextActive]}>
-              {mode.charAt(0).toUpperCase() + mode.slice(1)}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <View style={styles.summaryBar}>
-        <View style={styles.summaryItem}>
-          <Ionicons name="calendar-outline" size={14} color={C.coral} />
-          <Text style={styles.summaryText}>{todayEvents.length} today</Text>
-        </View>
-        {nextUpcomingEvent && (
-          <View style={[styles.summaryItem, { flex: 1, marginLeft: 12 }]}>
-            <Ionicons name="time-outline" size={14} color={C.coral} />
-            <Text style={styles.summaryNextTitle} numberOfLines={1}>{nextUpcomingEvent.title}</Text>
-            <Text style={styles.summaryNextTime}>{formatTime(nextUpcomingEvent.startTime)}</Text>
           </View>
-        )}
-      </View>
-
-      {viewMode === 'month' && (
-        <View style={styles.monthNav}>
-          <Pressable onPress={() => navigateMonth(-1)}>
-            <Ionicons name="chevron-back" size={22} color={C.textSecondary} />
-          </Pressable>
-          <View style={styles.monthLabelContainer}>
-            <Text style={styles.monthLabel}>{MONTHS[currentMonth]} {currentYear}</Text>
-          </View>
-          <Pressable onPress={() => navigateMonth(1)}>
-            <Ionicons name="chevron-forward" size={22} color={C.textSecondary} />
-          </Pressable>
         </View>
-      )}
 
-      {viewMode === 'month' && renderMonthGrid()}
-      {viewMode === 'week' && renderWeekView()}
+        <View style={styles.calViewToggle}>
+          {(['month', 'week', 'day'] as ViewMode[]).map((mode) => (
+            <Pressable
+              key={mode}
+              style={[styles.calViewToggleBtn, viewMode === mode && styles.calViewToggleBtnActive]}
+              onPress={() => {
+                setViewMode(mode);
+                Haptics.selectionAsync();
+              }}
+            >
+              <Text style={[styles.calViewToggleText, viewMode === mode && styles.calViewToggleTextActive]}>
+                {mode.charAt(0).toUpperCase() + mode.slice(1)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
 
-      <View style={styles.selectedDateHeader}>
-        <Text style={styles.selectedDateText}>{formatDateHeader(selectedDate)}</Text>
-        <Text style={styles.eventCount}>{selectedDayEvents.length} event{selectedDayEvents.length !== 1 ? 's' : ''}</Text>
-      </View>
-
-      {viewMode === 'day' ? renderDayTimeline() : (
-        <View style={styles.eventsList}>
-          {selectedDayEvents.length === 0 ? (
-            <View style={styles.emptyDay}>
-              <View style={[styles.emptyIconWrap, { backgroundColor: C.accent + '15' }]}>
-                <Ionicons name="calendar-outline" size={40} color={C.accent} />
-              </View>
-              <Text style={styles.emptyDayTitle}>No events</Text>
-              <Text style={styles.emptyDayText}>Tap + to create an event</Text>
+        <View style={styles.summaryBar}>
+          <View style={styles.summaryItem}>
+            <Ionicons name="calendar-outline" size={14} color={C.coral} />
+            <Text style={styles.summaryText}>{todayEvents.length} today</Text>
+          </View>
+          {nextUpcomingEvent && (
+            <View style={[styles.summaryItem, { flex: 1, marginLeft: 12 }]}>
+              <Ionicons name="time-outline" size={14} color={C.coral} />
+              <Text style={styles.summaryNextTitle} numberOfLines={1}>{nextUpcomingEvent.title}</Text>
+              <Text style={styles.summaryNextTime}>{formatTime(nextUpcomingEvent.startTime)}</Text>
             </View>
-          ) : (
-            selectedDayEvents.map((event) => (
-              <Pressable
-                key={event.id}
-                style={[styles.eventCard, C.shadow.card]}
-                onPress={() => openEventDetail(event)}
-                onLongPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                  deleteCalendarEvent(event.id);
-                }}
-              >
-                <View style={[styles.eventColorBar, { backgroundColor: event.color || C.coral }]} />
-                <View style={styles.eventContent}>
-                  <Text style={styles.eventTitle}>{event.title}</Text>
-                  <View style={styles.eventMeta}>
-                    <Ionicons name="time-outline" size={13} color={C.textTertiary} />
-                    <Text style={styles.eventTimeText}>
-                      {event.allDay ? 'All Day' : `${formatTime(event.startTime)} - ${formatTime(event.endTime)}`}
-                    </Text>
-                  </View>
-                  {event.location && (
+          )}
+        </View>
+      </View>
+
+      {viewMode === 'day' ? (
+        <View style={{ flex: 1 }}>
+          <View style={styles.selectedDateHeader}>
+            <Text style={styles.selectedDateText}>{formatDateHeader(selectedDate)}</Text>
+            <Text style={styles.eventCount}>{selectedDayEvents.length} event{selectedDayEvents.length !== 1 ? 's' : ''}</Text>
+          </View>
+          {renderDayTimeline()}
+        </View>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
+          {viewMode === 'month' && (
+            <View style={styles.monthNav}>
+              <Pressable onPress={() => navigateMonth(-1)}>
+                <Ionicons name="chevron-back" size={22} color={C.textSecondary} />
+              </Pressable>
+              <View style={styles.monthLabelContainer}>
+                <Text style={styles.monthLabel}>{MONTHS[currentMonth]} {currentYear}</Text>
+              </View>
+              <Pressable onPress={() => navigateMonth(1)}>
+                <Ionicons name="chevron-forward" size={22} color={C.textSecondary} />
+              </Pressable>
+            </View>
+          )}
+
+          {viewMode === 'month' && renderMonthGrid()}
+          {viewMode === 'week' && renderWeekView()}
+
+          <View style={styles.selectedDateHeader}>
+            <Text style={styles.selectedDateText}>{formatDateHeader(selectedDate)}</Text>
+            <Text style={styles.eventCount}>{selectedDayEvents.length} event{selectedDayEvents.length !== 1 ? 's' : ''}</Text>
+          </View>
+
+          <View style={styles.eventsList}>
+            {selectedDayEvents.length === 0 ? (
+              <View style={styles.emptyDay}>
+                <View style={[styles.emptyIconWrap, { backgroundColor: C.accent + '15' }]}>
+                  <Ionicons name="calendar-outline" size={40} color={C.accent} />
+                </View>
+                <Text style={styles.emptyDayTitle}>No events</Text>
+                <Text style={styles.emptyDayText}>Tap + to create an event</Text>
+              </View>
+            ) : (
+              selectedDayEvents.map((event) => (
+                <Pressable
+                  key={event.id}
+                  style={[styles.eventCard, C.shadow.card]}
+                  onPress={() => openEventDetail(event)}
+                  onLongPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                    deleteCalendarEvent(event.id);
+                  }}
+                >
+                  <View style={[styles.eventColorBar, { backgroundColor: event.color || C.coral }]} />
+                  <View style={styles.eventContent}>
+                    <Text style={styles.eventTitle}>{event.title}</Text>
                     <View style={styles.eventMeta}>
-                      <Ionicons name="location-outline" size={13} color={C.textTertiary} />
-                      <Text style={styles.eventTimeText}>{event.location}</Text>
+                      <Ionicons name="time-outline" size={13} color={C.textTertiary} />
+                      <Text style={styles.eventTimeText}>
+                        {event.allDay ? 'All Day' : `${formatTime(event.startTime)} - ${formatTime(event.endTime)}`}
+                      </Text>
+                    </View>
+                    {event.location && (
+                      <View style={styles.eventMeta}>
+                        <Ionicons name="location-outline" size={13} color={C.textTertiary} />
+                        <Text style={styles.eventTimeText}>{event.location}</Text>
+                      </View>
+                    )}
+                    {event.description && (
+                      <Text style={styles.eventDesc} numberOfLines={2}>{event.description}</Text>
+                    )}
+                  </View>
+                  {event.source && (
+                    <View style={[styles.sourceBadge, { backgroundColor: (event.color || C.coral) + '20' }]}>
+                      <Text style={[styles.sourceText, { color: event.color || C.coral }]}>{event.source}</Text>
                     </View>
                   )}
-                  {event.description && (
-                    <Text style={styles.eventDesc} numberOfLines={2}>{event.description}</Text>
-                  )}
-                </View>
-                {event.source && (
-                  <View style={[styles.sourceBadge, { backgroundColor: (event.color || C.coral) + '20' }]}>
-                    <Text style={[styles.sourceText, { color: event.color || C.coral }]}>{event.source}</Text>
-                  </View>
-                )}
-              </Pressable>
-            ))
-          )}
-        </View>
+                </Pressable>
+              ))
+            )}
+          </View>
+        </ScrollView>
       )}
-
-      </ScrollView>
 
       <Modal visible={showAddModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
