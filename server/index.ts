@@ -301,28 +301,14 @@ function setupErrorHandler(app: express.Application) {
   setupErrorHandler(app);
 
   const port = parseInt(process.env.PORT || "5000", 10);
-  const net = await import("net");
 
-  async function waitForPort(p: number, maxWait: number): Promise<void> {
-    const start = Date.now();
-    while (Date.now() - start < maxWait) {
-      const inUse = await new Promise<boolean>((resolve) => {
-        const tester = net.createServer()
-          .once("error", (err: any) => resolve(err.code === "EADDRINUSE"))
-          .once("listening", () => tester.close(() => resolve(false)))
-          .listen({ port: p, host: "0.0.0.0" });
-      });
-      if (!inUse) return;
-      log(`Port ${p} busy, waiting...`);
-      await new Promise((r) => setTimeout(r, 2000));
-    }
-    log(`Port ${p} still busy after ${maxWait / 1000}s, proceeding anyway`);
-  }
+  try {
+    const { execSync } = await import("child_process");
+    execSync(`fuser -k ${port}/tcp 2>/dev/null || true`, { stdio: "ignore" });
+    await new Promise((r) => setTimeout(r, 500));
+  } catch {}
 
-  await waitForPort(port, 20000);
-
-  server.listen(
-    { port, host: "0.0.0.0", reusePort: true },
-    () => { log(`express server serving on port ${port}`); },
-  );
+  server.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
+    log(`express server serving on port ${port}`);
+  });
 })();
