@@ -3,6 +3,7 @@ modules = ["nodejs-20", "web", "bash"]
 
 [nix]
 channel = "stable-25_05"
+packages = ["glib", "nss", "nspr", "at-spi2-atk", "cups", "dbus", "libdrm", "expat", "libxkbcommon", "pango", "cairo", "alsa-lib", "mesa", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXrandr", "xorg.libxcb", "chromium"]
 
 [deployment]
 deploymentTarget = "cloudrun"
