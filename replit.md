@@ -21,7 +21,7 @@ Preferred communication style: Simple, everyday language.
 - **Framework**: Express 5 (TypeScript) acting as a relay server, API proxy, and static file server.
 - **Relay Server**: Manages WebSocket bridging between mobile clients and the OpenClaw gateway, handling JWT authentication, connection management with exponential backoff, message bridging, and streaming. It exposes REST API endpoints, implements rate limiting, and maintains an in-memory audit trail.
 - **Storage**: Primarily uses in-memory storage, with Drizzle ORM configured for PostgreSQL for optional database usage, particularly for an audit log.
-- **Port Stability**: Server uses retry loop with exponential backoff (up to 3 attempts) to handle EADDRINUSE port conflicts gracefully.
+- **Port Stability**: Server uses retry loop with `server.once("error")` (up to 3 attempts) to handle EADDRINUSE port conflicts gracefully. Port-kill function reads `/proc/net/tcp` to find socket inodes and matches them to PIDs via `/proc/*/fd` — works in NixOS without `lsof` or `fuser`.
 
 ### Database
 - **ORM**: Drizzle ORM with PostgreSQL dialect, schema defined using `drizzle-zod` for validation. Migrations via `drizzle-kit`. Primarily, app data resides in client-side AsyncStorage.

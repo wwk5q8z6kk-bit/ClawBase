@@ -161,11 +161,26 @@ export default function MindMapScreen() {
     mindMapRef.current = mindMap;
   }, [mindMap]);
 
+  const didAutoCreate = useRef(false);
+
   useEffect(() => {
-    if (!id) return;
-    getMindMap(id).then((m) => {
-      if (m) setMindMap(m);
-    });
+    if (id) {
+      getMindMap(id).then((m) => {
+        if (m) setMindMap(m);
+      });
+    } else if (!didAutoCreate.current) {
+      didAutoCreate.current = true;
+      import('@/lib/mindmap').then(async ({ createMindMap }) => {
+        try {
+          const map = await createMindMap('New Mind Map');
+          setMindMap(map);
+          router.replace({ pathname: '/mindmap', params: { id: map.id } } as any);
+        } catch {
+          Alert.alert('Error', 'Failed to create mind map');
+          router.back();
+        }
+      });
+    }
   }, [id]);
 
   const pushUndo = useCallback((map: MindMap) => {

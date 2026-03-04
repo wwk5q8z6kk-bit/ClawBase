@@ -306,13 +306,17 @@ function setupErrorHandler(app: express.Application) {
     try {
       const { readFileSync, readdirSync, readlinkSync } = await import("fs");
       const portHex = p.toString(16).toUpperCase().padStart(4, "0");
-      const tcp = readFileSync("/proc/net/tcp", "utf8");
       const inodes = new Set<string>();
-      for (const line of tcp.split("\n")) {
-        const parts = line.trim().split(/\s+/);
-        if (parts[1]?.endsWith(`:${portHex}`) && parts[3] === "0A") {
-          inodes.add(parts[9]);
-        }
+      for (const tcpFile of ["/proc/net/tcp", "/proc/net/tcp6"]) {
+        try {
+          const tcp = readFileSync(tcpFile, "utf8");
+          for (const line of tcp.split("\n")) {
+            const parts = line.trim().split(/\s+/);
+            if (parts[1]?.endsWith(`:${portHex}`) && parts[3] === "0A") {
+              inodes.add(parts[9]);
+            }
+          }
+        } catch {}
       }
       if (inodes.size === 0) return;
       const myPid = process.pid.toString();
