@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 
-export type EntityType = 'conversation' | 'task' | 'memory' | 'calendar' | 'contact';
+export type EntityType = 'conversation' | 'task' | 'memory' | 'calendar' | 'contact' | 'mindmap';
 export type LinkRelation = 'created_from' | 'mentions' | 'related_to' | 'spawned_by';
 
 export interface EntityLink {

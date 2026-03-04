@@ -1477,11 +1477,12 @@ const RecentActivityWidget = React.memo(function RecentActivityWidget() {
   );
 });
 
-const COMMAND_CHIPS = ['Add a task', 'Schedule event', 'Inbox summary', "Today's brief", 'Check GitHub'];
+const COMMAND_CHIPS = ['Add a task', 'Schedule event', 'New mind map', 'Inbox summary', "Today's brief", 'Check GitHub'];
 
 const PREFILL_CHIPS: Record<string, string> = {
   'Add a task': 'add task ',
   'Schedule event': 'schedule ',
+  'New mind map': 'new mindmap ',
 };
 
 function parsePriority(text: string): Task['priority'] {
@@ -1579,7 +1580,23 @@ function CommandBar() {
       return;
     }
 
-    // Local: create event
+    if (/^(new mindmap|create mindmap|new mind map|create mind map|mindmap)\b/i.test(lower)) {
+      const keyword = lower.match(/^(new mindmap|create mindmap|new mind map|create mind map|mindmap)/i)?.[0] || '';
+      let title = text.trim().slice(keyword.length).trim();
+      if (!title) title = 'Untitled Mind Map';
+      (async () => {
+        try {
+          const { createMindMap } = await import('@/lib/mindmap');
+          const map = await createMindMap(title);
+          router.push({ pathname: '/mindmap', params: { id: map.id } } as any);
+          setFeedbackMsg(`Mind map "${title}" created`);
+        } catch {
+          setFeedbackMsg('Failed to create mind map');
+        }
+      })();
+      return;
+    }
+
     if (/^(add event|schedule|new event|meeting)\b/i.test(lower)) {
       const keyword = lower.match(/^(add event|schedule|new event|meeting)/i)?.[0] || '';
       let title = text.trim().slice(keyword.length).trim();
@@ -1625,6 +1642,7 @@ function CommandBar() {
     if (lower.includes('contacts')) { router.push('/crm' as any); return; }
     if (lower.includes('memory') || lower.includes('knowledge')) { router.push('/(tabs)/vault'); return; }
     if (lower.includes('settings') || lower.includes('automations')) { router.push('/(tabs)/settings'); return; }
+    if (lower.includes('mindmap') || lower.includes('mind map')) { router.push('/(tabs)/vault'); return; }
 
     // Fallback: open chat with the message as the prompt
     router.push('/(tabs)/chat');

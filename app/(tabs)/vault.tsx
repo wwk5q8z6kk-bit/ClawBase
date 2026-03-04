@@ -23,6 +23,7 @@ import { useApp } from '@/lib/AppContext';
 import type { Task, TaskStatus, MemoryEntry } from '@/lib/types';
 import type { GatewayMemoryFile } from '@/lib/gateway';
 import { getLinksFor, addLink, removeLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
+import { getAllMindMaps, createMindMap, deleteMindMap, type MindMap } from '@/lib/mindmap';
 import { router, useLocalSearchParams } from 'expo-router';
 
 const C = Colors.dark;
@@ -453,6 +454,7 @@ const ENTITY_TYPE_CONFIG: Record<EntityType, { icon: string; color: string; labe
   memory: { icon: 'book', color: '#8B7FFF', label: 'Memory' },
   calendar: { icon: 'calendar', color: C.coral, label: 'Event' },
   contact: { icon: 'person', color: C.textSecondary, label: 'Contact' },
+  mindmap: { icon: 'git-network-outline', color: C.accent, label: 'Mind Map' },
 };
 
 function EntityLinksSection({ entityType, entityId }: { entityType: EntityType; entityId: string }) {
@@ -491,6 +493,8 @@ function EntityLinksSection({ entityType, entityId }: { entityType: EntityType; 
       router.push({ pathname: '/(tabs)/calendar', params: { openEventId: targetId } });
     } else if (targetType === 'contact') {
       router.push({ pathname: '/crm', params: { openContactId: targetId } } as any);
+    } else if (targetType === 'mindmap') {
+      router.push({ pathname: '/mindmap', params: { id: targetId } } as any);
     }
   };
 
@@ -1486,6 +1490,15 @@ export default function VaultScreen() {
 
   const [syncingMemory, setSyncingMemory] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [mindMaps, setMindMaps] = useState<MindMap[]>([]);
+
+  useEffect(() => {
+    getAllMindMaps().then(setMindMaps).catch(() => {});
+  }, []);
+
+  const refreshMindMaps = useCallback(() => {
+    getAllMindMaps().then(setMindMaps).catch(() => {});
+  }, []);
 
   const handledDeepLink = useRef<string | null>(null);
   useEffect(() => {
@@ -1512,8 +1525,9 @@ export default function VaultScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
+    refreshMindMaps();
     setTimeout(() => setRefreshing(false), 500);
-  }, []);
+  }, [refreshMindMaps]);
 
   const handleSyncMemory = useCallback(async () => {
     setSyncingMemory(true);
@@ -2136,6 +2150,58 @@ export default function VaultScreen() {
               <Ionicons name="pricetags-outline" size={18} color={showTagBrowser ? C.coral : C.textSecondary} />
             </Pressable>
           </View>
+
+          {mindMaps.length > 0 && (
+            <View style={styles.mindMapsSection}>
+              <View style={styles.mindMapsSectionHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="git-network-outline" size={16} color={C.accent} />
+                  <Text style={styles.mindMapsSectionTitle}>Mind Maps</Text>
+                </View>
+                <Pressable
+                  onPress={async () => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    const map = await createMindMap('Untitled Mind Map');
+                    refreshMindMaps();
+                    router.push({ pathname: '/mindmap', params: { id: map.id } } as any);
+                  }}
+                >
+                  <Ionicons name="add" size={20} color={C.textSecondary} />
+                </Pressable>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 2 }}>
+                {mindMaps.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 10).map((map) => (
+                  <Pressable
+                    key={map.id}
+                    style={styles.mindMapCard}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      router.push({ pathname: '/mindmap', params: { id: map.id } } as any);
+                    }}
+                    onLongPress={() => {
+                      if (Platform.OS === 'web') {
+                        if (confirm(`Delete "${map.title}"?`)) {
+                          deleteMindMap(map.id).then(refreshMindMaps);
+                        }
+                      } else {
+                        Alert.alert('Delete Mind Map', `Delete "${map.title}"?`, [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Delete', style: 'destructive', onPress: () => deleteMindMap(map.id).then(refreshMindMaps) },
+                        ]);
+                      }
+                    }}
+                  >
+                    <Ionicons name="git-network-outline" size={20} color={C.accent} />
+                    <Text style={styles.mindMapCardTitle} numberOfLines={1}>{map.title}</Text>
+                    <View style={styles.mindMapCardMeta}>
+                      <Text style={styles.mindMapCardMetaText}>{map.nodes.length} nodes</Text>
+                      <Text style={styles.mindMapCardMetaText}>{formatAge(map.updatedAt)}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
 
           {deferredCount > 0 && reviewFilter !== 'deferred' && (
             <Pressable
@@ -3127,4 +3193,11 @@ const styles = StyleSheet.create({
   },
   deleteBtn: { marginTop: 16, padding: 14, borderRadius: 10, backgroundColor: C.error + '15', alignItems: 'center' },
   deleteBtnText: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.error, textAlign: 'center' },
+  mindMapsSection: { paddingHorizontal: 20, marginBottom: 8, marginTop: 4 },
+  mindMapsSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  mindMapsSectionTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.text },
+  mindMapCard: { width: 130, backgroundColor: C.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: C.borderLight, gap: 6 },
+  mindMapCardTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.text },
+  mindMapCardMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  mindMapCardMetaText: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary },
 });

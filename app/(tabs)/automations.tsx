@@ -11,6 +11,10 @@ import {
   ActivityIndicator,
   PanResponder,
   Text,
+  Modal,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
   type GestureResponderEvent,
   type PanResponderGestureState,
 } from 'react-native';
@@ -25,6 +29,17 @@ import { PulsingDot } from '@/components/PulsingDot';
 import { Card } from '@/components/Card';
 import { Typography } from '@/components/Typography';
 import * as LocalAuthentication from 'expo-local-authentication';
+import {
+  type AutomationRecipe,
+  type TriggerType,
+  type ActionType,
+  type RecipeTrigger,
+  type RecipeAction,
+  getAllRecipes,
+  createRecipe,
+  toggleRecipe,
+  deleteRecipe,
+} from '@/lib/automationRecipes';
 
 const C = Colors.dark;
 
@@ -69,7 +84,1023 @@ const RISK_TIER_CONFIG: Record<string, { color: string; label: string; glowColor
   P3: { color: C.textSecondary, label: 'LOW', glowColor: C.textSecondary + '15' },
 };
 
+const TRIGGER_OPTIONS: { type: TriggerType; icon: string; label: string; desc: string; color: string }[] = [
+  { type: 'schedule', icon: 'time-outline', label: 'Schedule', desc: 'Run on a timer or at specific times', color: C.accent },
+  { type: 'keyword', icon: 'chatbubble-ellipses-outline', label: 'Keyword Match', desc: 'Fires when a chat message contains text', color: C.coral },
+  { type: 'entity_created', icon: 'add-circle-outline', label: 'Entity Created', desc: 'Fires when a new task, memory, or event is created', color: C.secondary },
+];
 
+const ACTION_OPTIONS: { type: ActionType; icon: string; label: string; desc: string; color: string }[] = [
+  { type: 'send_chat', icon: 'chatbubble-outline', label: 'Send Chat', desc: 'Send a message to the agent', color: C.accent },
+  { type: 'create_task', icon: 'checkmark-circle-outline', label: 'Create Task', desc: 'Create a new task', color: C.coral },
+  { type: 'create_memory', icon: 'bookmark-outline', label: 'Create Memory', desc: 'Save a new memory entry', color: C.purple },
+  { type: 'notify', icon: 'notifications-outline', label: 'Notify', desc: 'Send a notification', color: C.amber },
+  { type: 'gateway_command', icon: 'terminal-outline', label: 'Gateway Command', desc: 'Invoke a gateway command', color: C.secondary },
+];
+
+const ENTITY_TYPE_OPTIONS: { value: 'task' | 'memory' | 'event' | 'contact'; label: string; icon: string }[] = [
+  { value: 'task', label: 'Task', icon: 'checkmark-circle-outline' },
+  { value: 'memory', label: 'Memory', icon: 'bookmark-outline' },
+  { value: 'event', label: 'Event', icon: 'calendar-outline' },
+  { value: 'contact', label: 'Contact', icon: 'person-outline' },
+];
+
+function getTriggerIcon(type: TriggerType): string {
+  return TRIGGER_OPTIONS.find(t => t.type === type)?.icon || 'flash-outline';
+}
+
+function getTriggerColor(type: TriggerType): string {
+  return TRIGGER_OPTIONS.find(t => t.type === type)?.color || C.accent;
+}
+
+function getTriggerLabel(type: TriggerType): string {
+  return TRIGGER_OPTIONS.find(t => t.type === type)?.label || type;
+}
+
+function RecipeCard({
+  recipe,
+  onToggle,
+  onDelete,
+}: {
+  recipe: AutomationRecipe;
+  onToggle: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const triggerColor = getTriggerColor(recipe.trigger.type);
+
+  return (
+    <View style={recipeStyles.recipeItem}>
+      <View style={recipeStyles.recipeTop}>
+        <View style={[recipeStyles.recipeTriggerIcon, { backgroundColor: triggerColor + '18' }]}>
+          <Ionicons name={getTriggerIcon(recipe.trigger.type) as any} size={18} color={triggerColor} />
+        </View>
+        <View style={recipeStyles.recipeInfo}>
+          <Typography weight="600" style={recipeStyles.recipeName}>{recipe.name}</Typography>
+          <View style={recipeStyles.recipeMeta}>
+            <Typography color="tertiary" style={recipeStyles.recipeMetaText} weight="400">
+              {getTriggerLabel(recipe.trigger.type)}
+            </Typography>
+            <View style={recipeStyles.metaDot} />
+            <Typography color="tertiary" style={recipeStyles.recipeMetaText} weight="400">
+              {recipe.actions.length} action{recipe.actions.length !== 1 ? 's' : ''}
+            </Typography>
+            {recipe.runCount > 0 && (
+              <>
+                <View style={recipeStyles.metaDot} />
+                <Typography color="tertiary" style={recipeStyles.recipeMetaText} weight="400">
+                  {recipe.runCount} runs
+                </Typography>
+              </>
+            )}
+          </View>
+        </View>
+        <View style={recipeStyles.recipeRight}>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onDelete(recipe.id);
+            }}
+            hitSlop={8}
+          >
+            <Ionicons name="trash-outline" size={16} color={C.textTertiary} />
+          </Pressable>
+          <Switch
+            value={recipe.enabled}
+            onValueChange={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onToggle(recipe.id);
+            }}
+            trackColor={{ false: C.border, true: C.success + '40' }}
+            thumbColor={recipe.enabled ? C.success : C.textTertiary}
+            style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+          />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function RecipeBuilderModal({
+  visible,
+  onClose,
+  onSave,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSave: (name: string, trigger: RecipeTrigger, actions: RecipeAction[]) => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const [step, setStep] = useState(1);
+  const [triggerType, setTriggerType] = useState<TriggerType | null>(null);
+  const [triggerConfig, setTriggerConfig] = useState<Record<string, any>>({});
+  const [selectedActions, setSelectedActions] = useState<{ type: ActionType; config: Record<string, any> }[]>([]);
+  const [recipeName, setRecipeName] = useState('');
+  const [configStep, setConfigStep] = useState<'action_pick' | 'action_config'>('action_pick');
+  const [currentActionType, setCurrentActionType] = useState<ActionType | null>(null);
+  const [currentActionConfig, setCurrentActionConfig] = useState<Record<string, any>>({});
+
+  const resetState = useCallback(() => {
+    setStep(1);
+    setTriggerType(null);
+    setTriggerConfig({});
+    setSelectedActions([]);
+    setRecipeName('');
+    setConfigStep('action_pick');
+    setCurrentActionType(null);
+    setCurrentActionConfig({});
+  }, []);
+
+  const handleClose = useCallback(() => {
+    resetState();
+    onClose();
+  }, [onClose, resetState]);
+
+  const handlePickTrigger = useCallback((type: TriggerType) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setTriggerType(type);
+    setTriggerConfig({});
+    setStep(2);
+  }, []);
+
+  const handleConfirmTrigger = useCallback(() => {
+    setStep(3);
+    setConfigStep('action_pick');
+  }, []);
+
+  const handlePickAction = useCallback((type: ActionType) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCurrentActionType(type);
+    setCurrentActionConfig({});
+    setConfigStep('action_config');
+  }, []);
+
+  const handleConfirmAction = useCallback(() => {
+    if (currentActionType) {
+      setSelectedActions(prev => [...prev, { type: currentActionType, config: { ...currentActionConfig } }]);
+      setCurrentActionType(null);
+      setCurrentActionConfig({});
+      setConfigStep('action_pick');
+    }
+  }, [currentActionType, currentActionConfig]);
+
+  const handleRemoveAction = useCallback((idx: number) => {
+    setSelectedActions(prev => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  const handleGoToNameStep = useCallback(() => {
+    if (selectedActions.length === 0) return;
+    setStep(4);
+  }, [selectedActions]);
+
+  const handleSave = useCallback(() => {
+    if (!triggerType || !recipeName.trim() || selectedActions.length === 0) return;
+    const trigger: RecipeTrigger = { type: triggerType, config: triggerConfig as any };
+    const actions: RecipeAction[] = selectedActions.map(a => ({ type: a.type, config: a.config as any }));
+    onSave(recipeName.trim(), trigger, actions);
+    handleClose();
+  }, [triggerType, triggerConfig, selectedActions, recipeName, onSave, handleClose]);
+
+  const canProceedStep2 = useMemo(() => {
+    if (!triggerType) return false;
+    if (triggerType === 'schedule') {
+      return !!(triggerConfig.intervalMinutes || triggerConfig.dailyAtTime);
+    }
+    if (triggerType === 'keyword') {
+      return !!(triggerConfig.keyword && triggerConfig.keyword.trim());
+    }
+    if (triggerType === 'entity_created') {
+      return !!triggerConfig.entityType;
+    }
+    return false;
+  }, [triggerType, triggerConfig]);
+
+  const renderStepIndicator = () => (
+    <View style={recipeStyles.stepIndicator}>
+      {[1, 2, 3, 4].map(s => (
+        <View key={s} style={recipeStyles.stepRow}>
+          <View style={[recipeStyles.stepDot, s === step && recipeStyles.stepDotActive, s < step && recipeStyles.stepDotDone]} />
+          {s < 4 && <View style={[recipeStyles.stepLine, s < step && recipeStyles.stepLineDone]} />}
+        </View>
+      ))}
+    </View>
+  );
+
+  const renderStep1 = () => (
+    <View style={recipeStyles.stepContent}>
+      <Typography variant="h2" weight="700" style={recipeStyles.stepTitle}>Choose Trigger</Typography>
+      <Typography color="secondary" style={recipeStyles.stepSubtitle} weight="400">What should start this recipe?</Typography>
+      <View style={recipeStyles.optionsList}>
+        {TRIGGER_OPTIONS.map(opt => (
+          <Pressable
+            key={opt.type}
+            onPress={() => handlePickTrigger(opt.type)}
+            style={({ pressed }) => [pressed && { opacity: 0.8 }]}
+          >
+            <LinearGradient
+              colors={C.gradient.cardElevated}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={recipeStyles.optionCard}
+            >
+              <View style={[recipeStyles.optionIcon, { backgroundColor: opt.color + '18' }]}>
+                <Ionicons name={opt.icon as any} size={22} color={opt.color} />
+              </View>
+              <View style={recipeStyles.optionInfo}>
+                <Typography weight="600" style={recipeStyles.optionLabel}>{opt.label}</Typography>
+                <Typography color="secondary" style={recipeStyles.optionDesc} weight="400">{opt.desc}</Typography>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={C.textTertiary} />
+            </LinearGradient>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+
+  const renderStep2 = () => {
+    if (!triggerType) return null;
+    return (
+      <View style={recipeStyles.stepContent}>
+        <Typography variant="h2" weight="700" style={recipeStyles.stepTitle}>Configure Trigger</Typography>
+        <Typography color="secondary" style={recipeStyles.stepSubtitle} weight="400">
+          Set up your {getTriggerLabel(triggerType).toLowerCase()} trigger
+        </Typography>
+        <View style={recipeStyles.configSection}>
+          {triggerType === 'schedule' && (
+            <>
+              <View style={recipeStyles.configField}>
+                <Typography weight="500" style={recipeStyles.configLabel}>Interval (minutes)</Typography>
+                <TextInput
+                  style={recipeStyles.configInput}
+                  value={triggerConfig.intervalMinutes?.toString() || ''}
+                  onChangeText={v => setTriggerConfig(prev => ({ ...prev, intervalMinutes: parseInt(v) || undefined }))}
+                  placeholder="e.g. 60"
+                  placeholderTextColor={C.textTertiary}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={recipeStyles.configDivider}>
+                <View style={recipeStyles.configDividerLine} />
+                <Typography color="tertiary" style={recipeStyles.configDividerText} weight="400">or</Typography>
+                <View style={recipeStyles.configDividerLine} />
+              </View>
+              <View style={recipeStyles.configField}>
+                <Typography weight="500" style={recipeStyles.configLabel}>Daily at time (HH:MM)</Typography>
+                <TextInput
+                  style={recipeStyles.configInput}
+                  value={triggerConfig.dailyAtTime || ''}
+                  onChangeText={v => setTriggerConfig(prev => ({ ...prev, dailyAtTime: v || undefined }))}
+                  placeholder="e.g. 09:00"
+                  placeholderTextColor={C.textTertiary}
+                />
+              </View>
+            </>
+          )}
+          {triggerType === 'keyword' && (
+            <>
+              <View style={recipeStyles.configField}>
+                <Typography weight="500" style={recipeStyles.configLabel}>Keyword or phrase</Typography>
+                <TextInput
+                  style={recipeStyles.configInput}
+                  value={triggerConfig.keyword || ''}
+                  onChangeText={v => setTriggerConfig(prev => ({ ...prev, keyword: v }))}
+                  placeholder="e.g. urgent"
+                  placeholderTextColor={C.textTertiary}
+                  autoCapitalize="none"
+                />
+              </View>
+              <Pressable
+                onPress={() => setTriggerConfig(prev => ({ ...prev, caseSensitive: !prev.caseSensitive }))}
+                style={recipeStyles.configToggleRow}
+              >
+                <Typography weight="500" style={recipeStyles.configLabel}>Case sensitive</Typography>
+                <View style={[recipeStyles.configCheckbox, triggerConfig.caseSensitive && recipeStyles.configCheckboxActive]}>
+                  {triggerConfig.caseSensitive && <Ionicons name="checkmark" size={14} color={C.background} />}
+                </View>
+              </Pressable>
+            </>
+          )}
+          {triggerType === 'entity_created' && (
+            <View style={recipeStyles.entityTypeGrid}>
+              {ENTITY_TYPE_OPTIONS.map(opt => (
+                <Pressable
+                  key={opt.value}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setTriggerConfig({ entityType: opt.value });
+                  }}
+                  style={({ pressed }) => [pressed && { opacity: 0.8 }]}
+                >
+                  <View style={[
+                    recipeStyles.entityTypeCard,
+                    triggerConfig.entityType === opt.value && { borderColor: C.secondary, backgroundColor: C.secondary + '10' },
+                  ]}>
+                    <Ionicons
+                      name={opt.icon as any}
+                      size={20}
+                      color={triggerConfig.entityType === opt.value ? C.secondary : C.textSecondary}
+                    />
+                    <Typography
+                      weight={triggerConfig.entityType === opt.value ? '600' : '400'}
+                      color={triggerConfig.entityType === opt.value ? 'primary' : 'secondary'}
+                      style={recipeStyles.entityTypeLabel}
+                    >
+                      {opt.label}
+                    </Typography>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+        <View style={recipeStyles.stepActions}>
+          <Pressable onPress={() => setStep(1)} style={({ pressed }) => [recipeStyles.backBtn, pressed && { opacity: 0.7 }]}>
+            <Ionicons name="arrow-back" size={18} color={C.textSecondary} />
+          </Pressable>
+          <Pressable
+            onPress={handleConfirmTrigger}
+            disabled={!canProceedStep2}
+            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+          >
+            <LinearGradient
+              colors={canProceedStep2 ? C.gradient.lobster : [C.surface, C.surface]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[recipeStyles.nextBtn, !canProceedStep2 && { opacity: 0.4 }]}
+            >
+              <Typography weight="600" style={recipeStyles.nextBtnText}>Next</Typography>
+              <Ionicons name="arrow-forward" size={16} color="white" />
+            </LinearGradient>
+          </Pressable>
+        </View>
+      </View>
+    );
+  };
+
+  const renderActionConfig = () => {
+    if (!currentActionType) return null;
+    const opt = ACTION_OPTIONS.find(a => a.type === currentActionType);
+    return (
+      <View style={recipeStyles.configSection}>
+        <View style={recipeStyles.actionConfigHeader}>
+          <View style={[recipeStyles.optionIcon, { backgroundColor: (opt?.color || C.accent) + '18' }]}>
+            <Ionicons name={(opt?.icon || 'flash') as any} size={18} color={opt?.color || C.accent} />
+          </View>
+          <Typography weight="600" style={recipeStyles.optionLabel}>{opt?.label}</Typography>
+        </View>
+        {currentActionType === 'send_chat' && (
+          <View style={recipeStyles.configField}>
+            <Typography weight="500" style={recipeStyles.configLabel}>Message</Typography>
+            <TextInput
+              style={[recipeStyles.configInput, { height: 72, textAlignVertical: 'top' as const }]}
+              value={currentActionConfig.message || ''}
+              onChangeText={v => setCurrentActionConfig(prev => ({ ...prev, message: v }))}
+              placeholder="Message to send..."
+              placeholderTextColor={C.textTertiary}
+              multiline
+            />
+          </View>
+        )}
+        {currentActionType === 'create_task' && (
+          <>
+            <View style={recipeStyles.configField}>
+              <Typography weight="500" style={recipeStyles.configLabel}>Task title</Typography>
+              <TextInput
+                style={recipeStyles.configInput}
+                value={currentActionConfig.title || ''}
+                onChangeText={v => setCurrentActionConfig(prev => ({ ...prev, title: v }))}
+                placeholder="Task title..."
+                placeholderTextColor={C.textTertiary}
+              />
+            </View>
+            <View style={recipeStyles.configField}>
+              <Typography weight="500" style={recipeStyles.configLabel}>Priority</Typography>
+              <View style={recipeStyles.priorityRow}>
+                {(['low', 'medium', 'high', 'urgent'] as const).map(p => (
+                  <Pressable
+                    key={p}
+                    onPress={() => setCurrentActionConfig(prev => ({ ...prev, priority: p }))}
+                    style={({ pressed }) => [pressed && { opacity: 0.8 }]}
+                  >
+                    <View style={[
+                      recipeStyles.priorityChip,
+                      (currentActionConfig.priority || 'medium') === p && { borderColor: C.accent, backgroundColor: C.accent + '15' },
+                    ]}>
+                      <Typography
+                        weight={(currentActionConfig.priority || 'medium') === p ? '600' : '400'}
+                        color={(currentActionConfig.priority || 'medium') === p ? 'primary' : 'secondary'}
+                        style={recipeStyles.priorityChipText}
+                      >
+                        {p.charAt(0).toUpperCase() + p.slice(1)}
+                      </Typography>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </>
+        )}
+        {currentActionType === 'create_memory' && (
+          <>
+            <View style={recipeStyles.configField}>
+              <Typography weight="500" style={recipeStyles.configLabel}>Title</Typography>
+              <TextInput
+                style={recipeStyles.configInput}
+                value={currentActionConfig.title || ''}
+                onChangeText={v => setCurrentActionConfig(prev => ({ ...prev, title: v }))}
+                placeholder="Memory title..."
+                placeholderTextColor={C.textTertiary}
+              />
+            </View>
+            <View style={recipeStyles.configField}>
+              <Typography weight="500" style={recipeStyles.configLabel}>Content</Typography>
+              <TextInput
+                style={[recipeStyles.configInput, { height: 72, textAlignVertical: 'top' as const }]}
+                value={currentActionConfig.content || ''}
+                onChangeText={v => setCurrentActionConfig(prev => ({ ...prev, content: v }))}
+                placeholder="Memory content..."
+                placeholderTextColor={C.textTertiary}
+                multiline
+              />
+            </View>
+          </>
+        )}
+        {currentActionType === 'notify' && (
+          <>
+            <View style={recipeStyles.configField}>
+              <Typography weight="500" style={recipeStyles.configLabel}>Notification title</Typography>
+              <TextInput
+                style={recipeStyles.configInput}
+                value={currentActionConfig.title || ''}
+                onChangeText={v => setCurrentActionConfig(prev => ({ ...prev, title: v }))}
+                placeholder="Title..."
+                placeholderTextColor={C.textTertiary}
+              />
+            </View>
+            <View style={recipeStyles.configField}>
+              <Typography weight="500" style={recipeStyles.configLabel}>Body</Typography>
+              <TextInput
+                style={recipeStyles.configInput}
+                value={currentActionConfig.body || ''}
+                onChangeText={v => setCurrentActionConfig(prev => ({ ...prev, body: v }))}
+                placeholder="Notification body..."
+                placeholderTextColor={C.textTertiary}
+              />
+            </View>
+          </>
+        )}
+        {currentActionType === 'gateway_command' && (
+          <View style={recipeStyles.configField}>
+            <Typography weight="500" style={recipeStyles.configLabel}>Command</Typography>
+            <TextInput
+              style={recipeStyles.configInput}
+              value={currentActionConfig.command || ''}
+              onChangeText={v => setCurrentActionConfig(prev => ({ ...prev, command: v }))}
+              placeholder="e.g. daily-brief"
+              placeholderTextColor={C.textTertiary}
+              autoCapitalize="none"
+            />
+          </View>
+        )}
+        <View style={recipeStyles.stepActions}>
+          <Pressable
+            onPress={() => { setConfigStep('action_pick'); setCurrentActionType(null); }}
+            style={({ pressed }) => [recipeStyles.backBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Ionicons name="arrow-back" size={18} color={C.textSecondary} />
+          </Pressable>
+          <Pressable
+            onPress={handleConfirmAction}
+            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+          >
+            <LinearGradient
+              colors={C.gradient.lobster}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={recipeStyles.nextBtn}
+            >
+              <Ionicons name="add" size={16} color="white" />
+              <Typography weight="600" style={recipeStyles.nextBtnText}>Add Action</Typography>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      </View>
+    );
+  };
+
+  const renderStep3 = () => (
+    <View style={recipeStyles.stepContent}>
+      <Typography variant="h2" weight="700" style={recipeStyles.stepTitle}>Add Actions</Typography>
+      <Typography color="secondary" style={recipeStyles.stepSubtitle} weight="400">What should happen when the trigger fires?</Typography>
+
+      {selectedActions.length > 0 && (
+        <View style={recipeStyles.addedActions}>
+          <Typography weight="500" color="secondary" style={recipeStyles.addedActionsLabel}>Added actions:</Typography>
+          {selectedActions.map((a, idx) => {
+            const opt = ACTION_OPTIONS.find(o => o.type === a.type);
+            return (
+              <View key={idx} style={recipeStyles.addedActionRow}>
+                <View style={[recipeStyles.addedActionIcon, { backgroundColor: (opt?.color || C.accent) + '18' }]}>
+                  <Ionicons name={(opt?.icon || 'flash') as any} size={14} color={opt?.color || C.accent} />
+                </View>
+                <Typography weight="500" style={recipeStyles.addedActionText}>{opt?.label}</Typography>
+                <Pressable onPress={() => handleRemoveAction(idx)} hitSlop={8}>
+                  <Ionicons name="close-circle" size={18} color={C.error} />
+                </Pressable>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {configStep === 'action_pick' ? (
+        <View style={recipeStyles.optionsList}>
+          {ACTION_OPTIONS.map(opt => (
+            <Pressable
+              key={opt.type}
+              onPress={() => handlePickAction(opt.type)}
+              style={({ pressed }) => [pressed && { opacity: 0.8 }]}
+            >
+              <LinearGradient
+                colors={C.gradient.cardElevated}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={recipeStyles.optionCard}
+              >
+                <View style={[recipeStyles.optionIcon, { backgroundColor: opt.color + '18' }]}>
+                  <Ionicons name={opt.icon as any} size={22} color={opt.color} />
+                </View>
+                <View style={recipeStyles.optionInfo}>
+                  <Typography weight="600" style={recipeStyles.optionLabel}>{opt.label}</Typography>
+                  <Typography color="secondary" style={recipeStyles.optionDesc} weight="400">{opt.desc}</Typography>
+                </View>
+                <Ionicons name="add-circle-outline" size={18} color={C.textTertiary} />
+              </LinearGradient>
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        renderActionConfig()
+      )}
+
+      {configStep === 'action_pick' && (
+        <View style={recipeStyles.stepActions}>
+          <Pressable onPress={() => setStep(2)} style={({ pressed }) => [recipeStyles.backBtn, pressed && { opacity: 0.7 }]}>
+            <Ionicons name="arrow-back" size={18} color={C.textSecondary} />
+          </Pressable>
+          <Pressable
+            onPress={handleGoToNameStep}
+            disabled={selectedActions.length === 0}
+            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+          >
+            <LinearGradient
+              colors={selectedActions.length > 0 ? C.gradient.lobster : [C.surface, C.surface]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[recipeStyles.nextBtn, selectedActions.length === 0 && { opacity: 0.4 }]}
+            >
+              <Typography weight="600" style={recipeStyles.nextBtnText}>Next</Typography>
+              <Ionicons name="arrow-forward" size={16} color="white" />
+            </LinearGradient>
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderStep4 = () => (
+    <View style={recipeStyles.stepContent}>
+      <Typography variant="h2" weight="700" style={recipeStyles.stepTitle}>Name Your Recipe</Typography>
+      <Typography color="secondary" style={recipeStyles.stepSubtitle} weight="400">Give this automation a memorable name</Typography>
+      <View style={recipeStyles.configSection}>
+        <View style={recipeStyles.configField}>
+          <TextInput
+            style={[recipeStyles.configInput, { fontSize: 16 }]}
+            value={recipeName}
+            onChangeText={setRecipeName}
+            placeholder="My Automation..."
+            placeholderTextColor={C.textTertiary}
+            autoFocus
+          />
+        </View>
+        <View style={recipeStyles.recipeSummary}>
+          <Typography weight="500" color="secondary" style={recipeStyles.summaryLabel}>Summary</Typography>
+          <View style={recipeStyles.summaryRow}>
+            <Ionicons name={getTriggerIcon(triggerType!) as any} size={14} color={getTriggerColor(triggerType!)} />
+            <Typography color="primary" style={recipeStyles.summaryText} weight="400">
+              When: {getTriggerLabel(triggerType!)}
+            </Typography>
+          </View>
+          {selectedActions.map((a, idx) => {
+            const opt = ACTION_OPTIONS.find(o => o.type === a.type);
+            return (
+              <View key={idx} style={recipeStyles.summaryRow}>
+                <Ionicons name={(opt?.icon || 'flash') as any} size={14} color={opt?.color || C.accent} />
+                <Typography color="primary" style={recipeStyles.summaryText} weight="400">
+                  Then: {opt?.label}
+                </Typography>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+      <View style={recipeStyles.stepActions}>
+        <Pressable onPress={() => setStep(3)} style={({ pressed }) => [recipeStyles.backBtn, pressed && { opacity: 0.7 }]}>
+          <Ionicons name="arrow-back" size={18} color={C.textSecondary} />
+        </Pressable>
+        <Pressable
+          onPress={handleSave}
+          disabled={!recipeName.trim()}
+          style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+        >
+          <LinearGradient
+            colors={recipeName.trim() ? C.gradient.lobster : [C.surface, C.surface]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[recipeStyles.saveBtn, !recipeName.trim() && { opacity: 0.4 }]}
+          >
+            <Ionicons name="checkmark-circle" size={18} color="white" />
+            <Typography weight="700" style={recipeStyles.saveBtnText}>Save Recipe</Typography>
+          </LinearGradient>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
+      <View style={[recipeStyles.modalContainer, { paddingTop: insets.top }]}>
+        <View style={recipeStyles.modalHeader}>
+          <Typography variant="h2" weight="700" style={recipeStyles.modalTitle}>New Recipe</Typography>
+          <Pressable onPress={handleClose} hitSlop={12}>
+            <Ionicons name="close" size={24} color={C.textSecondary} />
+          </Pressable>
+        </View>
+        {renderStepIndicator()}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={20}
+        >
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={[recipeStyles.modalScroll, { paddingBottom: insets.bottom + 20 }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {step === 1 && renderStep1()}
+            {step === 2 && renderStep2()}
+            {step === 3 && renderStep3()}
+            {step === 4 && renderStep4()}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
+
+const recipeStyles = StyleSheet.create({
+  modalContainer: {
+    flex: 1,
+    backgroundColor: C.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    color: C.text,
+  },
+  modalScroll: {
+    paddingHorizontal: 20,
+  },
+  stepIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+    paddingBottom: 16,
+    gap: 0,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  stepDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: C.border,
+  },
+  stepDotActive: {
+    backgroundColor: C.primary,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  stepDotDone: {
+    backgroundColor: C.success,
+  },
+  stepLine: {
+    width: 40,
+    height: 2,
+    backgroundColor: C.border,
+    marginHorizontal: 4,
+  },
+  stepLineDone: {
+    backgroundColor: C.success,
+  },
+  stepContent: {
+    gap: 16,
+  },
+  stepTitle: {
+    fontSize: 22,
+    color: C.text,
+  },
+  stepSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  optionsList: {
+    gap: 10,
+  },
+  optionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    gap: 14,
+  },
+  optionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  optionLabel: {
+    fontSize: 14,
+    color: C.text,
+  },
+  optionDesc: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  configSection: {
+    gap: 14,
+  },
+  configField: {
+    gap: 6,
+  },
+  configLabel: {
+    fontSize: 13,
+    color: C.text,
+  },
+  configInput: {
+    backgroundColor: C.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: C.text,
+  },
+  configDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  configDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: C.borderLight,
+  },
+  configDividerText: {
+    fontSize: 12,
+  },
+  configToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  configCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: C.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  configCheckboxActive: {
+    backgroundColor: C.accent,
+    borderColor: C.accent,
+  },
+  entityTypeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  entityTypeCard: {
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    backgroundColor: C.surface,
+    alignItems: 'center',
+    gap: 6,
+    minWidth: 90,
+  },
+  entityTypeLabel: {
+    fontSize: 12,
+  },
+  stepActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: C.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: C.borderLight,
+  },
+  nextBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  nextBtnText: {
+    fontSize: 14,
+    color: 'white',
+  },
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  saveBtnText: {
+    fontSize: 15,
+    color: 'white',
+  },
+  addedActions: {
+    gap: 8,
+    backgroundColor: C.surface,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+  },
+  addedActionsLabel: {
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  addedActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  addedActionIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addedActionText: {
+    flex: 1,
+    fontSize: 13,
+    color: C.text,
+  },
+  actionConfigHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 4,
+  },
+  priorityRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  priorityChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    backgroundColor: C.surface,
+  },
+  priorityChipText: {
+    fontSize: 12,
+  },
+  recipeSummary: {
+    backgroundColor: C.surface,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    gap: 8,
+  },
+  summaryLabel: {
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  summaryText: {
+    fontSize: 13,
+  },
+  recipeItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: C.borderLight,
+  },
+  recipeTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 12,
+  },
+  recipeTriggerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recipeInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  recipeName: {
+    fontSize: 14,
+    color: C.text,
+  },
+  recipeMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  recipeMetaText: {
+    fontSize: 11,
+  },
+  metaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: C.textTertiary,
+    marginHorizontal: 2,
+  },
+  recipeRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recipesList: {
+    borderRadius: 14,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    overflow: 'hidden',
+  },
+});
 
 function formatTimeAgo(ts: number) {
   const diff = Date.now() - ts;
@@ -637,6 +1668,8 @@ export default function AutomationsScreen() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [allPaused, setAllPaused] = useState(false);
   const [toast, setToast] = useState<ToastState>({ visible: false, message: '', type: 'success' });
+  const [recipes, setRecipes] = useState<AutomationRecipe[]>([]);
+  const [showRecipeBuilder, setShowRecipeBuilder] = useState(false);
 
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
     setToast({ visible: true, message, type });
@@ -645,6 +1678,40 @@ export default function AutomationsScreen() {
   const hideToast = useCallback(() => {
     setToast(prev => ({ ...prev, visible: false }));
   }, []);
+
+  const loadRecipes = useCallback(async () => {
+    const all = await getAllRecipes();
+    setRecipes(all);
+  }, []);
+
+  useEffect(() => {
+    loadRecipes();
+  }, [loadRecipes]);
+
+  const handleCreateRecipe = useCallback(async (name: string, trigger: RecipeTrigger, actions: RecipeAction[]) => {
+    await createRecipe(name, trigger, actions);
+    await loadRecipes();
+    showToast('Recipe created', 'success');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [loadRecipes, showToast]);
+
+  const handleToggleRecipe = useCallback(async (id: string) => {
+    await toggleRecipe(id);
+    await loadRecipes();
+  }, [loadRecipes]);
+
+  const handleDeleteRecipe = useCallback(async (id: string) => {
+    Alert.alert('Delete Recipe', 'Are you sure you want to delete this recipe?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          await deleteRecipe(id);
+          await loadRecipes();
+          showToast('Recipe deleted', 'success');
+        },
+      },
+    ]);
+  }, [loadRecipes, showToast]);
 
   const fetchData = useCallback(async () => {
     if (gatewayStatus !== 'connected') return;
@@ -761,9 +1828,9 @@ export default function AutomationsScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchData();
+    await Promise.all([fetchData(), loadRecipes()]);
     setRefreshing(false);
-  }, [fetchData]);
+  }, [fetchData, loadRecipes]);
 
   const handleToggleAutomation = useCallback(async (id: string, enabled: boolean) => {
     setAutomations((prev) =>
@@ -1010,6 +2077,40 @@ export default function AutomationsScreen() {
           )}
         </View>
 
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="construct" size={16} color={C.accent} />
+              <Typography style={styles.sectionTitle} weight="600">My Recipes</Typography>
+            </View>
+            {recipes.length > 0 && (
+              <View style={[styles.countBadge, { backgroundColor: C.accent + '20' }]}>
+                <Typography style={styles.countText} color={C.accent} weight="600">{recipes.length}</Typography>
+              </View>
+            )}
+          </View>
+          {recipes.length > 0 ? (
+            <View style={recipeStyles.recipesList}>
+              {recipes.map(recipe => (
+                <RecipeCard
+                  key={recipe.id}
+                  recipe={recipe}
+                  onToggle={handleToggleRecipe}
+                  onDelete={handleDeleteRecipe}
+                />
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons name="construct-outline" size={28} color={C.textTertiary} />
+              <Typography style={styles.emptyTitle} weight="600">No custom recipes</Typography>
+              <Typography style={styles.emptyDesc} color="secondary" weight="400">
+                Tap the + button to create your first automation recipe
+              </Typography>
+            </View>
+          )}
+        </View>
+
         <AnalyticsCard cronOutputs={cronOutputs} />
 
         <View style={styles.section}>
@@ -1038,6 +2139,29 @@ export default function AutomationsScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Pressable
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          setShowRecipeBuilder(true);
+        }}
+        style={({ pressed }) => [pressed && { opacity: 0.85 }]}
+      >
+        <LinearGradient
+          colors={C.gradient.lobster}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[recipeStyles.fab, { bottom: insets.bottom + 24 }]}
+        >
+          <Ionicons name="add" size={28} color="white" />
+        </LinearGradient>
+      </Pressable>
+
+      <RecipeBuilderModal
+        visible={showRecipeBuilder}
+        onClose={() => setShowRecipeBuilder(false)}
+        onSave={handleCreateRecipe}
+      />
     </View>
   );
 }

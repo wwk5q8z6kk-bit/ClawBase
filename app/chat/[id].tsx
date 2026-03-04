@@ -26,7 +26,7 @@ import { PulsingDot } from '@/components/PulsingDot';
 import type { ChatMessage } from '@/lib/types';
 import VoiceModeOverlay from '@/components/VoiceModeOverlay';
 import { enqueue } from '@/lib/offlineQueue';
-import { getLinksFor, type EntityLink, type EntityType } from '@/lib/entityLinks';
+import { getLinksFor, addLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
 
 const C = Colors.dark;
 
@@ -291,18 +291,62 @@ function renderFormattedText(content: string, isUser: boolean): React.ReactNode[
   return parts;
 }
 
+function InlineActionChips({
+  message,
+  onSaveMemory,
+  onCreateTask,
+  onAddCalendar,
+}: {
+  message: ChatMessage;
+  onSaveMemory: (msg: ChatMessage) => void;
+  onCreateTask: (msg: ChatMessage) => void;
+  onAddCalendar: (msg: ChatMessage) => void;
+}) {
+  const chips = [
+    { icon: 'book-outline' as const, label: 'Save as memory', color: '#8B7FFF', onPress: () => onSaveMemory(message) },
+    { icon: 'checkmark-circle-outline' as const, label: 'Create task', color: C.amber, onPress: () => onCreateTask(message) },
+    { icon: 'calendar-outline' as const, label: 'Add to calendar', color: C.coral, onPress: () => onAddCalendar(message) },
+  ];
+
+  return (
+    <View style={styles.inlineChipsRow}>
+      {chips.map((chip) => (
+        <Pressable
+          key={chip.label}
+          style={({ pressed }) => [styles.inlineChip, { borderColor: chip.color + '30' }, pressed && { opacity: 0.6, backgroundColor: chip.color + '15' }]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            chip.onPress();
+          }}
+        >
+          <Ionicons name={chip.icon} size={12} color={chip.color} />
+          <Text style={[styles.inlineChipText, { color: chip.color }]}>{chip.label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 const MessageBubble = React.memo(function MessageBubble({
   message,
   showAvatar,
   tightTop,
   onLongPress,
   copiedId,
+  showActionChips,
+  onSaveMemory,
+  onCreateTask,
+  onAddCalendar,
 }: {
   message: ChatMessage;
   showAvatar: boolean;
   tightTop: boolean;
   onLongPress: (id: string) => void;
   copiedId: string | null;
+  showActionChips?: boolean;
+  onSaveMemory?: (msg: ChatMessage) => void;
+  onCreateTask?: (msg: ChatMessage) => void;
+  onAddCalendar?: (msg: ChatMessage) => void;
 }) {
   const isUser = message.role === 'user';
 
@@ -366,6 +410,14 @@ const MessageBubble = React.memo(function MessageBubble({
           <Text style={styles.copiedText}>Copied!</Text>
         </View>
       )}
+      {showActionChips && !isUser && onSaveMemory && onCreateTask && onAddCalendar && (
+        <InlineActionChips
+          message={message}
+          onSaveMemory={onSaveMemory}
+          onCreateTask={onCreateTask}
+          onAddCalendar={onAddCalendar}
+        />
+      )}
     </View>
   );
 }, (prevProps, nextProps) => {
@@ -376,7 +428,8 @@ const MessageBubble = React.memo(function MessageBubble({
     prevProps.showAvatar === nextProps.showAvatar &&
     prevProps.tightTop === nextProps.tightTop &&
     prevProps.copiedId === nextProps.copiedId &&
-    prevProps.onLongPress === nextProps.onLongPress
+    prevProps.onLongPress === nextProps.onLongPress &&
+    prevProps.showActionChips === nextProps.showActionChips
   );
 });
 
@@ -436,11 +489,15 @@ function MessageActionSheet({
   onClose,
   onCopy,
   onReply,
+  onSaveAsMemory,
+  onCreateTask,
 }: {
   message: ChatMessage | null;
   onClose: () => void;
   onCopy: () => void;
   onReply: (text: string) => void;
+  onSaveAsMemory?: (msg: ChatMessage) => void;
+  onCreateTask?: (msg: ChatMessage) => void;
 }) {
   if (!message) return null;
   const isUser = message.role === 'user';
@@ -448,8 +505,8 @@ function MessageActionSheet({
   const actions = [
     { icon: 'copy-outline', label: 'Copy Text', onPress: onCopy, color: C.accent },
     { icon: 'arrow-undo-outline', label: 'Reply', onPress: () => { onReply(message.content); onClose(); }, color: C.secondary },
-    { icon: 'bookmark-outline', label: 'Bookmark', onPress: () => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); onClose(); }, color: C.amber },
-    { icon: 'share-outline', label: 'Share', onPress: () => { onClose(); }, color: C.coral },
+    { icon: 'book-outline', label: 'Save as Memory', onPress: () => onSaveAsMemory?.(message), color: '#8B7FFF' },
+    { icon: 'checkmark-circle-outline', label: 'Create Task', onPress: () => onCreateTask?.(message), color: C.amber },
   ];
 
   return (
@@ -530,6 +587,100 @@ function StreamingBubble({ text }: { text: string }) {
   );
 }
 
+type CreateEntityType = 'task' | 'memory' | 'event' | 'contact';
+type SlashCommand = { type: CreateEntityType; label: string; icon: string; color: string };
+
+const SLASH_COMMANDS: SlashCommand[] = [
+  { type: 'task', label: 'Create Task', icon: 'checkmark-circle', color: C.amber },
+  { type: 'memory', label: 'Save Memory', icon: 'book', color: '#8B7FFF' },
+  { type: 'event', label: 'Add Event', icon: 'calendar', color: C.coral },
+  { type: 'contact', label: 'Add Contact', icon: 'person', color: C.secondary },
+];
+
+function CreateEntitySheet({
+  visible,
+  entityType,
+  prefillText,
+  onClose,
+  onCreated,
+}: {
+  visible: boolean;
+  entityType: CreateEntityType | null;
+  prefillText: string;
+  onClose: () => void;
+  onCreated: (type: CreateEntityType, name: string) => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+
+  useEffect(() => {
+    if (visible) {
+      const lines = prefillText.split('\n');
+      setTitle(lines[0]?.slice(0, 100) || '');
+      setDescription(lines.length > 1 ? lines.slice(1).join('\n').slice(0, 500) : '');
+    }
+  }, [visible, prefillText]);
+
+  if (!entityType) return null;
+
+  const config = SLASH_COMMANDS.find(c => c.type === entityType)!;
+
+  const handleCreate = () => {
+    if (!title.trim()) return;
+    onCreated(entityType, title.trim());
+    setTitle('');
+    setDescription('');
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <Pressable style={styles.createSheet} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.modalHandle} />
+          <View style={styles.createSheetHeader}>
+            <View style={[styles.createSheetIcon, { backgroundColor: config.color + '20' }]}>
+              <Ionicons name={config.icon as any} size={20} color={config.color} />
+            </View>
+            <Text style={styles.createSheetTitle}>{config.label}</Text>
+          </View>
+          <TextInput
+            style={styles.createSheetInput}
+            placeholder={entityType === 'task' ? 'Task title...' : entityType === 'memory' ? 'Memory title...' : entityType === 'event' ? 'Event title...' : 'Contact name...'}
+            placeholderTextColor={C.textTertiary}
+            value={title}
+            onChangeText={setTitle}
+            autoFocus
+          />
+          {entityType !== 'contact' && (
+            <TextInput
+              style={[styles.createSheetInput, { minHeight: 60 }]}
+              placeholder="Description (optional)..."
+              placeholderTextColor={C.textTertiary}
+              value={description}
+              onChangeText={setDescription}
+              multiline
+            />
+          )}
+          <View style={styles.createSheetActions}>
+            <Pressable style={({ pressed }) => [styles.createSheetCancel, pressed && { opacity: 0.7 }]} onPress={onClose}>
+              <Text style={styles.createSheetCancelText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.createSheetSave, { backgroundColor: config.color }, pressed && { opacity: 0.7 }]}
+              onPress={handleCreate}
+              disabled={!title.trim()}
+            >
+              <Ionicons name={config.icon as any} size={16} color="#fff" />
+              <Text style={styles.createSheetSaveText}>Create</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function ChatDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id, voice, briefing } = useLocalSearchParams<{ id: string; voice?: string; briefing?: string }>();
@@ -543,12 +694,16 @@ export default function ChatDetailScreen() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [actionMenuMsg, setActionMenuMsg] = useState<ChatMessage | null>(null);
   const [voiceModeVisible, setVoiceModeVisible] = useState(false);
+  const [createMenuVisible, setCreateMenuVisible] = useState(false);
+  const [createEntityType, setCreateEntityType] = useState<CreateEntityType | null>(null);
+  const [createPrefillText, setCreatePrefillText] = useState('');
+  const [slashSuggestions, setSlashSuggestions] = useState<SlashCommand[]>([]);
   const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
   const prevMessageCountRef = useRef(0);
 
   const conversation = conversations.find((c) => c.id === id);
-  const { tasks, memoryEntries, calendarEvents, crmContacts } = useApp();
+  const { tasks, memoryEntries, calendarEvents, crmContacts, createTask, createMemoryEntry, createCalendarEvent, createCRMContact } = useApp();
 
   const [chatLinks, setChatLinks] = useState<EntityLink[]>([]);
   const [showContext, setShowContext] = useState(false);
@@ -570,11 +725,39 @@ export default function ChatDetailScreen() {
       const otherType = isSource ? link.targetType : link.sourceType;
       const otherId = isSource ? link.targetId : link.sourceId;
       let name = '';
-      if (otherType === 'task') name = tasks.find(t => t.id === otherId)?.title || 'Task';
-      else if (otherType === 'memory') name = memoryEntries.find(m => m.id === otherId)?.title || 'Memory';
-      else if (otherType === 'contact') name = crmContacts.find(c => c.id === otherId)?.name || 'Contact';
-      else if (otherType === 'calendar') name = calendarEvents.find(e => e.id === otherId)?.title || 'Event';
-      return { type: otherType as EntityType, id: otherId, name, relation: link.relation };
+      let detail = '';
+      if (otherType === 'task') {
+        const task = tasks.find(t => t.id === otherId);
+        name = task?.title || 'Task';
+        if (task) {
+          const statusLabels: Record<string, string> = { todo: 'To Do', in_progress: 'In Progress', done: 'Done', deferred: 'Deferred', archived: 'Archived' };
+          detail = statusLabels[task.status] || task.status;
+        }
+      } else if (otherType === 'memory') {
+        const mem = memoryEntries.find(m => m.id === otherId);
+        name = mem?.title || 'Memory';
+        if (mem) detail = mem.type;
+      } else if (otherType === 'contact') {
+        const contact = crmContacts.find(c => c.id === otherId);
+        name = contact?.name || 'Contact';
+        if (contact?.company) detail = contact.company;
+      } else if (otherType === 'calendar') {
+        const event = calendarEvents.find(e => e.id === otherId);
+        name = event?.title || 'Event';
+        if (event) {
+          const d = new Date(event.startTime);
+          const now = new Date();
+          const diffMs = d.getTime() - now.getTime();
+          if (diffMs > 0 && diffMs < 86400000) {
+            detail = `Today ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
+          } else if (diffMs > 0 && diffMs < 172800000) {
+            detail = `Tomorrow ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
+          } else {
+            detail = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+          }
+        }
+      }
+      return { type: otherType as EntityType, id: otherId, name, detail, relation: link.relation };
     });
   }, [chatLinks, id, tasks, memoryEntries, calendarEvents, crmContacts]);
 
@@ -646,6 +829,106 @@ export default function ChatDetailScreen() {
       inputRef.current?.focus();
     }
   }, [inputText, isSending, id, sendMessage, getMessages]);
+
+  const handleInputChange = useCallback((text: string) => {
+    setInputText(text);
+    if (text.startsWith('/')) {
+      const cmd = text.slice(1).toLowerCase();
+      const matches = SLASH_COMMANDS.filter(c => c.type.startsWith(cmd) || c.label.toLowerCase().includes(cmd));
+      setSlashSuggestions(matches.length > 0 ? matches : SLASH_COMMANDS);
+    } else {
+      setSlashSuggestions([]);
+    }
+  }, []);
+
+  const handleSlashSelect = useCallback((cmd: SlashCommand) => {
+    setSlashSuggestions([]);
+    setInputText('');
+    const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
+    setCreatePrefillText(lastAssistantMsg?.content?.slice(0, 200) || '');
+    setCreateEntityType(cmd.type);
+  }, [messages]);
+
+  const handleOpenCreateMenu = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCreateMenuVisible(true);
+  }, []);
+
+  const handleCreateEntity = useCallback(async (type: CreateEntityType, title: string) => {
+    try {
+      if (type === 'task') {
+        const task = await createTask(title, 'todo', 'medium', '', { source: 'chat', tags: ['from:chat'] });
+        await addLink('conversation', id!, 'task', task.id, 'created_from');
+        showToast('success', `Task "${title}" created`);
+      } else if (type === 'memory') {
+        const mem = await createMemoryEntry({
+          title,
+          content: createPrefillText || title,
+          category: 'note',
+          source: 'chat',
+          tags: ['from:chat'],
+          reviewStatus: 'unread',
+        });
+        if (mem?.id) await addLink('conversation', id!, 'memory', mem.id, 'created_from');
+        showToast('success', `Memory "${title}" saved`);
+      } else if (type === 'event') {
+        const start = new Date();
+        start.setHours(start.getHours() + 1, 0, 0, 0);
+        const end = new Date(start);
+        end.setHours(end.getHours() + 1);
+        const evt = await createCalendarEvent({
+          title,
+          startTime: start.getTime(),
+          endTime: end.getTime(),
+          source: 'agent',
+          tags: ['from:chat'],
+        });
+        if (evt?.id) await addLink('conversation', id!, 'calendar', evt.id, 'created_from');
+        showToast('success', `Event "${title}" added`);
+      } else if (type === 'contact') {
+        await createCRMContact({
+          name: title,
+          stage: 'lead',
+          tags: ['from:chat'],
+        });
+        showToast('success', `Contact "${title}" added`);
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      showToast('error', 'Failed to create');
+    }
+  }, [id, createTask, createMemoryEntry, createCalendarEvent, createCRMContact, createPrefillText, showToast]);
+
+  const handleSaveAsMemory = useCallback(async (msg: ChatMessage) => {
+    try {
+      const created = await createMemoryEntry({
+        title: msg.content.slice(0, 80),
+        content: msg.content,
+        category: 'note',
+        source: 'chat',
+        tags: ['from:chat'],
+        reviewStatus: 'unread',
+      });
+      if (id && created?.id) await addLink('conversation', id, 'memory', created.id, 'created_from').catch(() => {});
+      showToast('success', 'Saved as memory');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      showToast('error', 'Failed to save');
+    }
+    setActionMenuMsg(null);
+  }, [id, createMemoryEntry, showToast]);
+
+  const handleCreateTaskFromMsg = useCallback(async (msg: ChatMessage) => {
+    setCreatePrefillText(msg.content.slice(0, 200));
+    setCreateEntityType('task');
+    setActionMenuMsg(null);
+  }, []);
+
+  const handleAddCalendarFromMsg = useCallback(async (msg: ChatMessage) => {
+    setCreatePrefillText(msg.content.slice(0, 200));
+    setCreateEntityType('event');
+    setActionMenuMsg(null);
+  }, []);
 
   useEffect(() => {
     if (voice === 'true') {
@@ -728,6 +1011,13 @@ export default function ChatDetailScreen() {
     return !isSameDay(messages[index - 1].timestamp, messages[index].timestamp);
   };
 
+  const shouldShowActionChips = (index: number) => {
+    const msg = messages[index];
+    if (msg.role !== 'assistant') return false;
+    if (index === messages.length - 1) return true;
+    return messages[index + 1].role !== 'assistant';
+  };
+
   const newMessageStartIndex = prevMessageCountRef.current;
 
   useEffect(() => {
@@ -806,6 +1096,7 @@ export default function ChatDetailScreen() {
               >
                 <Ionicons name={cfg.icon as any} size={11} color={cfg.color} />
                 <Text style={[styles.contextChipText, { color: cfg.color }]} numberOfLines={1}>{e.name}</Text>
+                {e.detail ? <Text style={styles.contextChipDetail} numberOfLines={1}>{e.detail}</Text> : null}
               </Pressable>
             );
           })}
@@ -833,6 +1124,10 @@ export default function ChatDetailScreen() {
                     tightTop={isTightTop(index)}
                     onLongPress={openActionMenu}
                     copiedId={copiedId}
+                    showActionChips={shouldShowActionChips(index)}
+                    onSaveMemory={handleSaveAsMemory}
+                    onCreateTask={handleCreateTaskFromMsg}
+                    onAddCalendar={handleAddCalendarFromMsg}
                   />
                 </View>
               </AnimatedMessageWrapper>
@@ -883,6 +1178,21 @@ export default function ChatDetailScreen() {
           </View>
         )}
 
+        {slashSuggestions.length > 0 && (
+          <View style={styles.slashBar}>
+            {slashSuggestions.map(cmd => (
+              <Pressable
+                key={cmd.type}
+                style={({ pressed }) => [styles.slashChip, pressed && { opacity: 0.7 }]}
+                onPress={() => handleSlashSelect(cmd)}
+              >
+                <Ionicons name={cmd.icon as any} size={14} color={cmd.color} />
+                <Text style={[styles.slashChipText, { color: cmd.color }]}>{cmd.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
         <View
           style={[
             styles.inputContainer,
@@ -892,17 +1202,17 @@ export default function ChatDetailScreen() {
           <View style={styles.inputWrap}>
             <Pressable
               style={styles.attachBtn}
-              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              onPress={handleOpenCreateMenu}
             >
               <Ionicons name="add-circle-outline" size={24} color={C.textSecondary} />
             </Pressable>
             <TextInput
               ref={inputRef}
               style={styles.textInput}
-              placeholder="Message your agent..."
+              placeholder="Message or /task /memory..."
               placeholderTextColor={C.textTertiary}
               value={inputText}
-              onChangeText={setInputText}
+              onChangeText={handleInputChange}
               multiline
               maxLength={2000}
               returnKeyType="default"
@@ -981,6 +1291,48 @@ export default function ChatDetailScreen() {
           setInputText(`Re: ${text.slice(0, 50)}... `);
           inputRef.current?.focus();
         }}
+        onSaveAsMemory={handleSaveAsMemory}
+        onCreateTask={handleCreateTaskFromMsg}
+      />
+
+      <Modal
+        visible={createMenuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCreateMenuVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setCreateMenuVisible(false)}>
+          <View style={styles.createMenu}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.createMenuTitle}>Create from Chat</Text>
+            {SLASH_COMMANDS.map(cmd => (
+              <Pressable
+                key={cmd.type}
+                style={({ pressed }) => [styles.createMenuItem, pressed && { backgroundColor: C.cardElevated }]}
+                onPress={() => {
+                  setCreateMenuVisible(false);
+                  const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
+                  setCreatePrefillText(lastAssistantMsg?.content?.slice(0, 200) || '');
+                  setCreateEntityType(cmd.type);
+                }}
+              >
+                <View style={[styles.createMenuIcon, { backgroundColor: cmd.color + '15' }]}>
+                  <Ionicons name={cmd.icon as any} size={18} color={cmd.color} />
+                </View>
+                <Text style={styles.createMenuLabel}>{cmd.label}</Text>
+                <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <CreateEntitySheet
+        visible={!!createEntityType}
+        entityType={createEntityType}
+        prefillText={createPrefillText}
+        onClose={() => setCreateEntityType(null)}
+        onCreated={handleCreateEntity}
       />
 
       <Modal
@@ -1436,5 +1788,159 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
-  contextChipText: { fontFamily: 'Inter_500Medium', fontSize: 11, maxWidth: 120 },
+  contextChipText: { fontFamily: 'Inter_500Medium', fontSize: 11, maxWidth: 100 },
+  contextChipDetail: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 9,
+    color: C.textTertiary,
+    marginLeft: 2,
+  },
+  slashBar: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: C.card,
+    borderTopWidth: 1,
+    borderTopColor: C.borderLight,
+  },
+  slashChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  slashChipText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+  },
+  createMenu: {
+    backgroundColor: C.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34,
+    paddingTop: 8,
+  },
+  createMenuTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
+    color: C.text,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  createMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  createMenuIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createMenuLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    color: C.text,
+    flex: 1,
+  },
+  createSheet: {
+    backgroundColor: C.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34,
+    paddingTop: 8,
+    paddingHorizontal: 20,
+  },
+  createSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  createSheetIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createSheetTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 17,
+    color: C.text,
+  },
+  createSheetInput: {
+    backgroundColor: C.card,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    color: C.text,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+  },
+  createSheetActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 6,
+  },
+  createSheetCancel: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: C.card,
+  },
+  createSheetCancelText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    color: C.textSecondary,
+  },
+  createSheetSave: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  createSheetSaveText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: '#fff',
+  },
+  inlineChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+    marginBottom: 4,
+    marginLeft: 36,
+  },
+  inlineChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+  },
+  inlineChipText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+  },
 });

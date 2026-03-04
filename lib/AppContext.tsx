@@ -46,6 +46,17 @@ import {
   registerForPushNotifications,
   showLocalNotification,
 } from './notifications';
+import {
+  getRecipesByTriggerType,
+  shouldScheduleTriggerFire,
+  doesKeywordMatch,
+  doesEntityCreatedMatch,
+  executeRecipeActions,
+  type ScheduleTriggerConfig,
+  type KeywordTriggerConfig,
+  type EntityCreatedTriggerConfig,
+  type ActionExecutor,
+} from './automationRecipes';
 
 interface AppContextValue {
   connections: GatewayConnection[];
@@ -74,13 +85,13 @@ interface AppContextValue {
   deleteTask: (id: string) => Promise<void>;
 
   memoryEntries: MemoryEntry[];
-  createMemoryEntry: (entry: Omit<MemoryEntry, 'id' | 'timestamp'>) => Promise<void>;
+  createMemoryEntry: (entry: Omit<MemoryEntry, 'id' | 'timestamp'>) => Promise<MemoryEntry>;
   deleteMemoryEntry: (id: string) => Promise<void>;
   searchMemory: (query: string) => Promise<MemoryEntry[]>;
   updateMemoryEntry: (id: string, updates: Partial<MemoryEntry>) => Promise<void>;
 
   calendarEvents: CalendarEvent[];
-  createCalendarEvent: (event: Omit<CalendarEvent, 'id'>) => Promise<void>;
+  createCalendarEvent: (event: Omit<CalendarEvent, 'id'>) => Promise<CalendarEvent>;
   updateCalendarEvent: (id: string, updates: Partial<CalendarEvent>) => Promise<void>;
   deleteCalendarEvent: (id: string) => Promise<void>;
 
@@ -307,6 +318,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setIsStreaming(false);
 
       const fullText = event.data?.text;
+      if (fullText) {
+        try {
+          const kwRecipes = await getRecipesByTriggerType('keyword');
+          const executor: ActionExecutor = {
+            createTask: async (title, status, priority, description) => {
+              const task = await taskStorage.create(title, status as any || 'todo', priority as any || 'medium', description);
+              setTasks((prev) => [...prev, task]);
+              return task;
+            },
+            createMemoryEntry: async (entry) => {
+              const created = await memoryStorage.add(entry);
+              setMemoryEntries((prev) => [created, ...prev]);
+            },
+            sendGatewayChat: async (message, sessionKey) => {
+              if (gateway.isConnected()) await gateway.sendChat(message, sessionKey);
+            },
+            showNotification: (title, body) => {
+              showLocalNotification({ title, body, data: { type: 'automation' }, categoryIdentifier: 'alert', channelId: 'alerts' });
+            },
+          };
+          for (const recipe of kwRecipes) {
+            if (doesKeywordMatch(recipe.trigger.config as KeywordTriggerConfig, fullText)) {
+              console.log(`[AutomationEngine] keyword trigger fired on incoming: ${recipe.name}`);
+              await executeRecipeActions(recipe, executor);
+            }
+          }
+        } catch {}
+      }
       if (fullText && fullText.length > 20) {
         try {
           const { addLink } = await import('@/lib/entityLinks');
@@ -424,6 +463,97 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     return unsub;
   }, [gateway]);
+
+  const automationExecutorRef = React.useRef<ActionExecutor | null>(null);
+
+  const getAutomationExecutor = useCallback((): ActionExecutor => {
+    if (automationExecutorRef.current) return automationExecutorRef.current;
+    const executor: ActionExecutor = {
+      createTask: async (title, status, priority, description) => {
+        const task = await taskStorage.create(title, status as any || 'todo', priority as any || 'medium', description);
+        setTasks((prev) => [...prev, task]);
+        return task;
+      },
+      createMemoryEntry: async (entry) => {
+        const created = await memoryStorage.add(entry);
+        setMemoryEntries((prev) => [created, ...prev]);
+      },
+      sendGatewayChat: async (message, sessionKey) => {
+        if (gateway.isConnected()) {
+          await gateway.sendChat(message, sessionKey);
+        }
+      },
+      showNotification: (title, body) => {
+        showLocalNotification({
+          title,
+          body,
+          data: { type: 'automation' },
+          categoryIdentifier: 'alert',
+          channelId: 'alerts',
+        });
+      },
+      sendGatewayCommand: async (command, args) => {
+        if (gateway.isConnected()) {
+          await gateway.sendChat(`/${command} ${args ? Object.values(args).join(' ') : ''}`);
+        }
+      },
+    };
+    automationExecutorRef.current = executor;
+    return executor;
+  }, [gateway]);
+
+  const runEntityCreatedTriggers = useCallback(async (entityType: string) => {
+    try {
+      const recipes = await getRecipesByTriggerType('entity_created');
+      const executor = getAutomationExecutor();
+      for (const recipe of recipes) {
+        if (doesEntityCreatedMatch(recipe.trigger.config as EntityCreatedTriggerConfig, entityType)) {
+          console.log(`[AutomationEngine] entity_created trigger fired: ${recipe.name}`);
+          await executeRecipeActions(recipe, executor);
+        }
+      }
+    } catch (err) {
+      console.warn('[AutomationEngine] entity_created trigger error:', err);
+    }
+  }, [getAutomationExecutor]);
+
+  const runKeywordTriggers = useCallback(async (message: string) => {
+    try {
+      const recipes = await getRecipesByTriggerType('keyword');
+      const executor = getAutomationExecutor();
+      for (const recipe of recipes) {
+        if (doesKeywordMatch(recipe.trigger.config as KeywordTriggerConfig, message)) {
+          console.log(`[AutomationEngine] keyword trigger fired: ${recipe.name}`);
+          await executeRecipeActions(recipe, executor);
+        }
+      }
+    } catch (err) {
+      console.warn('[AutomationEngine] keyword trigger error:', err);
+    }
+  }, [getAutomationExecutor]);
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const checkScheduleTriggers = async () => {
+      try {
+        const recipes = await getRecipesByTriggerType('schedule');
+        const executor = getAutomationExecutor();
+        for (const recipe of recipes) {
+          if (shouldScheduleTriggerFire(recipe.trigger.config as ScheduleTriggerConfig, recipe.lastRun)) {
+            console.log(`[AutomationEngine] schedule trigger fired: ${recipe.name}`);
+            await executeRecipeActions(recipe, executor);
+          }
+        }
+      } catch (err) {
+        console.warn('[AutomationEngine] schedule check error:', err);
+      }
+    };
+
+    checkScheduleTriggers();
+    const intervalId = setInterval(checkScheduleTriggers, 60000);
+    return () => clearInterval(intervalId);
+  }, [isLoading, getAutomationExecutor]);
 
   const activeConnection = useMemo(
     () => connections.find((c) => c.id === activeConnectionId) || null,
@@ -637,9 +767,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         task.tags = tags;
       }
       setTasks((prev) => [...prev, task]);
+      runEntityCreatedTriggers('task');
       return task;
     },
-    [],
+    [runEntityCreatedTriggers],
   );
 
   const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {
@@ -655,14 +786,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('task', id); } catch {}
   }, []);
 
-  const createMemoryEntry = useCallback(async (entry: Omit<MemoryEntry, 'id' | 'timestamp'>) => {
+  const createMemoryEntry = useCallback(async (entry: Omit<MemoryEntry, 'id' | 'timestamp'>): Promise<MemoryEntry> => {
     const source = entry.source || 'manual';
     const sourceTag = `from:${source}`;
     const tags = entry.tags ? [...entry.tags] : [];
     if (!tags.includes(sourceTag)) tags.push(sourceTag);
     const created = await memoryStorage.add({ ...entry, tags });
     setMemoryEntries((prev) => [created, ...prev]);
-  }, []);
+    runEntityCreatedTriggers('memory');
+    return created;
+  }, [runEntityCreatedTriggers]);
 
   const deleteMemoryEntry = useCallback(async (id: string) => {
     await memoryStorage.remove(id);
@@ -682,13 +815,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const createCalendarEvent = useCallback(async (event: Omit<CalendarEvent, 'id'>) => {
+  const createCalendarEvent = useCallback(async (event: Omit<CalendarEvent, 'id'>): Promise<CalendarEvent> => {
     const source = event.source || 'manual';
     const sourceTag = `from:${source}`;
     const tags = event.tags ? [...event.tags] : [];
     if (!tags.includes(sourceTag)) tags.push(sourceTag);
     const created = await calendarStorage.create({ ...event, tags });
     setCalendarEvents((prev) => [...prev, created].sort((a, b) => a.startTime - b.startTime));
+    runEntityCreatedTriggers('event');
 
     if (event.attendees && event.attendees.length > 0) {
       try {
@@ -709,7 +843,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       } catch {}
     }
-  }, []);
+    return created;
+  }, [runEntityCreatedTriggers]);
 
   const updateCalendarEvent = useCallback(async (id: string, updates: Partial<CalendarEvent>) => {
     await calendarStorage.update(id, updates);

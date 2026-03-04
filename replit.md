@@ -21,6 +21,7 @@ Preferred communication style: Simple, everyday language.
 - **Framework**: Express 5 (TypeScript) acting as a relay server, API proxy, and static file server.
 - **Relay Server**: Manages WebSocket bridging between mobile clients and the OpenClaw gateway, handling JWT authentication, connection management with exponential backoff, message bridging, and streaming. It exposes REST API endpoints, implements rate limiting, and maintains an in-memory audit trail.
 - **Storage**: Primarily uses in-memory storage, with Drizzle ORM configured for PostgreSQL for optional database usage, particularly for an audit log.
+- **Port Stability**: Server uses retry loop with exponential backoff (up to 3 attempts) to handle EADDRINUSE port conflicts gracefully.
 
 ### Database
 - **ORM**: Drizzle ORM with PostgreSQL dialect, schema defined using `drizzle-zod` for validation. Migrations via `drizzle-kit`. Primarily, app data resides in client-side AsyncStorage.
@@ -41,7 +42,7 @@ Preferred communication style: Simple, everyday language.
 - **Shared Types**: TypeScript interfaces for data models in `lib/types.ts` and `lib/gateway.ts`.
 - **Onboarding Flow**: Guides new users through initial gateway connection.
 - **Cross-Entity Intelligence**:
-    - **Entity Link Registry**: Bi-directional linking between `conversation`, `task`, `memory`, `calendar`, `contact` entities, stored locally. Supports relations like `created_from`, `mentions`, `related_to`, `spawned_by`.
+    - **Entity Link Registry**: Bi-directional linking between `conversation`, `task`, `memory`, `calendar`, `contact`, `mindmap` entities, stored locally. Supports relations like `created_from`, `mentions`, `related_to`, `spawned_by`.
     - **Proactive Insights Engine**: Analyzes local data and entity links to generate actionable alerts (e.g., overdue tasks, stale contacts, unreviewed memory). Insights are prioritized and displayed on the dashboard with inline actions.
     - **Link Suggestions Engine**: Suggests unlinked relationships based on shared keywords, tags, and mentions.
     - **Auto-Tagging**: Entities receive `from:<source>` tags upon creation (e.g., `from:chat`).
@@ -49,6 +50,33 @@ Preferred communication style: Simple, everyday language.
     - **Knowledge Graph Widget/Explorer**: Visualizes and allows browsing of entity links, identifying "hub" entities.
     - **Search Relevance Scoring**: Weighted multi-field scoring with recency boost, tag matching, priority/status bonuses, and graph-aware ranking.
 - **Persistent Audit Log**: Logs device actions to PostgreSQL via Drizzle ORM and keeps the last 1000 entries in-memory.
+
+### Chat Entity Creation System
+- **+ Button Menu**: Opens a modal sheet with options to create task, memory, event, or contact directly from chat.
+- **Slash Commands**: Typing `/task`, `/memory`, `/event`, `/contact` in chat input shows suggestion chips that open entity creation sheets.
+- **Entity Creation Sheet**: Modal with title/description inputs, type-specific icons and colors, creates entity and auto-links to conversation.
+- **Inline Action Chips**: After AI messages, shows "Save as memory", "Create task", "Add to calendar" chips.
+- **Message Long-Press**: Extended action sheet includes "Save as Memory" and "Create Task" options.
+- **Context Panel**: Shows linked entities at top of chat with status details.
+
+### Workflow Automation System
+- **Data Model** (`lib/automationRecipes.ts`): Recipes with trigger + action chains, stored in AsyncStorage.
+- **Trigger Types**: `schedule` (interval/daily/weekday), `keyword` (message content matching), `entity_created` (fires when task/memory/event created).
+- **Action Types**: `send_chat`, `create_task`, `create_memory`, `notify`, `gateway_command`.
+- **Trigger Engine**: Runs in AppContext — schedule triggers checked every 60s, keyword triggers hooked into chat send/receive, entity_created triggers hooked into create functions.
+- **Recipe Builder UI**: Multi-step modal (pick trigger → configure → pick actions → name & save) on automations tab.
+- **Recipe Management**: My Recipes section with toggle, delete, run count display.
+
+### Canvas Mind Map System
+- **Data Model** (`lib/mindmap.ts`): Mind maps with nodes (id, text, x, y, width, height, color, type) and edges (from, to), stored in AsyncStorage.
+- **Node Types**: `idea`, `task`, `memory`, `event`, `contact` — matching entity types with color-coded visuals.
+- **Canvas** (`app/mindmap.tsx`): PanResponder-based canvas with pan/zoom, node dragging, SVG edge rendering.
+- **Node Editing**: Double-tap to edit (text, type, color), double-tap empty space to create node.
+- **Edge Creation**: Long-press node to enter connection mode, tap another to create edge.
+- **Floating Toolbar**: Add Node, AI Ideas, Undo, Delete Selected.
+- **AI Idea Generation**: Sends node texts to gateway AI, parses response, creates radial-layout nodes with auto-edges. Falls back to simulated ideas when offline.
+- **Entity Promotion**: Nodes can be promoted to real tasks/memories/events with entity links.
+- **Navigation**: Accessible from Workspace Knowledge tab (Mind Maps section) and dashboard command bar.
 
 ## External Dependencies
 
@@ -64,8 +92,10 @@ Preferred communication style: Simple, everyday language.
 - **@tanstack/react-query**: Server state management.
 - **react-native-reanimated**: Animations library.
 - **react-native-gesture-handler**: Touch gesture handling.
+- **react-native-svg**: SVG rendering for mind map edges.
 - **expo-secure-store**: Secure credential storage.
 - **expo-local-authentication**: Biometric/PIN authentication.
+- **expo-crypto**: UUID generation for entity IDs.
 
 ### Environment Variables
 - `DATABASE_URL`: PostgreSQL connection string.

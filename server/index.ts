@@ -302,13 +302,30 @@ function setupErrorHandler(app: express.Application) {
 
   const port = parseInt(process.env.PORT || "5000", 10);
 
+  const startServer = (attempt = 1): void => {
+    server.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
+      log(`express server serving on port ${port}`);
+    });
+    server.on("error", async (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE" && attempt <= 3) {
+        log(`Port ${port} in use, killing stale process (attempt ${attempt}/3)...`);
+        try {
+          const { execSync } = await import("child_process");
+          execSync(`fuser -k ${port}/tcp 2>/dev/null || true`, { stdio: "ignore" });
+        } catch {}
+        setTimeout(() => startServer(attempt + 1), 1000 * attempt);
+      } else {
+        log(`Failed to start server: ${err.message}`);
+        process.exit(1);
+      }
+    });
+  };
+
   try {
     const { execSync } = await import("child_process");
     execSync(`fuser -k ${port}/tcp 2>/dev/null || true`, { stdio: "ignore" });
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, 800));
   } catch {}
 
-  server.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
-    log(`express server serving on port ${port}`);
-  });
+  startServer();
 })();
