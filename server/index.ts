@@ -345,8 +345,9 @@ function setupErrorHandler(app: express.Application) {
         server.removeListener("error", onError);
         if (err.code === "EADDRINUSE" && attempt < 3) {
           log(`Port ${port} in use, retrying (attempt ${attempt + 1}/3)...`);
+          try { server.close(); } catch {}
           await killPort(port);
-          await new Promise((r) => setTimeout(r, 2000));
+          await new Promise((r) => setTimeout(r, 2500));
           tryListen(attempt + 1).then(resolve, reject);
         } else {
           reject(err);
@@ -362,7 +363,7 @@ function setupErrorHandler(app: express.Application) {
   };
 
   await killPort(port);
-  await new Promise((r) => setTimeout(r, 800));
+  await new Promise((r) => setTimeout(r, 1500));
 
   try {
     await tryListen(0);
