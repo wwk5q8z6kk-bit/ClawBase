@@ -304,8 +304,34 @@ function setupErrorHandler(app: express.Application) {
 
   const killPort = async (p: number) => {
     try {
-      const { execSync } = await import("child_process");
-      execSync(`kill $(lsof -ti:${p}) 2>/dev/null || fuser -k ${p}/tcp 2>/dev/null || true`, { stdio: "ignore" });
+      const { readFileSync, readdirSync, readlinkSync } = await import("fs");
+      const portHex = p.toString(16).toUpperCase().padStart(4, "0");
+      const tcp = readFileSync("/proc/net/tcp", "utf8");
+      const inodes = new Set<string>();
+      for (const line of tcp.split("\n")) {
+        const parts = line.trim().split(/\s+/);
+        if (parts[1]?.endsWith(`:${portHex}`) && parts[3] === "0A") {
+          inodes.add(parts[9]);
+        }
+      }
+      if (inodes.size === 0) return;
+      const myPid = process.pid.toString();
+      for (const entry of readdirSync("/proc").filter(e => /^\d+$/.test(e))) {
+        if (entry === myPid) continue;
+        try {
+          const fds = readdirSync(`/proc/${entry}/fd`);
+          for (const fd of fds) {
+            try {
+              const link = readlinkSync(`/proc/${entry}/fd/${fd}`);
+              const m = link.match(/socket:\[(\d+)\]/);
+              if (m && inodes.has(m[1])) {
+                process.kill(parseInt(entry), "SIGTERM");
+                break;
+              }
+            } catch {}
+          }
+        } catch {}
+      }
     } catch {}
   };
 
