@@ -1849,55 +1849,31 @@ export default function DashboardScreen() {
         )}
 
         <FadeInWidget delay={100}>
-          <SystemHealthWidget />
-        </FadeInWidget>
-
-        <FadeInWidget delay={200}>
-          <AgentSkillsBar />
-        </FadeInWidget>
-
-        <FadeInWidget delay={300}>
-          <GatewayStatusWidget />
-        </FadeInWidget>
-
-        <FadeInWidget delay={400}>
-          <AutomationStatusWidget />
-        </FadeInWidget>
-
-        <FadeInWidget delay={500}>
           <KanbanProgressWidget />
         </FadeInWidget>
 
-        <FadeInWidget delay={600}>
+        <FadeInWidget delay={150}>
           <CalendarAgendaWidget />
         </FadeInWidget>
 
-        <FadeInWidget delay={700}>
+        <FadeInWidget delay={200}>
           <QuickActionsRow />
         </FadeInWidget>
 
-        <FadeInWidget delay={800}>
-          <WorkstreamCards />
+        <FadeInWidget delay={250}>
+          <SystemHealthWidget />
         </FadeInWidget>
 
-        <FadeInWidget delay={900}>
+        <FadeInWidget delay={300}>
+          <RecentActivityWidget />
+        </FadeInWidget>
+
+        <FadeInWidget delay={350}>
           <CRMHighlightsWidget />
         </FadeInWidget>
 
-        <FadeInWidget delay={1000}>
+        <FadeInWidget delay={400}>
           <DeferredPKMWidget />
-        </FadeInWidget>
-
-        <FadeInWidget delay={1050}>
-          <KnowledgeGraphWidget links={entityLinks} />
-        </FadeInWidget>
-
-        <FadeInWidget delay={1075}>
-          <LinkSuggestionsWidget suggestions={linkSuggestions.filter(s => !acceptedSuggestionIds.has(s.id))} onAccept={handleAcceptSuggestion} />
-        </FadeInWidget>
-
-        <FadeInWidget delay={1100}>
-          <RecentActivityWidget />
         </FadeInWidget>
       </ScrollView>
     </View>

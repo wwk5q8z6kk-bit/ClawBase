@@ -10,7 +10,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Frontend (Mobile App)
 - **Framework**: React Native with Expo SDK 54 and Expo Router v6 for file-based routing.
-- **Navigation**: Tab-based layout (Home, Chat, Workspace, Calendar, Settings) with hidden granular routes. Tab bar uses static positioning (not absolute) with 84px height on web (includes 34px bottom inset). Content screens use `paddingBottom: insets.bottom + 20`.
+- **Navigation**: Tab-based layout (Home, Chat, Workspace, Automate, Settings) with hidden granular routes (Calendar, Tasks, Memory, Timeline accessible via navigation). Tab bar uses static positioning (not absolute) with 84px height on web (includes 34px bottom inset). Content screens use `paddingBottom: insets.bottom + 20`.
 - **Layout Pattern**: Scrollable content (FlatList/ScrollView) must be wrapped in `<View style={{ flex: 1 }}>`, never in React Fragments (`<>...</>`). Fragments don't propagate flex height, which prevents scrolling. Filter chips must use fixed `height: 32` with `justifyContent/alignItems: center`, wrapped in a `<View style={{ height: 52, flexShrink: 0 }}>` with horizontal `<ScrollView>`. Web top insets: `webTopPad = Platform.OS === 'web' ? 47 : 0` + `paddingTop: insets.top + webTopPad`. Bottom padding for scroll containers: `paddingBottom: insets.bottom + 20` (not hardcoded 100).
 - **State Management**: React Context for global state and React Query for server-state.
 - **Local Storage**: AsyncStorage for persisting local data, `expo-secure-store` for sensitive data.

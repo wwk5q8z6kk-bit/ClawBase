@@ -302,30 +302,42 @@ function setupErrorHandler(app: express.Application) {
 
   const port = parseInt(process.env.PORT || "5000", 10);
 
-  const startServer = (attempt = 1): void => {
-    server.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
-      log(`express server serving on port ${port}`);
-    });
-    server.on("error", async (err: NodeJS.ErrnoException) => {
-      if (err.code === "EADDRINUSE" && attempt <= 3) {
-        log(`Port ${port} in use, killing stale process (attempt ${attempt}/3)...`);
-        try {
-          const { execSync } = await import("child_process");
-          execSync(`fuser -k ${port}/tcp 2>/dev/null || true`, { stdio: "ignore" });
-        } catch {}
-        setTimeout(() => startServer(attempt + 1), 1000 * attempt);
-      } else {
-        log(`Failed to start server: ${err.message}`);
-        process.exit(1);
-      }
+  const killPort = async (p: number) => {
+    try {
+      const { execSync } = await import("child_process");
+      execSync(`kill $(lsof -ti:${p}) 2>/dev/null || fuser -k ${p}/tcp 2>/dev/null || true`, { stdio: "ignore" });
+    } catch {}
+  };
+
+  const tryListen = (attempt: number): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const onError = async (err: NodeJS.ErrnoException) => {
+        server.removeListener("error", onError);
+        if (err.code === "EADDRINUSE" && attempt < 3) {
+          log(`Port ${port} in use, retrying (attempt ${attempt + 1}/3)...`);
+          await killPort(port);
+          await new Promise((r) => setTimeout(r, 2000));
+          tryListen(attempt + 1).then(resolve, reject);
+        } else {
+          reject(err);
+        }
+      };
+      server.once("error", onError);
+      server.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
+        server.removeListener("error", onError);
+        log(`express server serving on port ${port}`);
+        resolve();
+      });
     });
   };
 
-  try {
-    const { execSync } = await import("child_process");
-    execSync(`fuser -k ${port}/tcp 2>/dev/null || true`, { stdio: "ignore" });
-    await new Promise((r) => setTimeout(r, 800));
-  } catch {}
+  await killPort(port);
+  await new Promise((r) => setTimeout(r, 800));
 
-  startServer();
+  try {
+    await tryListen(0);
+  } catch (err: any) {
+    log(`Failed to start server after retries: ${err.message}`);
+    process.exit(1);
+  }
 })();

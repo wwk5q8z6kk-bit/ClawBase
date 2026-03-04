@@ -5,6 +5,8 @@ import React from 'react';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 
+const C = Colors.dark;
+
 const TabIcon = ({ name, color, size, focused }: { name: any; color: string; size: number; focused: boolean }) => {
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center', width: 44, height: 44 }}>
@@ -36,13 +38,13 @@ function ClassicTabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.dark.primary,
-        tabBarInactiveTintColor: Colors.dark.tabIconDefault,
+        tabBarActiveTintColor: C.primary,
+        tabBarInactiveTintColor: C.tabIconDefault,
         tabBarLabelStyle: { fontFamily: 'Inter_500Medium', fontSize: 11 },
         tabBarStyle: {
-          backgroundColor: Colors.dark.surface,
+          backgroundColor: C.surface,
           borderTopWidth: 1,
-          borderTopColor: Colors.dark.border,
+          borderTopColor: C.border,
           elevation: 0,
           height: isWeb ? 84 : undefined,
           paddingBottom: isWeb ? 34 : undefined,
@@ -66,7 +68,7 @@ function ClassicTabLayout() {
             <TabIcon name={focused ? "chatbubbles" : "chatbubbles-outline"} size={size} color={color} focused={focused} />
           ),
           tabBarBadge: recentChatCount > 0 ? recentChatCount : undefined,
-          tabBarBadgeStyle: { backgroundColor: Colors.dark.coral, fontSize: 10, fontFamily: 'Inter_600SemiBold' },
+          tabBarBadgeStyle: { backgroundColor: C.coral, fontSize: 10, fontFamily: 'Inter_600SemiBold' },
         }}
       />
       <Tabs.Screen
@@ -77,15 +79,15 @@ function ClassicTabLayout() {
             <TabIcon name={focused ? "grid" : "grid-outline"} size={size} color={color} focused={focused} />
           ),
           tabBarBadge: vaultBadge > 0 ? vaultBadge : undefined,
-          tabBarBadgeStyle: { backgroundColor: Colors.dark.coral, fontSize: 10, fontFamily: 'Inter_600SemiBold' },
+          tabBarBadgeStyle: { backgroundColor: C.coral, fontSize: 10, fontFamily: 'Inter_600SemiBold' },
         }}
       />
       <Tabs.Screen
-        name="calendar"
+        name="automations"
         options={{
-          title: 'Calendar',
+          title: 'Automate',
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name={focused ? "calendar" : "calendar-outline"} size={size} color={color} focused={focused} />
+            <TabIcon name={focused ? "flash" : "flash-outline"} size={size} color={color} focused={focused} />
           ),
         }}
       />
@@ -111,7 +113,7 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="automations"
+        name="calendar"
         options={{
           href: null,
         }}
