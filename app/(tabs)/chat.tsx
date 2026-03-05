@@ -608,22 +608,8 @@ export default function ChatListScreen() {
               </LinearGradient>
               <Text style={styles.emptyTitle}>No conversations yet</Text>
               <Text style={styles.emptySubtitle}>
-                Tap the compose button to start chatting with your agent
+                Tap the + button to start chatting with your agent
               </Text>
-              <Pressable
-                onPress={handleNewChat}
-                style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.8 }]}
-              >
-                <LinearGradient
-                  colors={C.gradient.lobster}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.emptyBtnGradient}
-                >
-                  <Ionicons name="add" size={20} color="#fff" />
-                  <Text style={styles.emptyBtnText}>New Chat</Text>
-                </LinearGradient>
-              </Pressable>
             </View>
           )
         }
@@ -1153,23 +1139,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-  emptyBtn: {
-    marginTop: 16,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  emptyBtnGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    gap: 8,
-  },
-  emptyBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-    color: '#fff',
-  },
+  
   modalOverlay: {
     flex: 1,
     backgroundColor: C.overlay,

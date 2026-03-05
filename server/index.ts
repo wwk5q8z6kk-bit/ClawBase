@@ -339,36 +339,36 @@ function setupErrorHandler(app: express.Application) {
     } catch {}
   };
 
-  const tryListen = (attempt: number): Promise<void> => {
+  const tryListen = (): Promise<void> => {
     return new Promise((resolve, reject) => {
-      const onError = async (err: NodeJS.ErrnoException) => {
-        server.removeListener("error", onError);
-        if (err.code === "EADDRINUSE" && attempt < 3) {
-          log(`Port ${port} in use, retrying (attempt ${attempt + 1}/3)...`);
-          try { server.close(); } catch {}
-          await killPort(port);
-          await new Promise((r) => setTimeout(r, 2500));
-          tryListen(attempt + 1).then(resolve, reject);
-        } else {
-          reject(err);
-        }
-      };
-      server.once("error", onError);
-      server.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
-        server.removeListener("error", onError);
+      server.removeAllListeners("error");
+      server.removeAllListeners("listening");
+      server.once("error", (err: NodeJS.ErrnoException) => {
+        reject(err);
+      });
+      server.once("listening", () => {
         log(`express server serving on port ${port}`);
         resolve();
       });
+      server.listen({ port, host: "0.0.0.0", reusePort: true });
     });
   };
 
-  await killPort(port);
-  await new Promise((r) => setTimeout(r, 1500));
-
-  try {
-    await tryListen(0);
-  } catch (err: any) {
-    log(`Failed to start server after retries: ${err.message}`);
-    process.exit(1);
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) {
+      log(`Port ${port} in use, retrying (attempt ${attempt}/3)...`);
+    }
+    await killPort(port);
+    await new Promise((r) => setTimeout(r, attempt === 0 ? 500 : 2500));
+    try {
+      await tryListen();
+      break;
+    } catch (err: any) {
+      if (err.code !== "EADDRINUSE" || attempt >= 3) {
+        log(`Failed to start server: ${err.message}`);
+        process.exit(1);
+      }
+      try { server.close(); } catch {}
+    }
   }
 })();
