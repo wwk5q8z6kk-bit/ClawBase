@@ -40,8 +40,12 @@ yarn-error.*
 .vercel
 
 # Replit internal files
+.replit
+replit.md
 .cache/
 .local/
+.scratch/
+.upm/
 *.bin
 log-query.db
 log-query.db-shm
