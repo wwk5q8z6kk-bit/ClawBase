@@ -19,8 +19,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Swipeable } from 'react-native-gesture-handler';
 import Colors from '@/constants/colors';
+import { useToast } from '@/components/Toast';
 import { useApp } from '@/lib/AppContext';
-import type { Task, TaskStatus, MemoryEntry } from '@/lib/types';
+import type { Task, TaskStatus, MemoryEntry, InboxItem } from '@/lib/types';
+import {
+  getCategoryIcon,
+  getCategoryColor,
+  getPriorityLabel,
+  formatParsedDate,
+} from '@/lib/brainDump';
 import type { GatewayMemoryFile } from '@/lib/gateway';
 import { getLinksFor, addLink, removeLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
 import { getAllMindMaps, createMindMap, deleteMindMap, type MindMap } from '@/lib/mindmap';
@@ -28,7 +35,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 const C = Colors.dark;
 
-type VaultSegment = 'tasks' | 'knowledge' | 'files';
+type VaultSegment = 'inbox' | 'tasks' | 'knowledge' | 'files';
 
 const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string; icon: string }> = {
   todo: { label: 'To Do', color: C.textSecondary, icon: 'ellipse-outline' },
@@ -1346,7 +1353,7 @@ function MemoryDetailModal({
 
 type FilterType = 'all' | 'conversation' | 'note' | 'task' | 'event' | 'summary' | 'document';
 type ReviewFilter = typeof REVIEW_FILTERS[number]['key'];
-const VAULT_SEGMENTS: VaultSegment[] = ['tasks', 'knowledge', 'files'];
+const VAULT_SEGMENTS: VaultSegment[] = ['inbox', 'tasks', 'knowledge', 'files'];
 
 function AnimatedSegmentSwitcher({
   activeSegment,
@@ -1354,20 +1361,23 @@ function AnimatedSegmentSwitcher({
   tasks,
   memoryEntries,
   gatewayMemoryFiles,
+  inboxCount,
 }: {
   activeSegment: VaultSegment;
   onSegmentChange: (segment: VaultSegment) => void;
   tasks: Task[];
   memoryEntries: MemoryEntry[];
   gatewayMemoryFiles: GatewayMemoryFile[];
+  inboxCount: number;
 }) {
   const underlineLeftRef = useRef(new Animated.Value(0)).current;
   const underlineWidthRef = useRef(new Animated.Value(0)).current;
-  const segmentWidthsRef = useRef<Record<VaultSegment, number>>({ tasks: 0, knowledge: 0, files: 0 });
+  const segmentWidthsRef = useRef<Record<VaultSegment, number>>({ inbox: 0, tasks: 0, knowledge: 0, files: 0 });
 
-  const labels: Record<VaultSegment, string> = { tasks: 'Tasks', knowledge: 'Knowledge', files: 'Files' };
+  const labels: Record<VaultSegment, string> = { inbox: 'Inbox', tasks: 'Tasks', knowledge: 'Knowledge', files: 'Files' };
 
   const counts: Record<VaultSegment, number> = {
+    inbox: inboxCount,
     tasks: tasks.filter(t => t.status !== 'archived').length,
     knowledge: memoryEntries.length,
     files: gatewayMemoryFiles.length,
@@ -1444,13 +1454,468 @@ function AnimatedSegmentSwitcher({
   );
 }
 
+const INBOX_PRIORITY_COLORS: Record<string, string> = {
+  urgent: C.primary,
+  high: C.amber,
+  medium: C.accent,
+  low: C.textSecondary,
+};
+
+const InboxItemCard = React.memo(function InboxItemCard({
+  item,
+  onConvertToTask,
+  onSaveAsMemory,
+  onAddToCalendar,
+  onDismiss,
+  onDelete,
+}: {
+  item: InboxItem;
+  onConvertToTask: () => void;
+  onSaveAsMemory: () => void;
+  onAddToCalendar: () => void;
+  onDismiss: () => void;
+  onDelete: () => void;
+}) {
+  const catIcon = getCategoryIcon(item.parsedCategory || 'task');
+  const catColor = getCategoryColor(item.parsedCategory || 'task', C);
+  const priColor = INBOX_PRIORITY_COLORS[item.parsedPriority || 'medium'] || C.textSecondary;
+  const isProcessed = item.status === 'processed';
+  const isDismissed = item.status === 'dismissed';
+
+  return (
+    <View style={[
+      inboxStyles.itemCard,
+      isProcessed && inboxStyles.itemCardProcessed,
+      isDismissed && inboxStyles.itemCardDismissed,
+    ]}>
+      <View style={inboxStyles.itemTop}>
+        <View style={[inboxStyles.itemIconBg, { backgroundColor: catColor + '18' }]}>
+          <Ionicons name={catIcon as any} size={18} color={catColor} />
+        </View>
+        <View style={inboxStyles.itemContent}>
+          <Text style={[
+            inboxStyles.itemTitle,
+            (isProcessed || isDismissed) && inboxStyles.itemTitleFaded,
+          ]} numberOfLines={2}>
+            {item.parsedTitle || item.rawText}
+          </Text>
+          <View style={inboxStyles.itemMeta}>
+            <View style={[inboxStyles.catPill, { backgroundColor: catColor + '18' }]}>
+              <Text style={[inboxStyles.catPillText, { color: catColor }]}>
+                {item.parsedCategory || 'task'}
+              </Text>
+            </View>
+            {item.parsedPriority && item.parsedPriority !== 'medium' && (
+              <View style={[inboxStyles.priPill, { backgroundColor: priColor + '18' }]}>
+                <View style={[inboxStyles.priDot, { backgroundColor: priColor }]} />
+                <Text style={[inboxStyles.priText, { color: priColor }]}>
+                  {getPriorityLabel(item.parsedPriority)}
+                </Text>
+              </View>
+            )}
+            {item.parsedDueDate && (
+              <View style={inboxStyles.datePill}>
+                <Ionicons name="time-outline" size={10} color={C.accent} />
+                <Text style={inboxStyles.dateText}>
+                  {formatParsedDate(item.parsedDueDate)}
+                </Text>
+              </View>
+            )}
+            {isProcessed && (
+              <View style={[inboxStyles.statusPill, { backgroundColor: C.success + '18' }]}>
+                <Ionicons name="checkmark-circle" size={10} color={C.success} />
+                <Text style={[inboxStyles.statusText, { color: C.success }]}>Processed</Text>
+              </View>
+            )}
+            {isDismissed && (
+              <View style={[inboxStyles.statusPill, { backgroundColor: C.textTertiary + '18' }]}>
+                <Ionicons name="close-circle" size={10} color={C.textTertiary} />
+                <Text style={[inboxStyles.statusText, { color: C.textTertiary }]}>Dismissed</Text>
+              </View>
+            )}
+          </View>
+        </View>
+        {!isProcessed && !isDismissed && (
+          <Pressable onPress={onDelete} hitSlop={8} style={inboxStyles.deleteBtn}>
+            <Ionicons name="trash-outline" size={16} color={C.textTertiary} />
+          </Pressable>
+        )}
+      </View>
+      {!isProcessed && !isDismissed && (
+        <View style={inboxStyles.actionsRow}>
+          <Pressable style={inboxStyles.actionBtn} onPress={onConvertToTask}>
+            <Ionicons name="checkmark-circle-outline" size={15} color={C.amber} />
+            <Text style={[inboxStyles.actionText, { color: C.amber }]}>Task</Text>
+          </Pressable>
+          <Pressable style={inboxStyles.actionBtn} onPress={onSaveAsMemory}>
+            <Ionicons name="document-text-outline" size={15} color={C.purple} />
+            <Text style={[inboxStyles.actionText, { color: C.purple }]}>Memory</Text>
+          </Pressable>
+          <Pressable style={inboxStyles.actionBtn} onPress={onAddToCalendar}>
+            <Ionicons name="calendar-outline" size={15} color={C.accent} />
+            <Text style={[inboxStyles.actionText, { color: C.accent }]}>Calendar</Text>
+          </Pressable>
+          <Pressable style={inboxStyles.actionBtn} onPress={onDismiss}>
+            <Ionicons name="close-circle-outline" size={15} color={C.textTertiary} />
+            <Text style={[inboxStyles.actionText, { color: C.textTertiary }]}>Dismiss</Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+});
+
+function InboxSegment({
+  inboxItems,
+  onConvertToTask,
+  onSaveAsMemory,
+  onAddToCalendar,
+  onDismiss,
+  onDelete,
+  onProcessAll,
+  onClearInbox,
+  bottomInset,
+}: {
+  inboxItems: InboxItem[];
+  onConvertToTask: (item: InboxItem) => Promise<void>;
+  onSaveAsMemory: (item: InboxItem) => Promise<void>;
+  onAddToCalendar: (item: InboxItem) => Promise<void>;
+  onDismiss: (item: InboxItem) => Promise<void>;
+  onDelete: (item: InboxItem) => Promise<void>;
+  onProcessAll: () => Promise<void>;
+  onClearInbox: () => Promise<void>;
+  bottomInset: number;
+}) {
+  const [filter, setFilter] = useState<'all' | 'pending' | 'processed' | 'dismissed'>('pending');
+  const [processing, setProcessing] = useState(false);
+
+  const filteredItems = useMemo(() => {
+    if (filter === 'all') return inboxItems;
+    return inboxItems.filter(i => i.status === filter);
+  }, [inboxItems, filter]);
+
+  const pendingCount = inboxItems.filter(i => i.status === 'pending').length;
+
+  const handleProcessAll = async () => {
+    if (processing || pendingCount === 0) return;
+    setProcessing(true);
+    try {
+      await onProcessAll();
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  return (
+    <View style={{ flex: 1 }}>
+      <View style={inboxStyles.subHeader}>
+        {pendingCount > 0 && (
+          <Pressable
+            style={inboxStyles.processAllBtn}
+            onPress={handleProcessAll}
+            disabled={processing}
+          >
+            <Ionicons name={processing ? 'hourglass-outline' : 'flash'} size={14} color="#fff" />
+            <Text style={inboxStyles.processAllText}>
+              {processing ? 'Processing...' : `Process All (${pendingCount})`}
+            </Text>
+          </Pressable>
+        )}
+        <View style={{ flex: 1 }} />
+        <Pressable
+          style={inboxStyles.clearBtn}
+          onPress={onClearInbox}
+          disabled={inboxItems.length === 0}
+        >
+          <Ionicons name="trash-outline" size={14} color={inboxItems.length > 0 ? C.error : C.textTertiary} />
+        </Pressable>
+      </View>
+
+      <View style={inboxStyles.filterRowWrapper}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={inboxStyles.filterRow}>
+          {([
+            { key: 'pending' as const, label: 'Pending' },
+            { key: 'processed' as const, label: 'Processed' },
+            { key: 'dismissed' as const, label: 'Dismissed' },
+            { key: 'all' as const, label: 'All' },
+          ]).map((f) => (
+            <Pressable
+              key={f.key}
+              style={[inboxStyles.filterChip, filter === f.key && inboxStyles.filterChipActive]}
+              onPress={() => setFilter(f.key)}
+            >
+              <Text style={[inboxStyles.filterChipText, filter === f.key && inboxStyles.filterChipTextActive]}>
+                {f.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+
+      <FlatList
+        data={filteredItems}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <InboxItemCard
+            item={item}
+            onConvertToTask={() => onConvertToTask(item)}
+            onSaveAsMemory={() => onSaveAsMemory(item)}
+            onAddToCalendar={() => onAddToCalendar(item)}
+            onDismiss={() => onDismiss(item)}
+            onDelete={() => onDelete(item)}
+          />
+        )}
+        contentContainerStyle={[
+          inboxStyles.listContent,
+          { paddingBottom: bottomInset + 20 },
+          filteredItems.length === 0 && { flex: 1, justifyContent: 'center' as const },
+        ]}
+        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        scrollEnabled={!!filteredItems.length}
+        ListEmptyComponent={
+          <View style={inboxStyles.emptyState}>
+            <View style={inboxStyles.emptyIconBg}>
+              <Ionicons name="inbox-outline" size={40} color={C.text} />
+            </View>
+            <Text style={inboxStyles.emptyTitle}>
+              {filter === 'pending' ? 'No pending items' : 'No items'}
+            </Text>
+            <Text style={inboxStyles.emptySubtitle}>
+              Use the Brain Dump button to quickly capture thoughts and tasks
+            </Text>
+          </View>
+        }
+      />
+    </View>
+  );
+}
+
+const inboxStyles = StyleSheet.create({
+  subHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    gap: 8,
+    marginBottom: 4,
+  },
+  processAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: C.secondary,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  processAllText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: '#fff',
+  },
+  clearBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: C.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterRowWrapper: {
+    height: 48,
+    flexShrink: 0,
+  },
+  filterRow: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    gap: 8,
+    alignItems: 'center' as const,
+  },
+  filterChip: {
+    height: 30,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+  },
+  filterChipActive: {
+    backgroundColor: C.primaryMuted,
+    borderColor: C.primary,
+  },
+  filterChipText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: C.textSecondary,
+  },
+  filterChipTextActive: {
+    color: C.primary,
+  },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingTop: 4,
+  },
+  itemCard: {
+    backgroundColor: C.card,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    gap: 10,
+  },
+  itemCardProcessed: {
+    opacity: 0.6,
+  },
+  itemCardDismissed: {
+    opacity: 0.4,
+  },
+  itemTop: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+  },
+  itemIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  itemContent: {
+    flex: 1,
+    gap: 6,
+  },
+  itemTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: C.text,
+    lineHeight: 20,
+  },
+  itemTitleFaded: {
+    color: C.textTertiary,
+    textDecorationLine: 'line-through' as const,
+  },
+  itemMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap' as const,
+  },
+  catPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  catPillText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  priPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  priDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  priText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+  },
+  datePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: C.accent + '12',
+  },
+  dateText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+    color: C.accent,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  statusText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+  },
+  deleteBtn: {
+    padding: 4,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 4,
+    paddingLeft: 46,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: C.cardElevated,
+  },
+  actionText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+  },
+  emptyState: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 30,
+  },
+  emptyIconBg: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.primaryMuted,
+  },
+  emptyTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
+    color: C.text,
+    marginTop: 6,
+  },
+  emptySubtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: C.textTertiary,
+    textAlign: 'center' as const,
+    maxWidth: 280,
+  },
+});
+
 export default function VaultScreen() {
   const insets = useSafeAreaInsets();
+  const { showToast } = useToast();
   const { openTaskId, openMemoryId } = useLocalSearchParams<{ openTaskId?: string; openMemoryId?: string }>();
   const {
     tasks, createTask, updateTask, deleteTask,
     memoryEntries, updateMemoryEntry, createMemoryEntry, deleteMemoryEntry,
     gatewayStatus, gatewayMemoryFiles, fetchGatewayMemory,
+    createCalendarEvent,
+    inboxItems, updateInboxItem, deleteInboxItem, clearInbox,
   } = useApp();
 
   const [activeSegment, setActiveSegment] = useState<VaultSegment>('tasks');
@@ -1793,7 +2258,141 @@ export default function VaultScreen() {
         tasks={tasks}
         memoryEntries={memoryEntries}
         gatewayMemoryFiles={gatewayMemoryFiles}
+        inboxCount={inboxItems.filter(i => i.status === 'pending').length}
       />
+
+      {activeSegment === 'inbox' && (
+        <InboxSegment
+          inboxItems={inboxItems}
+          onConvertToTask={async (item) => {
+            try {
+              const task = await createTask(
+                item.parsedTitle || item.rawText,
+                'todo',
+                item.parsedPriority || 'medium',
+                undefined,
+                { source: 'braindump' },
+              );
+              if (item.parsedDueDate) {
+                await updateTask(task.id, { dueDate: item.parsedDueDate });
+              }
+              await updateInboxItem(item.id, { status: 'processed' });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showToast('success', 'Task created');
+            } catch {
+              showToast('error', 'Failed to create task');
+            }
+          }}
+          onSaveAsMemory={async (item) => {
+            try {
+              await createMemoryEntry({
+                type: 'note',
+                title: item.parsedTitle || item.rawText,
+                content: item.rawText,
+                source: 'braindump',
+                tags: ['from:braindump'],
+                reviewStatus: 'unread',
+              });
+              await updateInboxItem(item.id, { status: 'processed' });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showToast('success', 'Saved as memory');
+            } catch {
+              showToast('error', 'Failed to save memory');
+            }
+          }}
+          onAddToCalendar={async (item) => {
+            try {
+              const startTime = item.parsedDueDate || Date.now() + 3600000;
+              await createCalendarEvent({
+                title: item.parsedTitle || item.rawText,
+                startTime,
+                endTime: startTime + 3600000,
+                source: 'manual',
+              });
+              await updateInboxItem(item.id, { status: 'processed' });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showToast('success', 'Event added');
+            } catch {
+              showToast('error', 'Failed to add event');
+            }
+          }}
+          onDismiss={async (item) => {
+            try {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              await updateInboxItem(item.id, { status: 'dismissed' });
+            } catch {
+              showToast('error', 'Failed to dismiss');
+            }
+          }}
+          onDelete={async (item) => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            await deleteInboxItem(item.id);
+          }}
+          onProcessAll={async () => {
+            const pending = inboxItems.filter(i => i.status === 'pending');
+            let succeeded = 0;
+            for (const item of pending) {
+              try {
+                const category = item.parsedCategory || 'task';
+                if (category === 'task') {
+                  const task = await createTask(
+                    item.parsedTitle || item.rawText,
+                    'todo',
+                    item.parsedPriority || 'medium',
+                    undefined,
+                    { source: 'braindump' },
+                  );
+                  if (item.parsedDueDate) {
+                    await updateTask(task.id, { dueDate: item.parsedDueDate });
+                  }
+                } else if (category === 'event') {
+                  const startTime = item.parsedDueDate || Date.now() + 3600000;
+                  await createCalendarEvent({
+                    title: item.parsedTitle || item.rawText,
+                    startTime,
+                    endTime: startTime + 3600000,
+                    source: 'manual',
+                  });
+                } else {
+                  await createMemoryEntry({
+                    type: 'note',
+                    title: item.parsedTitle || item.rawText,
+                    content: item.rawText,
+                    source: 'braindump',
+                    tags: ['from:braindump'],
+                    reviewStatus: 'unread',
+                  });
+                }
+                await updateInboxItem(item.id, { status: 'processed' });
+                succeeded++;
+              } catch {
+                // continue processing remaining items
+              }
+            }
+            const allOk = succeeded === pending.length;
+            Haptics.notificationAsync(allOk
+              ? Haptics.NotificationFeedbackType.Success
+              : Haptics.NotificationFeedbackType.Warning);
+            showToast(
+              allOk ? 'success' : 'error',
+              allOk
+                ? `Processed all ${pending.length} items`
+                : `Processed ${succeeded}/${pending.length} items — ${pending.length - succeeded} failed`,
+            );
+          }}
+          onClearInbox={async () => {
+            if (Platform.OS === 'web') {
+              await clearInbox();
+              return;
+            }
+            Alert.alert('Clear Inbox', 'Remove all inbox items?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Clear All', style: 'destructive', onPress: () => clearInbox() },
+            ]);
+          }}
+          bottomInset={insets.bottom}
+        />
+      )}
 
       {activeSegment === 'tasks' && (
         <View style={{ flex: 1 }}>

@@ -17,6 +17,7 @@ import {
   calendarStorage,
   crmStorage,
   settingsStorage,
+  inboxStorage,
 } from './storage';
 import {
   generateSeedTasks,
@@ -36,6 +37,7 @@ import type {
   CalendarEvent,
   CRMContact,
   CRMInteraction,
+  InboxItem,
 } from './types';
 import * as Crypto from 'expo-crypto';
 import * as Notifications from 'expo-notifications';
@@ -122,6 +124,12 @@ interface AppContextValue {
   fetchGatewayMemory: () => Promise<GatewayMemoryFile[]>;
   streamingText: string | null;
   isStreaming: boolean;
+
+  inboxItems: InboxItem[];
+  addInboxItem: (rawText: string, source?: 'braindump' | 'voice', parsed?: { parsedTitle: string; parsedCategory: 'task' | 'event' | 'note'; parsedPriority: 'low' | 'medium' | 'high' | 'urgent'; parsedDueDate?: number }) => Promise<InboxItem>;
+  updateInboxItem: (id: string, updates: Partial<InboxItem>) => Promise<void>;
+  deleteInboxItem: (id: string) => Promise<void>;
+  clearInbox: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -150,6 +158,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [gatewayMemoryFiles, setGatewayMemoryFiles] = useState<GatewayMemoryFile[]>([]);
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [inboxItems, setInboxItems] = useState<InboxItem[]>([]);
 
   const seedIfNeeded = useCallback(async () => {
     const seeded = await AsyncStorage.getItem('@clawbase:seeded');
@@ -264,7 +273,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadAll = useCallback(async () => {
     try {
       await seedIfNeeded();
-      const [conns, convos, allTasks, memory, events, contacts, bioEnabled, onboarded, activeId] =
+      const [conns, convos, allTasks, memory, events, contacts, bioEnabled, onboarded, activeId, inbox] =
         await Promise.all([
           connectionStorage.getAll(),
           conversationStorage.getAll(),
@@ -275,6 +284,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           settingsStorage.getBiometricEnabled(),
           settingsStorage.getHasOnboarded(),
           connectionStorage.getActive(),
+          inboxStorage.getAll(),
         ]);
       setConnections(conns);
       setConversations(convos);
@@ -285,6 +295,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setBiometricEnabledState(bioEnabled);
       setHasOnboardedState(onboarded);
       setActiveConnectionId(activeId);
+      setInboxItems(inbox);
     } catch (e) {
       console.error('Failed to load data:', e);
     } finally {
@@ -922,6 +933,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return gateway.fetchMemory();
   }, [gateway]);
 
+  const addInboxItem = useCallback(async (rawText: string, source: 'braindump' | 'voice' = 'braindump', parsed?: { parsedTitle: string; parsedCategory: 'task' | 'event' | 'note'; parsedPriority: 'low' | 'medium' | 'high' | 'urgent'; parsedDueDate?: number }): Promise<InboxItem> => {
+    const item = await inboxStorage.add({
+      rawText,
+      status: 'pending',
+      source,
+      parsedTitle: parsed?.parsedTitle,
+      parsedCategory: parsed?.parsedCategory,
+      parsedPriority: parsed?.parsedPriority,
+      parsedDueDate: parsed?.parsedDueDate,
+    });
+    setInboxItems((prev) => [item, ...prev]);
+    return item;
+  }, []);
+
+  const updateInboxItem = useCallback(async (id: string, updates: Partial<InboxItem>) => {
+    await inboxStorage.update(id, updates);
+    setInboxItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, ...updates } : i)),
+    );
+  }, []);
+
+  const deleteInboxItem = useCallback(async (id: string) => {
+    await inboxStorage.remove(id);
+    setInboxItems((prev) => prev.filter((i) => i.id !== id));
+  }, []);
+
+  const clearInbox = useCallback(async () => {
+    await inboxStorage.clear();
+    setInboxItems([]);
+  }, []);
+
   const value = useMemo(
     () => ({
       connections,
@@ -972,6 +1014,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       fetchGatewayMemory,
       streamingText,
       isStreaming,
+      inboxItems,
+      addInboxItem,
+      updateInboxItem,
+      deleteInboxItem,
+      clearInbox,
     }),
     [
       connections, activeConnection, addConnection, removeConnection,
@@ -986,6 +1033,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       connectGateway, disconnectGateway, sendGatewayChat,
       fetchGatewaySessions, fetchGatewaySessionHistory, fetchGatewayMemory,
       streamingText, isStreaming,
+      inboxItems, addInboxItem, updateInboxItem, deleteInboxItem, clearInbox,
     ],
   );
 

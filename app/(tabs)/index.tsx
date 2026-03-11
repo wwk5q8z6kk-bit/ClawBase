@@ -1340,6 +1340,7 @@ interface QuickAction {
 }
 
 const QUICK_ACTIONS: QuickAction[] = [
+  { id: '0', icon: 'timer-outline', label: 'Focus', color: C.primary, route: '/focus' },
   { id: '1', icon: 'calendar-outline', label: 'Calendar', color: C.amber, route: '/(tabs)/calendar' },
   { id: '2', icon: 'people-outline', label: 'Contacts', color: C.secondary, route: '/crm' },
   { id: '3', icon: 'mail-outline', label: 'Summarize\nInbox', color: C.coral, gatewayCommand: 'inbox-summary' },
@@ -1477,12 +1478,13 @@ const RecentActivityWidget = React.memo(function RecentActivityWidget() {
   );
 });
 
-const COMMAND_CHIPS = ['Add a task', 'Schedule event', 'New mind map', 'Inbox summary', "Today's brief", 'Check GitHub'];
+const COMMAND_CHIPS = ['Add a task', 'Schedule event', 'Focus timer', 'New mind map', 'Inbox summary', "Today's brief", 'Check GitHub'];
 
 const PREFILL_CHIPS: Record<string, string> = {
   'Add a task': 'add task ',
   'Schedule event': 'schedule ',
   'New mind map': 'new mindmap ',
+  'Focus timer': '__navigate:/focus',
 };
 
 function parsePriority(text: string): Task['priority'] {
@@ -1637,6 +1639,7 @@ function CommandBar() {
     }
 
     // Navigation shortcuts
+    if (lower.includes('focus') || lower.includes('pomodoro') || lower.includes('timer')) { router.push('/focus' as any); return; }
     if (lower.includes('tasks') || lower.includes('vault')) { router.push('/(tabs)/vault'); return; }
     if (lower.includes('calendar')) { router.push('/(tabs)/calendar'); return; }
     if (lower.includes('contacts')) { router.push('/crm' as any); return; }
@@ -1649,8 +1652,11 @@ function CommandBar() {
   };
 
   const handleChipPress = (chip: string) => {
-    if (PREFILL_CHIPS[chip]) {
-      setCommandText(PREFILL_CHIPS[chip]);
+    const prefill = PREFILL_CHIPS[chip];
+    if (prefill && prefill.startsWith('__navigate:')) {
+      router.push(prefill.replace('__navigate:', '') as any);
+    } else if (prefill) {
+      setCommandText(prefill);
     } else {
       handleSend(chip);
     }

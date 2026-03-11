@@ -12,6 +12,8 @@ import type {
   CalendarEvent,
   CRMContact,
   CRMInteraction,
+  InboxItem,
+  FocusSession,
 } from './types';
 
 const KEYS = {
@@ -26,6 +28,8 @@ const KEYS = {
   CRM_CONTACTS: '@clawbase:crm_contacts',
   BIOMETRIC_ENABLED: '@clawbase:biometricEnabled',
   HAS_ONBOARDED: '@clawbase:hasOnboarded',
+  INBOX: '@clawbase:inbox',
+  FOCUS_SESSIONS: '@clawbase:focusSessions',
 };
 
 async function getJSON<T>(key: string, fallback: T): Promise<T> {
@@ -388,6 +392,64 @@ export const crmStorage = {
     all[idx].lastInteraction = entry.timestamp;
     await setJSON(KEYS.CRM_CONTACTS, all);
     return entry;
+  },
+};
+
+export const inboxStorage = {
+  async getAll(): Promise<InboxItem[]> {
+    const items = await getJSON<InboxItem[]>(KEYS.INBOX, []);
+    return items.sort((a, b) => b.createdAt - a.createdAt);
+  },
+  async add(item: Omit<InboxItem, 'id' | 'createdAt'>): Promise<InboxItem> {
+    const entry: InboxItem = {
+      ...item,
+      id: Crypto.randomUUID(),
+      createdAt: Date.now(),
+    };
+    const all = await getJSON<InboxItem[]>(KEYS.INBOX, []);
+    all.push(entry);
+    await setJSON(KEYS.INBOX, all);
+    return entry;
+  },
+  async update(id: string, updates: Partial<InboxItem>): Promise<void> {
+    const all = await getJSON<InboxItem[]>(KEYS.INBOX, []);
+    const idx = all.findIndex((i) => i.id === id);
+    if (idx >= 0) {
+      all[idx] = { ...all[idx], ...updates };
+      await setJSON(KEYS.INBOX, all);
+    }
+  },
+  async remove(id: string): Promise<void> {
+    const all = await getJSON<InboxItem[]>(KEYS.INBOX, []);
+    await setJSON(KEYS.INBOX, all.filter((i) => i.id !== id));
+  },
+  async clear(): Promise<void> {
+    await setJSON(KEYS.INBOX, []);
+  },
+};
+
+export const focusStorage = {
+  async getAll(): Promise<FocusSession[]> {
+    const sessions = await getJSON<FocusSession[]>(KEYS.FOCUS_SESSIONS, []);
+    return sessions.sort((a, b) => b.startedAt - a.startedAt);
+  },
+  async add(session: FocusSession): Promise<FocusSession> {
+    const all = await getJSON<FocusSession[]>(KEYS.FOCUS_SESSIONS, []);
+    all.push(session);
+    await setJSON(KEYS.FOCUS_SESSIONS, all);
+    return session;
+  },
+  async update(id: string, updates: Partial<FocusSession>): Promise<void> {
+    const all = await getJSON<FocusSession[]>(KEYS.FOCUS_SESSIONS, []);
+    const idx = all.findIndex((s) => s.id === id);
+    if (idx >= 0) {
+      all[idx] = { ...all[idx], ...updates };
+      await setJSON(KEYS.FOCUS_SESSIONS, all);
+    }
+  },
+  async remove(id: string): Promise<void> {
+    const all = await getJSON<FocusSession[]>(KEYS.FOCUS_SESSIONS, []);
+    await setJSON(KEYS.FOCUS_SESSIONS, all.filter((s) => s.id !== id));
   },
 };
 

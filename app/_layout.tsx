@@ -43,6 +43,7 @@ function RootLayoutNav() {
       <Stack.Screen name="pair" options={{ headerShown: false }} />
       <Stack.Screen name="search" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="mindmap" options={{ headerShown: false }} />
+      <Stack.Screen name="focus" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
     </Stack>
   );
 }

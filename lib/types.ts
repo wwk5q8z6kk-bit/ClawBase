@@ -99,6 +99,32 @@ export interface MemoryEntry {
   linkedIds?: string[];
 }
 
+export interface InboxItem {
+  id: string;
+  rawText: string;
+  createdAt: number;
+  status: 'pending' | 'processed' | 'dismissed';
+  parsedTitle?: string;
+  parsedCategory?: 'task' | 'event' | 'note';
+  parsedPriority?: 'low' | 'medium' | 'high' | 'urgent';
+  parsedDueDate?: number;
+  source?: 'braindump' | 'voice';
+}
+
+export type FocusMode = 'pomodoro' | 'short' | 'deep' | 'custom';
+
+export interface FocusSession {
+  id: string;
+  mode: FocusMode;
+  taskId?: string;
+  taskTitle?: string;
+  duration: number;
+  breakDuration: number;
+  startedAt: number;
+  completedAt?: number;
+  completed: boolean;
+}
+
 export interface QuickAction {
   id: string;
   icon: string;
