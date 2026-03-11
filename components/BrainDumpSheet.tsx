@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -33,6 +33,7 @@ import {
   formatParsedDate,
 } from '@/lib/brainDump';
 import type { ParsedItem } from '@/lib/brainDump';
+import { useToast } from '@/components/Toast';
 
 const C = Colors.dark;
 
@@ -53,19 +54,24 @@ export default function BrainDumpSheet({ visible, onClose }: BrainDumpSheetProps
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [aiParsing, setAiParsing] = useState(false);
-  const [usedAi, setUsedAi] = useState(false);
+  const [aiItems, setAiItems] = useState<ParsedItem[] | null>(null);
   const inputRef = useRef<TextInput>(null);
+  const parseRequestId = useRef(0);
   const insets = useSafeAreaInsets();
   const { addInboxItem, gateway, gatewayStatus } = useApp();
+  const { showToast } = useToast();
 
   const slideAnim = useSharedValue(0);
   const backdropAnim = useSharedValue(0);
 
-  const parsedItems = useMemo(() => {
+  const localParsedItems = useMemo(() => {
     const trimmed = text.trim();
     if (trimmed.length < 3) return [];
     return parseBrainDump(trimmed);
   }, [text]);
+
+  const parsedItems = aiItems || localParsedItems;
+  const isAiResult = aiItems !== null && aiItems.length > 0;
 
   useEffect(() => {
     if (visible) {
@@ -73,7 +79,8 @@ export default function BrainDumpSheet({ visible, onClose }: BrainDumpSheetProps
       setSaving(false);
       setShowPreview(false);
       setAiParsing(false);
-      setUsedAi(false);
+      setAiItems(null);
+      parseRequestId.current++;
       backdropAnim.value = withTiming(1, { duration: 250 });
       slideAnim.value = withSpring(1, { damping: 20, stiffness: 300 });
       setTimeout(() => inputRef.current?.focus(), 350);
@@ -100,33 +107,45 @@ export default function BrainDumpSheet({ visible, onClose }: BrainDumpSheetProps
     });
   };
 
+  const handleAiParse = useCallback(async () => {
+    if (aiParsing || gatewayStatus !== 'connected') return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    const requestId = ++parseRequestId.current;
+    Keyboard.dismiss();
+    setAiParsing(true);
+    try {
+      const result = await aiParseBrainDump(trimmed, gateway);
+      if (parseRequestId.current !== requestId) return;
+      if (result && result.length > 0) {
+        setAiItems(result);
+        setShowPreview(true);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } else {
+        showToast('info', 'AI couldn\'t parse this — try the local parser instead');
+      }
+    } catch {
+      if (parseRequestId.current === requestId) {
+        showToast('error', 'AI parsing failed — try again or use local parser');
+      }
+    } finally {
+      if (parseRequestId.current === requestId) {
+        setAiParsing(false);
+      }
+    }
+  }, [aiParsing, gatewayStatus, text, gateway, showToast]);
+
   const handleDump = async () => {
     const trimmed = text.trim();
     if (!trimmed || saving || aiParsing) return;
 
     setSaving(true);
     try {
-      let items: ParsedItem[] = parsedItems;
-      let aiUsed = false;
-
-      if (gatewayStatus === 'connected') {
-        setAiParsing(true);
-        try {
-          const aiResult = await aiParseBrainDump(trimmed, gateway);
-          if (aiResult && aiResult.length > 0) {
-            items = aiResult;
-            aiUsed = true;
-          }
-        } catch {} finally {
-          setAiParsing(false);
-        }
-      }
-
-      setUsedAi(aiUsed);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      if (items.length > 0) {
-        for (const item of items) {
+      if (parsedItems.length > 0) {
+        for (const item of parsedItems) {
           await addInboxItem(item.rawText || item.parsedTitle, 'braindump', item);
         }
       } else {
@@ -139,7 +158,6 @@ export default function BrainDumpSheet({ visible, onClose }: BrainDumpSheetProps
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setSaving(false);
-      setAiParsing(false);
     }
   };
 
@@ -197,7 +215,7 @@ export default function BrainDumpSheet({ visible, onClose }: BrainDumpSheetProps
                     placeholder="Call dentist tomorrow, buy milk, finish slides by Friday..."
                     placeholderTextColor={C.textTertiary}
                     value={text}
-                    onChangeText={setText}
+                    onChangeText={(t) => { setText(t); setAiItems(null); }}
                     multiline
                     textAlignVertical="top"
                     maxLength={2000}
@@ -211,32 +229,58 @@ export default function BrainDumpSheet({ visible, onClose }: BrainDumpSheetProps
                   )}
                 </View>
 
-                {parsedItems.length > 0 && (
-                  <Pressable
-                    style={styles.previewToggle}
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      setShowPreview(true);
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }}
-                  >
-                    <Ionicons name="sparkles" size={14} color={C.accent} />
-                    <Text style={styles.previewToggleText}>
-                      {parsedItems.length} item{parsedItems.length !== 1 ? 's' : ''} detected
-                    </Text>
-                    <Ionicons name="chevron-forward" size={14} color={C.textTertiary} />
-                  </Pressable>
+                {(localParsedItems.length > 0 || isGatewayConnected) && text.trim().length >= 3 && (
+                  <View style={styles.previewActions}>
+                    {localParsedItems.length > 0 && (
+                      <Pressable
+                        style={styles.previewToggle}
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          setAiItems(null);
+                          setShowPreview(true);
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        }}
+                      >
+                        <Ionicons name="list-outline" size={14} color={C.accent} />
+                        <Text style={styles.previewToggleText}>
+                          {localParsedItems.length} item{localParsedItems.length !== 1 ? 's' : ''} detected
+                        </Text>
+                        <Ionicons name="chevron-forward" size={14} color={C.textTertiary} />
+                      </Pressable>
+                    )}
+                    {isGatewayConnected && (
+                      <Pressable
+                        style={[styles.previewToggle, styles.aiPreviewToggle]}
+                        onPress={handleAiParse}
+                        disabled={aiParsing}
+                      >
+                        <Ionicons name={aiParsing ? 'hourglass-outline' : 'sparkles'} size={14} color={C.primary} />
+                        <Text style={[styles.previewToggleText, { color: C.primary }]}>
+                          {aiParsing ? 'AI analyzing...' : 'Parse with AI'}
+                        </Text>
+                        {!aiParsing && <Ionicons name="chevron-forward" size={14} color={C.textTertiary} />}
+                      </Pressable>
+                    )}
+                  </View>
                 )}
               </>
             ) : (
               <>
-                <Pressable
-                  style={styles.backToEdit}
-                  onPress={() => setShowPreview(false)}
-                >
-                  <Ionicons name="chevron-back" size={16} color={C.accent} />
-                  <Text style={styles.backToEditText}>Edit text</Text>
-                </Pressable>
+                <View style={styles.previewHeader}>
+                  <Pressable
+                    style={styles.backToEdit}
+                    onPress={() => { setShowPreview(false); setAiItems(null); }}
+                  >
+                    <Ionicons name="chevron-back" size={16} color={C.accent} />
+                    <Text style={styles.backToEditText}>Edit text</Text>
+                  </Pressable>
+                  {isAiResult && (
+                    <View style={styles.aiBadge}>
+                      <Ionicons name="sparkles" size={11} color={C.primary} />
+                      <Text style={[styles.aiBadgeText, { color: C.primary }]}>AI parsed</Text>
+                    </View>
+                  )}
+                </View>
 
                 <ScrollView
                   style={styles.previewScroll}
@@ -295,12 +339,12 @@ export default function BrainDumpSheet({ visible, onClose }: BrainDumpSheetProps
                 disabled={!canSubmit}
               >
                 <Ionicons
-                  name={aiParsing ? 'sparkles' : saving ? 'hourglass-outline' : 'arrow-down-circle'}
+                  name={saving ? 'hourglass-outline' : 'arrow-down-circle'}
                   size={20}
                   color={canSubmit ? '#fff' : C.textTertiary}
                 />
                 <Text style={[styles.dumpButtonText, !canSubmit && styles.dumpButtonTextDisabled]}>
-                  {aiParsing ? 'AI analyzing...' : saving ? 'Saving...' : hasMultipleItems ? `Dump ${parsedItems.length} Items` : 'Dump It'}
+                  {saving ? 'Saving...' : hasMultipleItems ? `Dump ${parsedItems.length} Items` : 'Dump It'}
                 </Text>
               </Pressable>
             </View>
@@ -421,6 +465,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: C.textTertiary,
   },
+  previewActions: {
+    gap: 8,
+    marginBottom: 12,
+  },
   previewToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -431,7 +479,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: C.accent + '20',
-    marginBottom: 12,
+  },
+  aiPreviewToggle: {
+    backgroundColor: C.primary + '10',
+    borderColor: C.primary + '20',
   },
   previewToggleText: {
     fontFamily: 'Inter_500Medium',
@@ -439,11 +490,16 @@ const styles = StyleSheet.create({
     color: C.accent,
     flex: 1,
   },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
   backToEdit: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 12,
   },
   backToEditText: {
     fontFamily: 'Inter_500Medium',
