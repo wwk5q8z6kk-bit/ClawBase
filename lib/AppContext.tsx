@@ -320,11 +320,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const unsub4 = gateway.on('memory_data', (event) => {
       setGatewayMemoryFiles(event.data);
     });
+    const INTERNAL_SESSIONS = new Set(['agent:braindump:parser']);
     const unsub5 = gateway.on('message_chunk', (event) => {
+      if (event.data?.sessionKey && INTERNAL_SESSIONS.has(event.data.sessionKey)) return;
       setStreamingText(event.data.text);
       setIsStreaming(true);
     });
     const unsub6 = gateway.on('message_complete', async (event) => {
+      if (event.data?.sessionKey && INTERNAL_SESSIONS.has(event.data.sessionKey)) return;
       setStreamingText(null);
       setIsStreaming(false);
 

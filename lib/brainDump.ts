@@ -1,6 +1,7 @@
 import type { InboxItem } from './types';
+import type { OpenClawGateway } from './gateway';
 
-interface ParsedItem {
+export interface ParsedItem {
   rawText: string;
   parsedTitle: string;
   parsedCategory: 'task' | 'event' | 'note';
@@ -320,6 +321,139 @@ export function parseItem(rawText: string): ParsedItem {
 export function parseBrainDump(rawText: string): ParsedItem[] {
   const items = splitBrainDump(rawText);
   return items.map(parseItem);
+}
+
+const AI_SESSION_KEY = 'agent:braindump:parser';
+const AI_TIMEOUT_MS = 15000;
+
+function buildBrainDumpPrompt(rawText: string): string {
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  return [
+    `Today is ${dateStr}.`,
+    'You are a brain dump parser. The user typed a stream-of-consciousness dump of tasks, events, notes, and reminders.',
+    'Split the text into individual actionable items and classify each one.',
+    '',
+    'Return ONLY a JSON array (no markdown fences, no explanation) where each element has:',
+    '- "rawText": the original fragment from the input',
+    '- "parsedTitle": a clean, concise title (capitalize first letter, remove filler words)',
+    '- "parsedCategory": one of "task", "event", or "note"',
+    '  - "task" = something to do (buy, fix, send, finish, etc.)',
+    '  - "event" = something with a time/place (meeting, call, dinner, appointment)',
+    '  - "note" = an idea, thought, or reference to remember',
+    '- "parsedPriority": one of "low", "medium", "high", or "urgent"',
+    '  - Default to "medium" unless the text signals otherwise',
+    '- "parsedDueDate": ISO 8601 string if a date/time is mentioned, otherwise omit',
+    '',
+    'Rules:',
+    '- Each item must map back to part of the original text',
+    '- Preserve the user\'s intent — do not invent items',
+    '- If text contains only one item, return a single-element array',
+    '- Do not wrap in markdown code fences',
+    '',
+    'User input:',
+    rawText,
+  ].join('\n');
+}
+
+function extractJsonArray(text: string): any[] | null {
+  let cleaned = text.trim();
+  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) cleaned = fenceMatch[1].trim();
+
+  const bracketStart = cleaned.indexOf('[');
+  const bracketEnd = cleaned.lastIndexOf(']');
+  if (bracketStart === -1 || bracketEnd === -1 || bracketEnd <= bracketStart) return null;
+
+  try {
+    const arr = JSON.parse(cleaned.slice(bracketStart, bracketEnd + 1));
+    if (!Array.isArray(arr)) return null;
+    return arr;
+  } catch {
+    return null;
+  }
+}
+
+function validateParsedItems(arr: any[]): ParsedItem[] | null {
+  const validCategories = new Set(['task', 'event', 'note']);
+  const validPriorities = new Set(['low', 'medium', 'high', 'urgent']);
+  const results: ParsedItem[] = [];
+
+  for (const item of arr) {
+    if (!item || typeof item !== 'object') continue;
+    const rawText = typeof item.rawText === 'string' ? item.rawText.trim() : '';
+    const parsedTitle = typeof item.parsedTitle === 'string' ? item.parsedTitle.trim() : '';
+    if (!rawText && !parsedTitle) continue;
+
+    let parsedDueDate: number | undefined;
+    if (item.parsedDueDate) {
+      const ts = typeof item.parsedDueDate === 'number' ? item.parsedDueDate : Date.parse(item.parsedDueDate);
+      if (!isNaN(ts) && ts > Date.now() - 86400000) parsedDueDate = ts;
+    }
+
+    results.push({
+      rawText: rawText || parsedTitle,
+      parsedTitle: parsedTitle || rawText,
+      parsedCategory: validCategories.has(item.parsedCategory) ? item.parsedCategory : 'task',
+      parsedPriority: validPriorities.has(item.parsedPriority) ? item.parsedPriority : 'medium',
+      parsedDueDate,
+    });
+  }
+
+  return results.length > 0 ? results : null;
+}
+
+export async function aiParseBrainDump(
+  rawText: string,
+  gateway: OpenClawGateway,
+): Promise<ParsedItem[] | null> {
+  if (!gateway.isConnected()) return null;
+
+  const prompt = buildBrainDumpPrompt(rawText);
+  let unsubChunk: (() => void) | null = null;
+  let unsubComplete: (() => void) | null = null;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const cleanup = () => {
+    unsubChunk?.();
+    unsubComplete?.();
+    if (timeoutId) clearTimeout(timeoutId);
+    unsubChunk = null;
+    unsubComplete = null;
+    timeoutId = null;
+  };
+
+  try {
+    const responsePromise = new Promise<string>((resolve) => {
+      let fullText = '';
+      unsubChunk = gateway.on('message_chunk', (event) => {
+        if (event.data?.sessionKey && event.data.sessionKey !== AI_SESSION_KEY) return;
+        fullText = event.data.text || fullText;
+      });
+      unsubComplete = gateway.on('message_complete', (event) => {
+        if (event.data?.sessionKey && event.data.sessionKey !== AI_SESSION_KEY) return;
+        cleanup();
+        resolve(event.data?.text || fullText);
+      });
+      timeoutId = setTimeout(() => {
+        cleanup();
+        resolve(fullText || '');
+      }, AI_TIMEOUT_MS);
+    });
+
+    await gateway.sendChat(prompt, AI_SESSION_KEY);
+    const response = await responsePromise;
+
+    if (!response) return null;
+
+    const arr = extractJsonArray(response);
+    if (!arr) return null;
+
+    return validateParsedItems(arr);
+  } catch {
+    cleanup();
+    return null;
+  }
 }
 
 export function getCategoryIcon(category: 'task' | 'event' | 'note'): string {

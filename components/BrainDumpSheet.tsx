@@ -26,11 +26,13 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import {
   parseBrainDump,
+  aiParseBrainDump,
   getCategoryIcon,
   getCategoryColor,
   getPriorityLabel,
   formatParsedDate,
 } from '@/lib/brainDump';
+import type { ParsedItem } from '@/lib/brainDump';
 
 const C = Colors.dark;
 
@@ -50,9 +52,11 @@ export default function BrainDumpSheet({ visible, onClose }: BrainDumpSheetProps
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [aiParsing, setAiParsing] = useState(false);
+  const [usedAi, setUsedAi] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
-  const { addInboxItem } = useApp();
+  const { addInboxItem, gateway, gatewayStatus } = useApp();
 
   const slideAnim = useSharedValue(0);
   const backdropAnim = useSharedValue(0);
@@ -68,6 +72,8 @@ export default function BrainDumpSheet({ visible, onClose }: BrainDumpSheetProps
       setText('');
       setSaving(false);
       setShowPreview(false);
+      setAiParsing(false);
+      setUsedAi(false);
       backdropAnim.value = withTiming(1, { duration: 250 });
       slideAnim.value = withSpring(1, { damping: 20, stiffness: 300 });
       setTimeout(() => inputRef.current?.focus(), 350);
@@ -96,14 +102,31 @@ export default function BrainDumpSheet({ visible, onClose }: BrainDumpSheetProps
 
   const handleDump = async () => {
     const trimmed = text.trim();
-    if (!trimmed || saving) return;
+    if (!trimmed || saving || aiParsing) return;
 
     setSaving(true);
     try {
+      let items: ParsedItem[] = parsedItems;
+      let aiUsed = false;
+
+      if (gatewayStatus === 'connected') {
+        setAiParsing(true);
+        try {
+          const aiResult = await aiParseBrainDump(trimmed, gateway);
+          if (aiResult && aiResult.length > 0) {
+            items = aiResult;
+            aiUsed = true;
+          }
+        } catch {} finally {
+          setAiParsing(false);
+        }
+      }
+
+      setUsedAi(aiUsed);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      if (parsedItems.length > 0) {
-        for (const item of parsedItems) {
+      if (items.length > 0) {
+        for (const item of items) {
           await addInboxItem(item.rawText || item.parsedTitle, 'braindump', item);
         }
       } else {
@@ -116,13 +139,15 @@ export default function BrainDumpSheet({ visible, onClose }: BrainDumpSheetProps
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setSaving(false);
+      setAiParsing(false);
     }
   };
 
   if (!visible) return null;
 
-  const canSubmit = text.trim().length > 0 && !saving;
+  const canSubmit = text.trim().length > 0 && !saving && !aiParsing;
   const hasMultipleItems = parsedItems.length > 1;
+  const isGatewayConnected = gatewayStatus === 'connected';
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={handleDismiss}>
@@ -151,9 +176,17 @@ export default function BrainDumpSheet({ visible, onClose }: BrainDumpSheetProps
               </Pressable>
             </View>
 
-            <Text style={styles.subtitle}>
-              Type anything — tasks, ideas, reminders. Just get it out of your head.
-            </Text>
+            <View style={styles.subtitleRow}>
+              <Text style={styles.subtitle}>
+                Type anything — tasks, ideas, reminders. Just get it out of your head.
+              </Text>
+              {isGatewayConnected && (
+                <View style={styles.aiBadge}>
+                  <Ionicons name="sparkles" size={11} color={C.accent} />
+                  <Text style={styles.aiBadgeText}>AI</Text>
+                </View>
+              )}
+            </View>
 
             {!showPreview ? (
               <>
@@ -262,12 +295,12 @@ export default function BrainDumpSheet({ visible, onClose }: BrainDumpSheetProps
                 disabled={!canSubmit}
               >
                 <Ionicons
-                  name={saving ? 'hourglass-outline' : 'arrow-down-circle'}
+                  name={aiParsing ? 'sparkles' : saving ? 'hourglass-outline' : 'arrow-down-circle'}
                   size={20}
                   color={canSubmit ? '#fff' : C.textTertiary}
                 />
                 <Text style={[styles.dumpButtonText, !canSubmit && styles.dumpButtonTextDisabled]}>
-                  {saving ? 'Saving...' : hasMultipleItems ? `Dump ${parsedItems.length} Items` : 'Dump It'}
+                  {aiParsing ? 'AI analyzing...' : saving ? 'Saving...' : hasMultipleItems ? `Dump ${parsedItems.length} Items` : 'Dump It'}
                 </Text>
               </Pressable>
             </View>
@@ -332,12 +365,33 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: C.text,
   },
+  subtitleRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    marginBottom: 16,
+    gap: 8,
+  },
   subtitle: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
     color: C.textSecondary,
-    marginBottom: 16,
     lineHeight: 18,
+    flex: 1,
+  },
+  aiBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+    backgroundColor: C.accent + '18',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  aiBadgeText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    color: C.accent,
+    letterSpacing: 0.5,
   },
   inputContainer: {
     backgroundColor: C.card,
