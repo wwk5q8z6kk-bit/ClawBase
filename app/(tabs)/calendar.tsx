@@ -406,7 +406,7 @@ export default function CalendarTab() {
     }
   }, [openEventId, calendarEvents]);
 
-  const webTopPad = Platform.OS === 'web' ? 47 : 0;
+  const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   const today = new Date();
   const isViewingCurrentMonth = currentMonth === today.getMonth() && currentYear === today.getFullYear();

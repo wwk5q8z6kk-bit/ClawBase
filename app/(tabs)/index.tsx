@@ -1724,7 +1724,7 @@ export default function DashboardScreen() {
     setRefreshing(false);
   }, [refreshAll, fetchGatewaySessions]);
 
-  const webTopPad = Platform.OS === 'web' ? 47 : 0;
+  const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   const [entityLinks, setEntityLinks] = useState<EntityLink[]>([]);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());

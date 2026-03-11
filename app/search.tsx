@@ -327,7 +327,7 @@ export default function SearchScreen() {
     );
   };
 
-  const webTopPad = Platform.OS === 'web' ? 47 : 0;
+  const webTopPad = Platform.OS === 'web' ? 67 : 0;
   const totalCount = results.length;
 
   return (

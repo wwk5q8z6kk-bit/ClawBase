@@ -200,6 +200,11 @@ export const messageStorage = {
     await setJSON(KEYS.MESSAGES, all);
     return message;
   },
+  async clearConversation(conversationId: string): Promise<void> {
+    const all = await getJSON<ChatMessage[]>(KEYS.MESSAGES, []);
+    const remaining = all.filter((m) => m.conversationId !== conversationId);
+    await setJSON(KEYS.MESSAGES, remaining);
+  },
 };
 
 export const taskStorage = {

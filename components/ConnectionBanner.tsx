@@ -53,7 +53,7 @@ const ConnectionBanner = React.memo(function ConnectionBanner() {
     setDismissed(true);
   };
 
-  const webTopPad = Platform.OS === 'web' ? 47 : 0;
+  const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   return (
     <Animated.View

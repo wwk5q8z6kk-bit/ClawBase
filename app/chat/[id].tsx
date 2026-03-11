@@ -26,6 +26,7 @@ import { PulsingDot } from '@/components/PulsingDot';
 import type { ChatMessage } from '@/lib/types';
 import VoiceModeOverlay from '@/components/VoiceModeOverlay';
 import { enqueue } from '@/lib/offlineQueue';
+import { messageStorage } from '@/lib/storage';
 import { getLinksFor, addLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
 
 const C = Colors.dark;
@@ -864,7 +865,7 @@ export default function ChatDetailScreen() {
         const mem = await createMemoryEntry({
           title,
           content: createPrefillText || title,
-          category: 'note',
+          type: 'note',
           source: 'chat',
           tags: ['from:chat'],
           reviewStatus: 'unread',
@@ -904,7 +905,7 @@ export default function ChatDetailScreen() {
       const created = await createMemoryEntry({
         title: msg.content.slice(0, 80),
         content: msg.content,
-        category: 'note',
+        type: 'note',
         source: 'chat',
         tags: ['from:chat'],
         reviewStatus: 'unread',
@@ -947,9 +948,10 @@ export default function ChatDetailScreen() {
   }, [briefing, handleSend]);
 
   const handleClearConversation = useCallback(() => {
-    const doClear = () => {
+    const doClear = async () => {
       setMessages([]);
       setMenuVisible(false);
+      if (id) await messageStorage.clearConversation(id).catch(() => {});
     };
     if (Platform.OS === 'web') {
       doClear();
@@ -1024,7 +1026,7 @@ export default function ChatDetailScreen() {
     prevMessageCountRef.current = messages.length;
   }, [messages.length]);
 
-  const webTopPad = Platform.OS === 'web' ? 47 : 0;
+  const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>

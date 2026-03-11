@@ -224,7 +224,7 @@ export default function SessionsScreen() {
     return groups;
   }, [gatewaySessions]);
 
-  const webTopPad = Platform.OS === 'web' ? 47 : 0;
+  const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>

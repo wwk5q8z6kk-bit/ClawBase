@@ -115,7 +115,7 @@ export default function PairScreen() {
   const pulseAnim = useRef(new Animated.Value(0.5)).current;
   const autoConnectTriggered = useRef(false);
 
-  const webTopPad = Platform.OS === 'web' ? 47 : 0;
+  const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   useEffect(() => {
     Animated.loop(

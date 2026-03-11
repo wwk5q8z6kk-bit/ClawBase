@@ -159,7 +159,7 @@ export default function TimelineScreen() {
   const [gatewayEvents, setGatewayEvents] = useState<TimelineEvent[]>([]);
   const [showFilters, setShowFilters] = useState(true);
 
-  const webTopPad = Platform.OS === 'web' ? 47 : 0;
+  const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   const [linkCounts, setLinkCounts] = useState<Record<string, number>>({});
 

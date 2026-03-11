@@ -288,7 +288,7 @@ export default function CRMScreen() {
     }
   }, [openContactId, crmContacts]);
 
-  const webTopPad = Platform.OS === 'web' ? 47 : 0;
+  const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   const filteredContacts = useMemo(() => {
     let contacts = crmContacts;

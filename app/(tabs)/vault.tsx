@@ -1774,7 +1774,7 @@ export default function VaultScreen() {
     return memoryEntries.find((e) => e.id === selectedMemory.id) || selectedMemory;
   }, [selectedMemory, memoryEntries]);
 
-  const webTopPad = Platform.OS === 'web' ? 47 : 0;
+  const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>

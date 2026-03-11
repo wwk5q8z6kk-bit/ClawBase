@@ -104,7 +104,7 @@ export default function ConnectionsScreen() {
       .slice(0, 8);
   }, [links]);
 
-  const webTopPad = Platform.OS === 'web' ? 47 : 0;
+  const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   const renderLink = ({ item }: { item: EntityLink }) => {
     const sourceConfig = ENTITY_CONFIG[item.sourceType];

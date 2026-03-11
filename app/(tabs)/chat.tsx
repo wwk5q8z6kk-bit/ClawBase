@@ -468,7 +468,7 @@ export default function ChatListScreen() {
     updateConversation(item.id, { pinned: !item.pinned });
   }, [updateConversation]);
 
-  const webTopPad = Platform.OS === 'web' ? 47 : 0;
+  const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
   const fabRotation = fabRotateAnim.interpolate({
     inputRange: [0, 1],
