@@ -75,7 +75,9 @@ async function setStoredConnectionTokens(tokens: ConnectionTokenMap): Promise<vo
   try {
     if (Platform.OS !== 'web') {
       await SecureStore.setItemAsync(KEYS.CONNECTION_TOKENS, raw);
-      await AsyncStorage.removeItem(KEYS.CONNECTION_TOKENS).catch(() => {});
+      await AsyncStorage.removeItem(KEYS.CONNECTION_TOKENS).catch((e) => {
+        console.warn('[storage] Failed to remove legacy connection token fallback key:', e);
+      });
       return;
     }
   } catch (e) {
@@ -329,43 +331,99 @@ export const taskStorage = {
   },
 };
 
+const MEMORY_IDS_KEY = '@clawbase:memory:ids';
+const MEMORY_ENTRY_PREFIX = '@clawbase:mem:';
+let memoryMigrationDone = false;
+
+async function migrateMemoryIfNeeded(): Promise<void> {
+  if (memoryMigrationDone) return;
+  await withLock(MEMORY_IDS_KEY, async () => {
+    if (memoryMigrationDone) return;
+    try {
+      const raw = await AsyncStorage.getItem(KEYS.MEMORY);
+      if (!raw) {
+        memoryMigrationDone = true;
+        return;
+      }
+      const legacyEntries: MemoryEntry[] = JSON.parse(raw);
+      if (legacyEntries.length === 0) {
+        await AsyncStorage.removeItem(KEYS.MEMORY);
+        memoryMigrationDone = true;
+        return;
+      }
+
+      const existingIds = await getJSON<string[]>(MEMORY_IDS_KEY, []);
+      const existingIdSet = new Set(existingIds);
+      const newIds: string[] = [...existingIds];
+      const writes: [string, string][] = [];
+
+      for (const entry of legacyEntries) {
+        if (!existingIdSet.has(entry.id)) {
+          newIds.push(entry.id);
+          writes.push([MEMORY_ENTRY_PREFIX + entry.id, JSON.stringify(entry)]);
+        }
+      }
+
+      if (writes.length > 0) {
+        await AsyncStorage.multiSet(writes);
+      }
+      await setJSON(MEMORY_IDS_KEY, newIds);
+      await AsyncStorage.removeItem(KEYS.MEMORY);
+      memoryMigrationDone = true;
+    } catch (e) {
+      console.warn('[storage] Memory migration failed, will retry next access:', e);
+    }
+  });
+}
+
 export const memoryStorage = {
   async getAll(): Promise<MemoryEntry[]> {
-    const entries = await getJSON<MemoryEntry[]>(KEYS.MEMORY, []);
+    await migrateMemoryIfNeeded();
+    const ids = await getJSON<string[]>(MEMORY_IDS_KEY, []);
+    if (ids.length === 0) return [];
+    const keys = ids.map((id) => MEMORY_ENTRY_PREFIX + id);
+    const pairs = await AsyncStorage.multiGet(keys);
+    const entries: MemoryEntry[] = [];
+    for (const [, value] of pairs) {
+      if (value) {
+        try { entries.push(JSON.parse(value)); } catch (e) { console.warn('[storage] Failed to parse memory entry:', e); }
+      }
+    }
     return entries.sort((a, b) => b.timestamp - a.timestamp);
   },
   async add(
     entry: Omit<MemoryEntry, 'id' | 'timestamp'>,
   ): Promise<MemoryEntry> {
-    return withLock(KEYS.MEMORY, async () => {
+    await migrateMemoryIfNeeded();
+    return withLock(MEMORY_IDS_KEY, async () => {
       const mem: MemoryEntry = {
         ...entry,
         id: Crypto.randomUUID(),
         timestamp: Date.now(),
       };
-      const all = await getJSON<MemoryEntry[]>(KEYS.MEMORY, []);
-      all.push(mem);
-      await setJSON(KEYS.MEMORY, all);
+      await setJSON(MEMORY_ENTRY_PREFIX + mem.id, mem);
+      const ids = await getJSON<string[]>(MEMORY_IDS_KEY, []);
+      ids.push(mem.id);
+      await setJSON(MEMORY_IDS_KEY, ids);
       return mem;
     });
   },
   async update(id: string, updates: Partial<MemoryEntry>): Promise<void> {
-    return withLock(KEYS.MEMORY, async () => {
-      const all = await getJSON<MemoryEntry[]>(KEYS.MEMORY, []);
-      const idx = all.findIndex((m) => m.id === id);
-      if (idx >= 0) {
-        all[idx] = { ...all[idx], ...updates };
-        await setJSON(KEYS.MEMORY, all);
+    await migrateMemoryIfNeeded();
+    const key = MEMORY_ENTRY_PREFIX + id;
+    return withLock(key, async () => {
+      const existing = await getJSON<MemoryEntry | null>(key, null);
+      if (existing) {
+        await setJSON(key, { ...existing, ...updates });
       }
     });
   },
   async remove(id: string): Promise<void> {
-    return withLock(KEYS.MEMORY, async () => {
-      const all = await getJSON<MemoryEntry[]>(KEYS.MEMORY, []);
-      await setJSON(
-        KEYS.MEMORY,
-        all.filter((m) => m.id !== id),
-      );
+    await migrateMemoryIfNeeded();
+    await AsyncStorage.removeItem(MEMORY_ENTRY_PREFIX + id);
+    await withLock(MEMORY_IDS_KEY, async () => {
+      const ids = await getJSON<string[]>(MEMORY_IDS_KEY, []);
+      await setJSON(MEMORY_IDS_KEY, ids.filter((i) => i !== id));
     });
   },
   async search(query: string): Promise<MemoryEntry[]> {
