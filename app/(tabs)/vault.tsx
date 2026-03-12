@@ -1914,9 +1914,67 @@ export default function VaultScreen() {
     tasks, createTask, updateTask, deleteTask,
     memoryEntries, updateMemoryEntry, createMemoryEntry, deleteMemoryEntry,
     gatewayStatus, gatewayMemoryFiles, fetchGatewayMemory,
-    createCalendarEvent,
+    createCalendarEvent, deleteCalendarEvent,
     inboxItems, updateInboxItem, deleteInboxItem, clearInbox,
   } = useApp();
+
+  const convertItemToTask = useCallback(async (item: InboxItem): Promise<void> => {
+    const task = await createTask(
+      item.parsedTitle || item.rawText,
+      'todo',
+      item.parsedPriority || 'medium',
+      undefined,
+      { source: 'braindump' },
+    );
+    try {
+      if (item.parsedDueDate) {
+        await updateTask(task.id, { dueDate: item.parsedDueDate });
+      }
+      await updateInboxItem(item.id, { status: 'processed' });
+    } catch (e) {
+      try { await deleteTask(task.id); } catch (rollbackErr) {
+        console.warn('[vault] Rollback failed after task conversion error:', rollbackErr);
+      }
+      throw e;
+    }
+  }, [createTask, updateTask, updateInboxItem, deleteTask]);
+
+  const convertItemToEvent = useCallback(async (item: InboxItem): Promise<void> => {
+    const startTime = item.parsedDueDate || Date.now() + 3600000;
+    const event = await createCalendarEvent({
+      title: item.parsedTitle || item.rawText,
+      startTime,
+      endTime: startTime + 3600000,
+      source: 'manual',
+    });
+    try {
+      await updateInboxItem(item.id, { status: 'processed' });
+    } catch (e) {
+      try { await deleteCalendarEvent(event.id); } catch (rollbackErr) {
+        console.warn('[vault] Rollback failed after event conversion error:', rollbackErr);
+      }
+      throw e;
+    }
+  }, [createCalendarEvent, deleteCalendarEvent, updateInboxItem]);
+
+  const convertItemToMemory = useCallback(async (item: InboxItem): Promise<void> => {
+    const entry = await createMemoryEntry({
+      type: 'note',
+      title: item.parsedTitle || item.rawText,
+      content: item.rawText,
+      source: 'braindump',
+      tags: ['from:braindump'],
+      reviewStatus: 'unread',
+    });
+    try {
+      await updateInboxItem(item.id, { status: 'processed' });
+    } catch (e) {
+      try { await deleteMemoryEntry(entry.id); } catch (rollbackErr) {
+        console.warn('[vault] Rollback failed after memory conversion error:', rollbackErr);
+      }
+      throw e;
+    }
+  }, [createMemoryEntry, deleteMemoryEntry, updateInboxItem]);
 
   const [activeSegment, setActiveSegment] = useState<VaultSegment>('tasks');
 
@@ -2266,107 +2324,71 @@ export default function VaultScreen() {
           inboxItems={inboxItems}
           onConvertToTask={async (item) => {
             try {
-              const task = await createTask(
-                item.parsedTitle || item.rawText,
-                'todo',
-                item.parsedPriority || 'medium',
-                undefined,
-                { source: 'braindump' },
-              );
-              if (item.parsedDueDate) {
-                await updateTask(task.id, { dueDate: item.parsedDueDate });
-              }
-              await updateInboxItem(item.id, { status: 'processed' });
+              await convertItemToTask(item);
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               showToast('success', 'Task created');
-            } catch {
-              showToast('error', 'Failed to create task');
+            } catch (e) {
+              console.warn('[vault] Task conversion failed:', e);
+              showToast('error', `Failed to create task: ${e instanceof Error ? e.message : 'unknown error'}`);
             }
           }}
           onSaveAsMemory={async (item) => {
             try {
-              await createMemoryEntry({
-                type: 'note',
-                title: item.parsedTitle || item.rawText,
-                content: item.rawText,
-                source: 'braindump',
-                tags: ['from:braindump'],
-                reviewStatus: 'unread',
-              });
-              await updateInboxItem(item.id, { status: 'processed' });
+              await convertItemToMemory(item);
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               showToast('success', 'Saved as memory');
-            } catch {
-              showToast('error', 'Failed to save memory');
+            } catch (e) {
+              console.warn('[vault] Memory conversion failed:', e);
+              showToast('error', `Failed to save memory: ${e instanceof Error ? e.message : 'unknown error'}`);
             }
           }}
           onAddToCalendar={async (item) => {
             try {
-              const startTime = item.parsedDueDate || Date.now() + 3600000;
-              await createCalendarEvent({
-                title: item.parsedTitle || item.rawText,
-                startTime,
-                endTime: startTime + 3600000,
-                source: 'manual',
-              });
-              await updateInboxItem(item.id, { status: 'processed' });
+              await convertItemToEvent(item);
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               showToast('success', 'Event added');
-            } catch {
-              showToast('error', 'Failed to add event');
+            } catch (e) {
+              console.warn('[vault] Event conversion failed:', e);
+              showToast('error', `Failed to add event: ${e instanceof Error ? e.message : 'unknown error'}`);
             }
           }}
           onDismiss={async (item) => {
             try {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               await updateInboxItem(item.id, { status: 'dismissed' });
-            } catch {
-              showToast('error', 'Failed to dismiss');
+            } catch (e) {
+              console.warn('[vault] Dismiss failed:', e);
+              showToast('error', `Failed to dismiss: ${e instanceof Error ? e.message : 'unknown error'}`);
             }
           }}
           onDelete={async (item) => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            await deleteInboxItem(item.id);
+            try {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              await deleteInboxItem(item.id);
+            } catch (e) {
+              console.warn('[vault] Delete failed:', e);
+              showToast('error', `Failed to delete: ${e instanceof Error ? e.message : 'unknown error'}`);
+            }
           }}
           onProcessAll={async () => {
             const pending = inboxItems.filter(i => i.status === 'pending');
             let succeeded = 0;
+            const failures: string[] = [];
             for (const item of pending) {
               try {
                 const category = item.parsedCategory || 'task';
                 if (category === 'task') {
-                  const task = await createTask(
-                    item.parsedTitle || item.rawText,
-                    'todo',
-                    item.parsedPriority || 'medium',
-                    undefined,
-                    { source: 'braindump' },
-                  );
-                  if (item.parsedDueDate) {
-                    await updateTask(task.id, { dueDate: item.parsedDueDate });
-                  }
+                  await convertItemToTask(item);
                 } else if (category === 'event') {
-                  const startTime = item.parsedDueDate || Date.now() + 3600000;
-                  await createCalendarEvent({
-                    title: item.parsedTitle || item.rawText,
-                    startTime,
-                    endTime: startTime + 3600000,
-                    source: 'manual',
-                  });
+                  await convertItemToEvent(item);
                 } else {
-                  await createMemoryEntry({
-                    type: 'note',
-                    title: item.parsedTitle || item.rawText,
-                    content: item.rawText,
-                    source: 'braindump',
-                    tags: ['from:braindump'],
-                    reviewStatus: 'unread',
-                  });
+                  await convertItemToMemory(item);
                 }
-                await updateInboxItem(item.id, { status: 'processed' });
                 succeeded++;
-              } catch {
-                // continue processing remaining items
+              } catch (e) {
+                const label = item.parsedTitle || item.rawText.slice(0, 30);
+                console.warn(`[vault] Process All: failed to convert "${label}":`, e);
+                failures.push(label);
               }
             }
             const allOk = succeeded === pending.length;
@@ -2377,7 +2399,7 @@ export default function VaultScreen() {
               allOk ? 'success' : 'error',
               allOk
                 ? `Processed all ${pending.length} items`
-                : `Processed ${succeeded}/${pending.length} items — ${pending.length - succeeded} failed`,
+                : `${succeeded} processed, ${failures.length} failed`,
             );
           }}
           onClearInbox={async () => {

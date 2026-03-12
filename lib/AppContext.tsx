@@ -484,31 +484,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (automationExecutorRef.current) return automationExecutorRef.current;
     const executor: ActionExecutor = {
       createTask: async (title, status, priority, description) => {
-        const task = await taskStorage.create(title, status as any || 'todo', priority as any || 'medium', description);
-        setTasks((prev) => [...prev, task]);
-        return task;
+        try {
+          const task = await taskStorage.create(title, status as any || 'todo', priority as any || 'medium', description);
+          setTasks((prev) => [...prev, task]);
+          return task;
+        } catch (e) {
+          console.warn('[automation] Failed to create task:', e);
+          throw e;
+        }
       },
       createMemoryEntry: async (entry) => {
-        const created = await memoryStorage.add(entry);
-        setMemoryEntries((prev) => [created, ...prev]);
+        try {
+          const created = await memoryStorage.add(entry);
+          setMemoryEntries((prev) => [created, ...prev]);
+        } catch (e) {
+          console.warn('[automation] Failed to create memory entry:', e);
+          throw e;
+        }
       },
       sendGatewayChat: async (message, sessionKey) => {
-        if (gateway.isConnected()) {
+        if (!gateway.isConnected()) {
+          const err = new Error('Gateway not connected');
+          console.warn('[automation] Cannot send chat: gateway not connected');
+          throw err;
+        }
+        try {
           await gateway.sendChat(message, sessionKey);
+        } catch (e) {
+          console.warn('[automation] Failed to send gateway chat:', e);
+          throw e;
         }
       },
       showNotification: (title, body) => {
-        showLocalNotification({
-          title,
-          body,
-          data: { type: 'automation' },
-          categoryIdentifier: 'alert',
-          channelId: 'alerts',
-        });
+        try {
+          showLocalNotification({
+            title,
+            body,
+            data: { type: 'automation' },
+            categoryIdentifier: 'alert',
+            channelId: 'alerts',
+          });
+        } catch (e) {
+          console.warn('[automation] Failed to show notification:', e);
+        }
       },
       sendGatewayCommand: async (command, args) => {
-        if (gateway.isConnected()) {
+        if (!gateway.isConnected()) {
+          const err = new Error('Gateway not connected');
+          console.warn('[automation] Cannot send command: gateway not connected');
+          throw err;
+        }
+        try {
           await gateway.sendChat(`/${command} ${args ? Object.values(args).join(' ') : ''}`);
+        } catch (e) {
+          console.warn('[automation] Failed to send gateway command:', e);
+          throw e;
         }
       },
     };
