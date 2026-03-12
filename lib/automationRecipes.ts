@@ -223,7 +223,7 @@ export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 
 export interface ActionExecutor {
   createTask: (title: string, status?: string, priority?: TaskPriority, description?: string) => Promise<{ id: string }>;
-  createMemoryEntry: (entry: { type: string; title: string; content: string; source?: string; tags?: string[]; reviewStatus?: string }) => Promise<void>;
+  createMemoryEntry: (entry: { type: string; title: string; content: string; source?: string; tags?: string[]; reviewStatus?: string }) => Promise<{ id: string } | void>;
   sendGatewayChat: (message: string, sessionKey?: string) => Promise<void>;
   showNotification: (title: string, body: string) => void;
   sendGatewayCommand?: (command: string, args?: Record<string, string>) => Promise<void>;
@@ -255,14 +255,14 @@ export async function executeRecipeActions(
         }
         case 'create_memory': {
           const cfg = action.config as CreateMemoryActionConfig;
-          await executor.createMemoryEntry({
+          const memResult = await executor.createMemoryEntry({
             type: cfg.type || 'note',
             title: cfg.title,
             content: cfg.content,
             tags: cfg.tags || [],
             source: 'automation',
           });
-          completedActions.push({ type: 'create_memory' });
+          completedActions.push({ type: 'create_memory', entityId: memResult && typeof memResult === 'object' ? memResult.id : undefined });
           break;
         }
         case 'notify': {

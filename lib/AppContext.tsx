@@ -501,6 +501,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         try {
           const created = await memoryStorage.add(entry);
           setMemoryEntries((prev) => [created, ...prev]);
+          return created;
         } catch (e) {
           console.warn('[automation] Failed to create memory entry:', e);
           throw e;

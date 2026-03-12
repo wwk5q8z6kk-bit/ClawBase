@@ -1939,11 +1939,21 @@ export default function VaultScreen() {
         undefined,
         { source: 'braindump' },
       );
+    } catch (e) {
+      await updateInboxItem(item.id, { status: 'pending' });
+      throw e;
+    }
+    try {
       if (item.parsedDueDate) {
         await updateTask(task.id, { dueDate: item.parsedDueDate });
       }
     } catch (e) {
-      await updateInboxItem(item.id, { status: 'pending' });
+      try { await deleteTask(task.id); } catch (rollbackErr) {
+        console.warn('[vault] Rollback failed after task dueDate update error:', rollbackErr);
+      }
+      await updateInboxItem(item.id, { status: 'pending' }).catch((revertErr) =>
+        console.warn('[vault] Failed to revert inbox item to pending:', revertErr),
+      );
       throw e;
     }
     try {
