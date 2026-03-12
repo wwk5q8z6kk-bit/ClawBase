@@ -336,30 +336,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (fullText) {
         try {
           const kwRecipes = await getRecipesByTriggerType('keyword');
-          const executor: ActionExecutor = {
-            createTask: async (title, status, priority, description) => {
-              const task = await taskStorage.create(title, status as any || 'todo', priority as any || 'medium', description);
-              setTasks((prev) => [...prev, task]);
-              return task;
-            },
-            createMemoryEntry: async (entry) => {
-              const created = await memoryStorage.add(entry);
-              setMemoryEntries((prev) => [created, ...prev]);
-            },
-            sendGatewayChat: async (message, sessionKey) => {
-              if (gateway.isConnected()) await gateway.sendChat(message, sessionKey);
-            },
-            showNotification: (title, body) => {
-              showLocalNotification({ title, body, data: { type: 'automation' }, categoryIdentifier: 'alert', channelId: 'alerts' });
-            },
-          };
+          const executor = getAutomationExecutor();
           for (const recipe of kwRecipes) {
             if (doesKeywordMatch(recipe.trigger.config as KeywordTriggerConfig, fullText)) {
               console.log(`[AutomationEngine] keyword trigger fired on incoming: ${recipe.name}`);
               await executeRecipeActions(recipe, executor);
             }
           }
-        } catch {}
+        } catch (e) {
+          console.warn('[AutomationEngine] Keyword trigger processing failed:', e);
+        }
       }
       if (fullText && fullText.length > 20) {
         try {
