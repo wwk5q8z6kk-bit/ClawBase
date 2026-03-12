@@ -8,10 +8,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardAvoidingView, Platform } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import ConnectionBanner from '@/components/ConnectionBanner';
-import { ToastProvider } from '@/components/Toast';
+import { ToastProvider, useToast } from '@/components/Toast';
 import { queryClient } from '@/lib/query-client';
 import { AppProvider } from '@/lib/AppContext';
 import { AppLockWrapper } from '@/components/AppLockWrapper';
+import { setOnMessagesDropped } from '@/lib/offlineQueue';
 import {
   useFonts,
   Inter_400Regular,
@@ -30,6 +31,17 @@ function getFirstParam(value: unknown): string | undefined {
     return value;
   }
   return undefined;
+}
+
+function OfflineQueueBridge() {
+  const { showToast } = useToast();
+  useEffect(() => {
+    setOnMessagesDropped((count) => {
+      showToast('warning', `${count} queued message${count !== 1 ? 's' : ''} couldn't be delivered and were removed`);
+    });
+    return () => setOnMessagesDropped(null);
+  }, [showToast]);
+  return null;
 }
 
 function RootLayoutNav() {
@@ -145,6 +157,7 @@ export default function RootLayout() {
           <AppLockWrapper>
             <GestureHandlerRootView>
               <ToastProvider>
+                <OfflineQueueBridge />
                 <RootLayoutNav />
                 <ConnectionBanner />
               </ToastProvider>

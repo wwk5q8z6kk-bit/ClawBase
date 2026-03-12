@@ -92,7 +92,9 @@ async function getOrCreateDeviceId(): Promise<string> {
       await SecureStore.setItemAsync(DEVICE_ID_KEY, id);
       return id;
     }
-  } catch { }
+  } catch (e) {
+    console.warn('[gateway] SecureStore read failed for device ID, falling back to AsyncStorage:', e);
+  }
   const existing = await AsyncStorage.getItem(DEVICE_ID_KEY);
   if (existing) return existing;
   const id = Crypto.randomUUID();
@@ -105,7 +107,9 @@ async function getStoredDeviceToken(): Promise<string | null> {
     if (Platform.OS !== 'web') {
       return await SecureStore.getItemAsync(DEVICE_TOKEN_KEY);
     }
-  } catch { }
+  } catch (e) {
+    console.warn('[gateway] SecureStore read failed for device token, falling back to AsyncStorage:', e);
+  }
   return AsyncStorage.getItem(DEVICE_TOKEN_KEY);
 }
 
@@ -115,7 +119,9 @@ async function storeDeviceToken(token: string): Promise<void> {
       await SecureStore.setItemAsync(DEVICE_TOKEN_KEY, token);
       return;
     }
-  } catch { }
+  } catch (e) {
+    console.warn('[gateway] SecureStore write failed for device token, falling back to AsyncStorage:', e);
+  }
   await AsyncStorage.setItem(DEVICE_TOKEN_KEY, token);
 }
 
