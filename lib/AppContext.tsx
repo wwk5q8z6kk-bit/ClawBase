@@ -535,14 +535,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
           console.warn('[automation] Invalid gateway command:', command);
           throw err;
         }
+        const normalized = command.trim().replace(/^\/+/, '');
+        if (!normalized) {
+          throw new Error('Invalid command: command is empty after normalization');
+        }
         if (args !== undefined && (typeof args !== 'object' || args === null || Array.isArray(args))) {
           throw new Error('Invalid args: must be a plain object');
         }
         try {
-          const result = await gateway.invokeCommand(command.trim(), args);
+          const result = await gateway.invokeCommand(normalized, args);
           if (result?.error) {
             throw new Error(typeof result.error === 'string' ? result.error : JSON.stringify(result.error));
           }
+          return result;
         } catch (e) {
           console.warn('[automation] Failed to send gateway command:', e);
           throw e;
