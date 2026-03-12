@@ -473,7 +473,7 @@ function EntityLinksSection({ entityType, entityId }: { entityType: EntityType; 
   const [pickerSearch, setPickerSearch] = useState('');
 
   React.useEffect(() => {
-    getLinksFor(entityType, entityId).then(setLinks).catch(() => {});
+    getLinksFor(entityType, entityId).then(setLinks).catch((e) => console.warn('[vault] Failed to load entity links:', e));
   }, [entityType, entityId, refreshKey]);
 
   React.useEffect(() => {
@@ -2016,11 +2016,11 @@ export default function VaultScreen() {
   const [mindMaps, setMindMaps] = useState<MindMap[]>([]);
 
   useEffect(() => {
-    getAllMindMaps().then(setMindMaps).catch(() => {});
+    getAllMindMaps().then(setMindMaps).catch((e) => console.warn('[vault] Failed to load mind maps:', e));
   }, []);
 
   const refreshMindMaps = useCallback(() => {
-    getAllMindMaps().then(setMindMaps).catch(() => {});
+    getAllMindMaps().then(setMindMaps).catch((e) => console.warn('[vault] Failed to refresh mind maps:', e));
   }, []);
 
   const handledDeepLink = useRef<string | null>(null);
@@ -2057,7 +2057,10 @@ export default function VaultScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await fetchGatewayMemory();
-    } catch { }
+    } catch (e) {
+      console.warn('[vault] Failed to sync memory from gateway:', e);
+      showToast('error', 'Failed to sync memory');
+    }
     setSyncingMemory(false);
   }, [fetchGatewayMemory]);
 

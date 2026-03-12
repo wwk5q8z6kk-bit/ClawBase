@@ -232,7 +232,11 @@ export interface ActionExecutor {
 export async function executeRecipeActions(
   recipe: AutomationRecipe,
   executor: ActionExecutor,
-): Promise<void> {
+): Promise<{ succeeded: number; failed: number }> {
+  let succeeded = 0;
+  let failed = 0;
+  const createdEntities: Array<{ type: string; id: string }> = [];
+
   for (const action of recipe.actions) {
     try {
       switch (action.type) {
@@ -243,7 +247,8 @@ export async function executeRecipeActions(
         }
         case 'create_task': {
           const cfg = action.config as CreateTaskActionConfig;
-          await executor.createTask(cfg.title, 'todo', cfg.priority || 'medium', cfg.description);
+          const task = await executor.createTask(cfg.title, 'todo', cfg.priority || 'medium', cfg.description);
+          createdEntities.push({ type: 'task', id: task.id });
           break;
         }
         case 'create_memory': {
@@ -270,9 +275,16 @@ export async function executeRecipeActions(
           break;
         }
       }
+      succeeded++;
     } catch (err) {
-      console.warn(`[AutomationEngine] Action ${action.type} failed:`, err);
+      failed++;
+      console.warn(`[AutomationEngine] Action ${action.type} failed for recipe "${recipe.name}":`, err);
     }
   }
-  await recordRun(recipe.id);
+  if (succeeded > 0 || failed === 0) {
+    await recordRun(recipe.id);
+  } else {
+    console.warn(`[AutomationEngine] All ${failed} actions failed for recipe "${recipe.name}", run not recorded`);
+  }
+  return { succeeded, failed };
 }
