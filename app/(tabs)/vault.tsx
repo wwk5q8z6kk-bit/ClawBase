@@ -1919,14 +1919,16 @@ export default function VaultScreen() {
     memoryEntries, updateMemoryEntry, createMemoryEntry, deleteMemoryEntry,
     gatewayStatus, gatewayMemoryFiles, fetchGatewayMemory,
     createCalendarEvent, deleteCalendarEvent,
-    inboxItems, updateInboxItem, deleteInboxItem, clearInbox,
+    inboxItems, updateInboxItem, deleteInboxItem, refreshInboxItems, clearInbox,
   } = useApp();
 
   useEffect(() => {
-    inboxStorage.recoverStuckProcessing().catch((e) =>
+    inboxStorage.recoverStuckProcessing().then((recovered) => {
+      if (recovered > 0) refreshInboxItems();
+    }).catch((e) =>
       console.warn('[vault] Failed to recover stuck inbox items:', e),
     );
-  }, []);
+  }, [refreshInboxItems]);
 
   const convertItemToTask = useCallback(async (item: InboxItem): Promise<void> => {
     await updateInboxItem(item.id, { status: 'processing' });
@@ -2369,7 +2371,7 @@ export default function VaultScreen() {
         tasks={tasks}
         memoryEntries={memoryEntries}
         gatewayMemoryFiles={gatewayMemoryFiles}
-        inboxCount={inboxItems.filter(i => i.status === 'pending').length}
+        inboxCount={inboxItems.filter(i => i.status === 'pending' || i.status === 'processing').length}
       />
 
       {activeSegment === 'inbox' && (

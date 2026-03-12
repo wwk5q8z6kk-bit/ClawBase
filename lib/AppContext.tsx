@@ -129,6 +129,7 @@ interface AppContextValue {
   addInboxItem: (rawText: string, source?: 'braindump' | 'voice', parsed?: { parsedTitle: string; parsedCategory: 'task' | 'event' | 'note'; parsedPriority: 'low' | 'medium' | 'high' | 'urgent'; parsedDueDate?: number }) => Promise<InboxItem>;
   updateInboxItem: (id: string, updates: Partial<InboxItem>) => Promise<void>;
   deleteInboxItem: (id: string) => Promise<void>;
+  refreshInboxItems: () => Promise<void>;
   clearInbox: () => Promise<void>;
 }
 
@@ -1011,6 +1012,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setInboxItems((prev) => prev.filter((i) => i.id !== id));
   }, []);
 
+  const refreshInboxItems = useCallback(async () => {
+    const items = await inboxStorage.getAll();
+    setInboxItems(items);
+  }, []);
+
   const clearInbox = useCallback(async () => {
     await inboxStorage.clear();
     setInboxItems([]);
@@ -1070,6 +1076,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addInboxItem,
       updateInboxItem,
       deleteInboxItem,
+      refreshInboxItems,
       clearInbox,
     }),
     [
@@ -1085,7 +1092,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       connectGateway, disconnectGateway, sendGatewayChat,
       fetchGatewaySessions, fetchGatewaySessionHistory, fetchGatewayMemory,
       streamingText, isStreaming,
-      inboxItems, addInboxItem, updateInboxItem, deleteInboxItem, clearInbox,
+      inboxItems, addInboxItem, updateInboxItem, deleteInboxItem, refreshInboxItems, clearInbox,
     ],
   );
 
