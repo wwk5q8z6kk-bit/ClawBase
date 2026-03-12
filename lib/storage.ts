@@ -280,7 +280,9 @@ export const messageStorage = {
   },
   async clearConversation(conversationId: string): Promise<void> {
     const key = KEYS.MESSAGES_PREFIX + conversationId;
-    await AsyncStorage.removeItem(key);
+    return withLock(key, async () => {
+      await AsyncStorage.removeItem(key);
+    });
   },
 };
 
@@ -420,7 +422,10 @@ export const memoryStorage = {
   },
   async remove(id: string): Promise<void> {
     await migrateMemoryIfNeeded();
-    await AsyncStorage.removeItem(MEMORY_ENTRY_PREFIX + id);
+    const entryKey = MEMORY_ENTRY_PREFIX + id;
+    await withLock(entryKey, async () => {
+      await AsyncStorage.removeItem(entryKey);
+    });
     await withLock(MEMORY_IDS_KEY, async () => {
       const ids = await getJSON<string[]>(MEMORY_IDS_KEY, []);
       await setJSON(MEMORY_IDS_KEY, ids.filter((i) => i !== id));

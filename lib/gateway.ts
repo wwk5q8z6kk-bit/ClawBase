@@ -300,7 +300,9 @@ export class OpenClawGateway {
         return;
       }
 
-    } catch { }
+    } catch (e) {
+      console.warn('[gateway] Failed to handle incoming message:', e);
+    }
   }
 
   private handleResponse(msg: any) {
@@ -631,7 +633,8 @@ export class OpenClawGateway {
       this.gatewayInfo.activeSessionCount = sessions.filter((s) => s.isActive).length;
       this.emit('sessions_list', sessions);
       return sessions;
-    } catch {
+    } catch (e) {
+      console.warn('[gateway] Operation failed:', e);
       return [];
     }
   }
@@ -689,7 +692,8 @@ export class OpenClawGateway {
 
       this.emit('session_history', { sessionKey, messages });
       return messages;
-    } catch {
+    } catch (e) {
+      console.warn('[gateway] Operation failed:', e);
       return [];
     }
   }
@@ -719,7 +723,7 @@ export class OpenClawGateway {
       }
 
       this.emit('gateway_info', this.gatewayInfo);
-    } catch { }
+    } catch (e) { console.warn('[gateway] Operation failed:', e); }
   }
 
   async fetchMemory(): Promise<GatewayMemoryFile[]> {
@@ -758,7 +762,8 @@ export class OpenClawGateway {
 
       this.emit('memory_data', files);
       return files;
-    } catch {
+    } catch (e) {
+      console.warn('[gateway] Operation failed:', e);
       return [];
     }
   }
@@ -783,7 +788,8 @@ export class OpenClawGateway {
         url: result?.url || result?.publicUrl,
         provider: result?.provider,
       };
-    } catch {
+    } catch (e) {
+      console.warn('[gateway] Operation failed:', e);
       return { active: false };
     }
   }
@@ -791,7 +797,7 @@ export class OpenClawGateway {
   async stopTunnel(): Promise<void> {
     try {
       await this.rpc('config.tunnel.stop');
-    } catch { }
+    } catch (e) { console.warn('[gateway] Operation failed:', e); }
   }
 
   async generatePairCode(): Promise<{ code: string; expiresAt: number } | null> {
@@ -801,7 +807,8 @@ export class OpenClawGateway {
         code: result?.code || '',
         expiresAt: result?.expiresAt || Date.now() + 600000,
       };
-    } catch {
+    } catch (e) {
+      console.warn('[gateway] Operation failed:', e);
       return null;
     }
   }
@@ -810,7 +817,8 @@ export class OpenClawGateway {
     try {
       const result = await this.rpc('automations.list');
       return Array.isArray(result) ? result : result?.automations || [];
-    } catch {
+    } catch (e) {
+      console.warn('[gateway] Operation failed:', e);
       return [];
     }
   }
@@ -819,7 +827,8 @@ export class OpenClawGateway {
     try {
       const result = await this.rpc('automations.approvals');
       return Array.isArray(result) ? result : result?.approvals || [];
-    } catch {
+    } catch (e) {
+      console.warn('[gateway] Operation failed:', e);
       return [];
     }
   }
@@ -828,7 +837,8 @@ export class OpenClawGateway {
     try {
       await this.rpc('automations.toggle', { id, enabled });
       return true;
-    } catch {
+    } catch (e) {
+      console.warn('[gateway] Operation failed:', e);
       return false;
     }
   }
@@ -848,7 +858,8 @@ export class OpenClawGateway {
         }
       });
       return res.ok;
-    } catch {
+    } catch (e) {
+      console.warn('[gateway] Operation failed:', e);
       return false;
     }
   }
@@ -868,7 +879,8 @@ export class OpenClawGateway {
         }
       });
       return res.ok;
-    } catch {
+    } catch (e) {
+      console.warn('[gateway] Operation failed:', e);
       return false;
     }
   }
@@ -877,7 +889,8 @@ export class OpenClawGateway {
     try {
       const result = await this.rpc('events.list', { limit });
       return Array.isArray(result) ? result : result?.events || [];
-    } catch {
+    } catch (e) {
+      console.warn('[gateway] Operation failed:', e);
       return [];
     }
   }
@@ -886,7 +899,8 @@ export class OpenClawGateway {
     try {
       const result = await this.rpc('automations.outputs', { limit });
       return Array.isArray(result) ? result : result?.outputs || [];
-    } catch {
+    } catch (e) {
+      console.warn('[gateway] Operation failed:', e);
       return [];
     }
   }
@@ -908,7 +922,8 @@ export class OpenClawGateway {
         diskPercent: result.diskPercent ?? result.disk ?? 0,
         uptimeMs: result.uptimeMs ?? result.uptime ?? 0,
       };
-    } catch {
+    } catch (e) {
+      console.warn('[gateway] Operation failed:', e);
       return null;
     }
   }
@@ -959,7 +974,8 @@ export class OpenClawGateway {
         recentActivity: Array.from({ length: 7 }, () => Math.floor(Math.random() * data.count + 1)),
         ...(channelLabels[type] || {}),
       }));
-    } catch {
+    } catch (e) {
+      console.warn('[gateway] Operation failed:', e);
       return [];
     }
   }
@@ -997,7 +1013,8 @@ export class OpenClawGateway {
       const resp = await fetch(healthUrl, { signal: controller.signal });
       clearTimeout(timer);
       return resp.ok;
-    } catch {
+    } catch (e) {
+      console.warn('[gateway] Operation failed:', e);
       return false;
     }
   }
