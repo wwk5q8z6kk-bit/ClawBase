@@ -485,7 +485,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const executor: ActionExecutor = {
       createTask: async (title, status, priority, description) => {
         try {
-          const task = await taskStorage.create(title, status as any || 'todo', priority as any || 'medium', description);
+          const validStatuses = ['todo', 'in_progress', 'done', 'deferred', 'archived'];
+          const validPriorities = ['low', 'medium', 'high', 'urgent'];
+          const safeStatus = (validStatuses.includes(status || '') ? status : 'todo') as TaskStatus;
+          const safePriority = (validPriorities.includes(priority || '') ? priority : 'medium') as Task['priority'];
+          const task = await taskStorage.create(title, safeStatus, safePriority, description);
           setTasks((prev) => [...prev, task]);
           return task;
         } catch (e) {

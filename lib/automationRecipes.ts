@@ -219,9 +219,11 @@ export function doesEntityCreatedMatch(config: EntityCreatedTriggerConfig, entit
   return config.entityType === entityType;
 }
 
+export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+
 export interface ActionExecutor {
-  createTask: (title: string, status?: string, priority?: string, description?: string) => Promise<any>;
-  createMemoryEntry: (entry: any) => Promise<void>;
+  createTask: (title: string, status?: string, priority?: TaskPriority, description?: string) => Promise<{ id: string }>;
+  createMemoryEntry: (entry: { type: string; title: string; content: string; source?: string; tags?: string[]; reviewStatus?: string }) => Promise<void>;
   sendGatewayChat: (message: string, sessionKey?: string) => Promise<void>;
   showNotification: (title: string, body: string) => void;
   sendGatewayCommand?: (command: string, args?: Record<string, string>) => Promise<void>;
