@@ -22,7 +22,8 @@ export async function getDismissedInsights(): Promise<Set<string>> {
     const raw = await AsyncStorage.getItem(DISMISSED_INSIGHTS_KEY);
     if (!raw) return new Set();
     return new Set(JSON.parse(raw));
-  } catch {
+  } catch (e) {
+    console.warn('[entityLinks] Failed to load dismissed insights:', e);
     return new Set();
   }
 }
@@ -42,7 +43,8 @@ async function getAll(): Promise<EntityLink[]> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
-  } catch {
+  } catch (e) {
+    console.warn('[entityLinks] Failed to load entity links:', e);
     return [];
   }
 }

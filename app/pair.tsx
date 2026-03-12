@@ -135,7 +135,9 @@ export default function PairScreen() {
         onProgress: (checked, total) => setScanProgress({ checked, total }),
       });
       setDiscoveredGateways(found);
-    } catch { }
+    } catch (e) {
+      console.warn('[Pair] Gateway discovery failed:', e);
+    }
     setScanning(false);
   }, []);
 
@@ -211,7 +213,7 @@ export default function PairScreen() {
       }
 
       let parsed: any;
-      try { parsed = JSON.parse(data); } catch { }
+      try { parsed = JSON.parse(data); } catch (_) { /* QR data is not JSON, will try URL match */ }
 
       if (parsed?.url) {
         finishPairing(parsed.name || 'OpenClaw Gateway', parsed.url, parsed.token);
@@ -225,7 +227,8 @@ export default function PairScreen() {
 
       setError('Unrecognized QR code');
       setTimeout(() => setScanned(false), 2500);
-    } catch {
+    } catch (e) {
+      console.warn('[Pair] QR scan processing failed:', e);
       setError('Could not read QR code');
       setTimeout(() => setScanned(false), 2500);
     }

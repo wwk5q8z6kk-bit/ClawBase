@@ -56,7 +56,9 @@ function closeSocketSafely(socket: WebSocket | null) {
     socket.onerror = null;
     socket.onclose = null;
     socket.close();
-  } catch {}
+  } catch (e) {
+    console.warn('[gatewayHandshake] Error closing socket:', e);
+  }
 }
 
 export async function validateGatewayHandshake(
@@ -115,7 +117,8 @@ export async function validateGatewayHandshake(
 
     try {
       socket = new WebSocket(wsUrl);
-    } catch {
+    } catch (e) {
+      console.warn('[gatewayHandshake] WebSocket construction failed:', e);
       clearTimeout(timeout);
       resolve({ valid: false, error: 'Could not open WebSocket connection' });
       return;
@@ -165,7 +168,9 @@ export async function validateGatewayHandshake(
             return;
           }
         }
-      } catch {}
+      } catch (e) {
+        console.warn('[gatewayHandshake] Failed to parse WebSocket message:', e);
+      }
     };
 
     socket.onerror = () => {

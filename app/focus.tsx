@@ -111,7 +111,7 @@ export default function FocusScreen() {
   }, [selectedMode, customMinutes, isBreak]);
 
   useEffect(() => {
-    focusStorage.getAll().then(setSessions).catch(() => {});
+    focusStorage.getAll().then(setSessions).catch((e) => console.warn('[Focus] Failed to load sessions:', e));
   }, []);
 
   useEffect(() => {
@@ -156,7 +156,9 @@ export default function FocusScreen() {
           await focusStorage.update(currentSessionId, { completed: true, completedAt: Date.now() });
           const updated = await focusStorage.getAll();
           setSessions(updated);
-        } catch {}
+        } catch (e) {
+          console.warn('[Focus] Failed to mark session complete:', e);
+        }
       }
 
       const breakDur = MODE_CONFIG[selectedMode].breakDuration;
@@ -217,7 +219,9 @@ export default function FocusScreen() {
     try {
       await focusStorage.add(session);
       setSessions(await focusStorage.getAll());
-    } catch {}
+    } catch (e) {
+      console.warn('[Focus] Failed to save focus session:', e);
+    }
     setCurrentSessionId(sessionId);
     setIsRunning(true);
     setIsPaused(false);

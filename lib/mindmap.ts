@@ -48,7 +48,8 @@ async function loadAll(): Promise<MindMap[]> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
-  } catch {
+  } catch (e) {
+    console.warn('[mindmap] Failed to load mind maps:', e);
     return [];
   }
 }

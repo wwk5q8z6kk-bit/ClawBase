@@ -40,7 +40,7 @@ function ContactLinksSection({ contactId }: { contactId: string }) {
   const [pickerFilter, setPickerFilter] = React.useState<EntityType | ''>('');
 
   React.useEffect(() => {
-    getLinksFor('contact', contactId).then(setLinks).catch(() => {});
+    getLinksFor('contact', contactId).then(setLinks).catch((e) => console.warn('[CRM] Failed to load contact links:', e));
   }, [contactId, refreshKey]);
 
   React.useEffect(() => {

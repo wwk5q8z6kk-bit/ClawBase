@@ -173,7 +173,7 @@ export default function TimelineScreen() {
         counts[tKey] = (counts[tKey] || 0) + 1;
       }
       setLinkCounts(counts);
-    }).catch(() => {});
+    }).catch((e) => console.warn('[Timeline] Failed to load entity links:', e));
   }, [conversations, tasks, memoryEntries]);
 
   const localEvents = useMemo(() => {
@@ -240,7 +240,9 @@ export default function TimelineScreen() {
         }));
         setGatewayEvents(mapped);
       }
-    } catch { }
+    } catch (e) {
+      console.warn('[Timeline] Failed to fetch gateway events:', e);
+    }
   }, [gateway, gatewayStatus]);
 
   const allEvents = useMemo(() => {

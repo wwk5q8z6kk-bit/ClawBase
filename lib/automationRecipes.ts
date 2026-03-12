@@ -85,7 +85,8 @@ async function loadRecipes(): Promise<AutomationRecipe[]> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
-  } catch {
+  } catch (e) {
+    console.warn('[automationRecipes] Failed to load recipes:', e);
     return [];
   }
 }

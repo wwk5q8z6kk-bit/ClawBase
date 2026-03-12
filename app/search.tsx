@@ -97,7 +97,7 @@ export default function SearchScreen() {
           counts[tKey] = (counts[tKey] || 0) + 1;
         }
         setLinkCounts(counts);
-      }).catch(() => {});
+      }).catch((e) => console.warn('[Search] Failed to load entity links:', e));
     }, [])
   );
 

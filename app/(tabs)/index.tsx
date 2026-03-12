@@ -1005,7 +1005,9 @@ function AutomationStatusWidget() {
             approvals: Array.isArray(approvals) ? approvals.length : 0,
           });
         }
-      } catch { }
+      } catch (e) {
+        console.warn('[Dashboard] Failed to load automation status:', e);
+      }
     };
     load();
   }, [gateway, gatewayStatus]);
@@ -1366,7 +1368,9 @@ function QuickActionsRow() {
       setLoadingId(action.id);
       try {
         await gateway.invokeCommand(action.gatewayCommand);
-      } catch { }
+      } catch (e) {
+        console.warn(`[Dashboard] Quick action "${action.id}" failed:`, e);
+      }
       setLoadingId(null);
       return;
     }
@@ -1592,7 +1596,8 @@ function CommandBar() {
           const map = await createMindMap(title);
           router.push({ pathname: '/mindmap', params: { id: map.id } } as any);
           setFeedbackMsg(`Mind map "${title}" created`);
-        } catch {
+        } catch (e) {
+          console.warn('[Dashboard] Failed to create mind map:', e);
           setFeedbackMsg('Failed to create mind map');
         }
       })();
@@ -1630,7 +1635,8 @@ function CommandBar() {
         const summary = typeof result === 'string' ? result :
           result?.message || result?.summary || result?.output || `${label} completed`;
         setFeedbackMsg(`✓ ${typeof summary === 'string' ? summary.slice(0, 100) : label + ' done'}`);
-      } catch {
+      } catch (e) {
+        console.warn(`[Dashboard] Gateway command "${command}" failed:`, e);
         setFeedbackMsg(`✗ ${label} failed — check gateway connection`);
       } finally {
         setIsLoading(false);
@@ -1726,7 +1732,7 @@ export default function DashboardScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refreshAll();
-    fetchGatewaySessions().catch(() => { });
+    fetchGatewaySessions().catch((e) => console.warn('[Dashboard] Failed to fetch gateway sessions:', e));
     setRefreshing(false);
   }, [refreshAll, fetchGatewaySessions]);
 
@@ -1736,10 +1742,10 @@ export default function DashboardScreen() {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    getAllLinks().then(setEntityLinks).catch(() => {});
-    getDismissedInsights().then(setDismissedIds).catch(() => {});
+    getAllLinks().then(setEntityLinks).catch((e) => console.warn('[Dashboard] Failed to load entity links:', e));
+    getDismissedInsights().then(setDismissedIds).catch((e) => console.warn('[Dashboard] Failed to load dismissed insights:', e));
     const interval = setInterval(() => {
-      getAllLinks().then(setEntityLinks).catch(() => {});
+      getAllLinks().then(setEntityLinks).catch((e) => console.warn('[Dashboard] Failed to refresh entity links:', e));
     }, 10000);
     return () => clearInterval(interval);
   }, []);
@@ -1792,7 +1798,7 @@ export default function DashboardScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setAcceptedSuggestionIds(prev => new Set(prev).add(suggestion.id));
     await addLink(suggestion.sourceType as EntityType, suggestion.sourceId, suggestion.targetType as EntityType, suggestion.targetId, 'related_to');
-    getAllLinks().then(setEntityLinks).catch(() => {});
+    getAllLinks().then(setEntityLinks).catch((e) => console.warn('[Dashboard] Failed to refresh entity links after suggestion:', e));
   }, []);
 
   const visibleInsights = showAllInsights ? insights : insights.slice(0, 3);

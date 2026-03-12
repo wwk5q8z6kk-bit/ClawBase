@@ -250,7 +250,9 @@ export default function SettingsScreen() {
         contacts: crmContacts.length,
         events: calendarEvents.length,
       });
-    } catch { }
+    } catch (e) {
+      console.warn('[Settings] Failed to load storage stats:', e);
+    }
   }, [tasks, conversations, memoryEntries, crmContacts, calendarEvents]);
 
   useEffect(() => {
@@ -305,7 +307,9 @@ export default function SettingsScreen() {
           source: a.source,
         })));
       }
-    } catch { }
+    } catch (e) {
+      console.warn('[Settings] Failed to fetch automations data:', e);
+    }
     setAutomationsLoading(false);
   }, [gatewayStatus]);
 
@@ -318,7 +322,8 @@ export default function SettingsScreen() {
     setAutomations(prev => prev.map(a => a.id === id ? { ...a, enabled } : a));
     try {
       await getGateway().toggleAutomation(id, enabled);
-    } catch {
+    } catch (e) {
+      console.warn('[Settings] Failed to toggle automation:', e);
       setAutomations(prev => prev.map(a => a.id === id ? { ...a, enabled: !enabled } : a));
     }
   }, []);
@@ -333,7 +338,9 @@ export default function SettingsScreen() {
       for (const a of automations) {
         await gw.toggleAutomation(a.id, newEnabled);
       }
-    } catch { }
+    } catch (e) {
+      console.warn('[Settings] Failed to pause/resume automations:', e);
+    }
   }, [automations]);
 
   const handleQuickAction = useCallback(async (label: string, command: string) => {
@@ -342,7 +349,9 @@ export default function SettingsScreen() {
     setQuickActionLoading(label);
     try {
       await getGateway().invokeCommand(command);
-    } catch { }
+    } catch (e) {
+      console.warn(`[Settings] Quick action "${label}" failed:`, e);
+    }
     setQuickActionLoading(null);
   }, [gatewayStatus]);
 
@@ -365,7 +374,8 @@ export default function SettingsScreen() {
       } else {
         setTestResult({ ok: false, msg: 'Gateway not responding. Check URL.' });
       }
-    } catch {
+    } catch (e) {
+      console.warn('[Settings] Gateway test failed:', e);
       setTestResult({ ok: false, msg: 'Could not reach gateway.' });
     }
     setTestingConnection(false);
@@ -377,7 +387,8 @@ export default function SettingsScreen() {
     setConnectionError(null);
     try {
       await connectGateway(activeConnection.url, activeConnection.token || '');
-    } catch {
+    } catch (e) {
+      console.warn('[Settings] Manual connect failed:', e);
       setConnectionError('Failed to connect');
     }
   }, [activeConnection, connectGateway]);
@@ -437,7 +448,8 @@ export default function SettingsScreen() {
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
+    } catch (e) {
+      console.warn('[Settings] Data export failed:', e);
       if (Platform.OS !== 'web') {
         Alert.alert('Export Failed', 'Could not export data. Please try again.');
       }
@@ -452,7 +464,12 @@ export default function SettingsScreen() {
         await AsyncStorage.multiRemove(clawKeys);
         await refreshAll();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch { }
+      } catch (e) {
+        console.warn('[Settings] Failed to clear all data:', e);
+        if (Platform.OS !== 'web') {
+          Alert.alert('Error', 'Failed to clear data. Please try again.');
+        }
+      }
     };
     if (Platform.OS === 'web') {
       doClear();
@@ -1048,7 +1065,7 @@ export default function SettingsScreen() {
                       style={({ pressed }) => [styles.approvalDenyBtn, pressed && { opacity: 0.7 }]}
                       onPress={async () => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        try { await getGateway().denyAction(approval.id); } catch { }
+                        try { await getGateway().denyAction(approval.id); } catch (e) { console.warn('[Settings] Failed to deny action:', e); }
                         setApprovals(prev => prev.filter(a => a.id !== approval.id));
                       }}
                     >
@@ -1058,7 +1075,7 @@ export default function SettingsScreen() {
                       style={({ pressed }) => [styles.approvalApproveBtn, pressed && { opacity: 0.7 }]}
                       onPress={async () => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        try { await getGateway().approveAction(approval.id); } catch { }
+                        try { await getGateway().approveAction(approval.id); } catch (e) { console.warn('[Settings] Failed to approve action:', e); }
                         setApprovals(prev => prev.filter(a => a.id !== approval.id));
                       }}
                     >

@@ -42,7 +42,7 @@ function EventLinksSection({ eventId }: { eventId: string }) {
   const [pickerFilter, setPickerFilter] = React.useState<EntityType | ''>('');
 
   React.useEffect(() => {
-    getLinksFor('calendar', eventId).then(setLinks).catch(() => {});
+    getLinksFor('calendar', eventId).then(setLinks).catch((e) => console.warn('[Calendar] Failed to load event links:', e));
   }, [eventId, refreshKey]);
 
   React.useEffect(() => {
@@ -611,7 +611,9 @@ export default function CalendarTab() {
         }));
         setGatewayEvents(mapped);
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[Calendar] Failed to fetch gateway events:', e);
+    }
   }, [gateway, gatewayStatus]);
 
   const allTimelineEvents = useMemo(() => {

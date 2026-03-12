@@ -266,7 +266,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         }
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[AppContext] Entity linking during seed failed:', e);
+    }
 
     await AsyncStorage.setItem('@clawbase:seeded', 'true');
   }, []);
@@ -364,7 +366,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (sessionKey) {
             await addLink('memory', memEntry.id, 'conversation', sessionKey, 'created_from');
           }
-        } catch {}
+        } catch (e) {
+          console.warn('[AppContext] Failed to save gateway message as memory:', e);
+        }
       }
     });
     const unsub7 = gateway.on('error', (event) => {
@@ -526,8 +530,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
           console.warn('[automation] Cannot send command: gateway not connected');
           throw err;
         }
+        if (!command || typeof command !== 'string' || !command.trim()) {
+          const err = new Error('Invalid command: command must be a non-empty string');
+          console.warn('[automation] Invalid gateway command:', command);
+          throw err;
+        }
+        if (args !== undefined && (typeof args !== 'object' || args === null || Array.isArray(args))) {
+          throw new Error('Invalid args: must be a plain object');
+        }
         try {
-          await gateway.sendChat(`/${command} ${args ? Object.values(args).join(' ') : ''}`);
+          const result = await gateway.invokeCommand(command.trim(), args);
+          if (result?.error) {
+            throw new Error(typeof result.error === 'string' ? result.error : JSON.stringify(result.error));
+          }
         } catch (e) {
           console.warn('[automation] Failed to send gateway command:', e);
           throw e;
@@ -664,7 +679,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteConversation = useCallback(async (id: string) => {
     await conversationStorage.remove(id);
     setConversations((prev) => prev.filter((c) => c.id !== id));
-    try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('conversation', id); } catch {}
+    try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('conversation', id); } catch (e) { console.warn('[AppContext] Failed to remove conversation links:', e); }
   }, []);
 
   const getMessages = useCallback(async (conversationId: string) => {
@@ -750,7 +765,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await addLink('memory', memEntry.id, 'calendar', event.id, 'mentions');
           }
         }
-      } catch {}
+      } catch (e) {
+        console.warn('[AppContext] Failed to create entity links for memory:', e);
+      }
 
       const allMem = await memoryStorage.getAll();
       setMemoryEntries(allMem);
@@ -788,7 +805,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (gateway.isConnected()) {
         try {
           await gateway.sendChat(content);
-        } catch {
+        } catch (e) {
+          console.warn('[AppContext] Gateway sendChat failed, using local simulation:', e);
           await simulateResponse(conversationId, content);
         }
       } else {
@@ -833,7 +851,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteTask = useCallback(async (id: string) => {
     await taskStorage.remove(id);
     setTasks((prev) => prev.filter((t) => t.id !== id));
-    try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('task', id); } catch {}
+    try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('task', id); } catch (e) { console.warn('[AppContext] Failed to remove task links:', e); }
   }, []);
 
   const createMemoryEntry = useCallback(async (entry: Omit<MemoryEntry, 'id' | 'timestamp'>): Promise<MemoryEntry> => {
@@ -850,7 +868,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteMemoryEntry = useCallback(async (id: string) => {
     await memoryStorage.remove(id);
     setMemoryEntries((prev) => prev.filter((m) => m.id !== id));
-    try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('memory', id); } catch {}
+    try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('memory', id); } catch (e) { console.warn('[AppContext] Failed to remove memory links:', e); }
   }, []);
 
   const searchMemory = useCallback(async (query: string) => {
@@ -891,7 +909,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await addLink('calendar', created.id, 'contact', matched.id, 'mentions');
           }
         }
-      } catch {}
+      } catch (e) {
+        console.warn('[AppContext] Failed to link calendar event to contacts:', e);
+      }
     }
     return created;
   }, [runEntityCreatedTriggers]);
@@ -906,7 +926,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteCalendarEvent = useCallback(async (id: string) => {
     await calendarStorage.remove(id);
     setCalendarEvents((prev) => prev.filter((e) => e.id !== id));
-    try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('calendar', id); } catch {}
+    try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('calendar', id); } catch (e) { console.warn('[AppContext] Failed to remove calendar links:', e); }
   }, []);
 
   const createCRMContact = useCallback(async (contact: Omit<CRMContact, 'id' | 'createdAt' | 'interactions'>) => {
@@ -924,7 +944,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteCRMContact = useCallback(async (id: string) => {
     await crmStorage.remove(id);
     setCrmContacts((prev) => prev.filter((c) => c.id !== id));
-    try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('contact', id); } catch {}
+    try { const { removeLinksFor } = await import('@/lib/entityLinks'); await removeLinksFor('contact', id); } catch (e) { console.warn('[AppContext] Failed to remove contact links:', e); }
   }, []);
 
   const addCRMInteraction = useCallback(async (contactId: string, interaction: Omit<CRMInteraction, 'id' | 'contactId'>) => {

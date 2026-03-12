@@ -44,7 +44,7 @@ export default function ConnectionsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      getAllLinks().then(setLinks).catch(() => {});
+      getAllLinks().then(setLinks).catch((e) => console.warn('[Connections] Failed to load links:', e));
     }, [])
   );
 
@@ -122,7 +122,7 @@ export default function ConnectionsScreen() {
             { text: 'Cancel', style: 'cancel' },
             { text: 'Remove', style: 'destructive', onPress: async () => {
               await removeLink(item.id);
-              getAllLinks().then(setLinks).catch(() => {});
+              getAllLinks().then(setLinks).catch((e) => console.warn('[Connections] Failed to refresh links:', e));
             }},
           ]);
         }}

@@ -713,7 +713,7 @@ export default function ChatDetailScreen() {
     if (!id) return;
     let active = true;
     const fetchLinks = () => {
-      getLinksFor('conversation', id).then(l => { if (active) setChatLinks(l); }).catch(() => {});
+      getLinksFor('conversation', id).then(l => { if (active) setChatLinks(l); }).catch((e) => console.warn('[Chat] Failed to load conversation links:', e));
     };
     fetchLinks();
     const interval = setInterval(fetchLinks, 8000);
@@ -818,9 +818,10 @@ export default function ChatDetailScreen() {
       await sendMessage(id, content);
       const updated = await getMessages(id);
       setMessages(updated);
-    } catch {
+    } catch (e) {
+      console.warn('[Chat] Message send failed, queuing:', e);
       // Queue the message for later delivery
-      await enqueue(id, content).catch(() => { });
+      await enqueue(id, content).catch((e) => console.warn('[Chat] Failed to enqueue message:', e));
       setMessages((prev) =>
         prev.map((m) => m.id === userMsg.id ? { ...m, status: 'queued' as any } : m),
       );
@@ -895,7 +896,8 @@ export default function ChatDetailScreen() {
         showToast('success', `Contact "${title}" added`);
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
+    } catch (e) {
+      console.warn('[Chat] Failed to create entity from message:', e);
       showToast('error', 'Failed to create');
     }
   }, [id, createTask, createMemoryEntry, createCalendarEvent, createCRMContact, createPrefillText, showToast]);
@@ -910,10 +912,11 @@ export default function ChatDetailScreen() {
         tags: ['from:chat'],
         reviewStatus: 'unread',
       });
-      if (id && created?.id) await addLink('conversation', id, 'memory', created.id, 'created_from').catch(() => {});
+      if (id && created?.id) await addLink('conversation', id, 'memory', created.id, 'created_from').catch((e) => console.warn('[Chat] Failed to link memory to conversation:', e));
       showToast('success', 'Saved as memory');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
+    } catch (e) {
+      console.warn('[Chat] Failed to save as memory:', e);
       showToast('error', 'Failed to save');
     }
     setActionMenuMsg(null);
@@ -951,7 +954,7 @@ export default function ChatDetailScreen() {
     const doClear = async () => {
       setMessages([]);
       setMenuVisible(false);
-      if (id) await messageStorage.clearConversation(id).catch(() => {});
+      if (id) await messageStorage.clearConversation(id).catch((e) => console.warn('[Chat] Failed to clear conversation messages:', e));
     };
     if (Platform.OS === 'web') {
       doClear();
@@ -979,9 +982,10 @@ export default function ChatDetailScreen() {
     if (!actionMenuMsg) return;
     try {
       await Clipboard.setStringAsync(actionMenuMsg.content);
-    } catch {
+    } catch (e) {
+      console.warn('[Chat] Clipboard copy failed:', e);
       if (Platform.OS === 'web') {
-        try { navigator.clipboard.writeText(actionMenuMsg.content); } catch { }
+        try { navigator.clipboard.writeText(actionMenuMsg.content); } catch (e2) { console.warn('[Chat] Web clipboard fallback failed:', e2); }
       }
     }
     setCopiedId(actionMenuMsg.id);

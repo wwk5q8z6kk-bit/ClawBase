@@ -156,7 +156,9 @@ export async function getNotificationPrefs(): Promise<NotificationPrefs> {
     try {
         const raw = await AsyncStorage.getItem(NOTIFICATION_PREFS_KEY);
         if (raw) return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
-    } catch { }
+    } catch (e) {
+        console.warn('[notifications] Failed to load notification prefs:', e);
+    }
     return { ...DEFAULT_PREFS };
 }
 

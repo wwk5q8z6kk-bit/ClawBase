@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState, useRef } from 'react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
   StyleSheet,
   Text,
@@ -297,7 +298,7 @@ function SwipeableConversationItem({
   );
 }
 
-export default function ChatListScreen() {
+function ChatListScreenInner() {
   const insets = useSafeAreaInsets();
   const { conversations, createConversation, updateConversation, deleteConversation, gatewayStatus, gatewaySessions } = useApp();
 
@@ -794,6 +795,14 @@ export default function ChatListScreen() {
         </Pressable>
       </Modal>
     </View>
+  );
+}
+
+export default function ChatListScreen() {
+  return (
+    <ErrorBoundary onError={(error, stack) => console.error('[ChatListScreen] Render error:', error, stack)}>
+      <ChatListScreenInner />
+    </ErrorBoundary>
   );
 }
 

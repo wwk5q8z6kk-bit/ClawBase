@@ -162,7 +162,7 @@ export default function VoiceModeOverlay({ visible, onClose, onSend }: VoiceMode
             onChunk: (base64) => {
                 if (gatewayStatus === 'connected') {
                     // Send chunks immediately as they are recorded
-                    gateway.streamAudioChunk(base64, 'agent:main:main').catch(() => { });
+                    gateway.streamAudioChunk(base64, 'agent:main:main').catch((e) => console.warn('[Voice] Failed to stream audio chunk:', e));
                 }
             }
         });
@@ -190,7 +190,7 @@ export default function VoiceModeOverlay({ visible, onClose, onSend }: VoiceMode
 
         // Send end signal to gateway so it knows the audio file stream is finished
         if (gatewayStatus === 'connected') {
-            gateway.endAudioStream('agent:main:main').catch(() => { });
+            gateway.endAudioStream('agent:main:main').catch((e) => console.warn('[Voice] Failed to end audio stream:', e));
         }
 
         // If the recording is too short, show an error
@@ -216,7 +216,8 @@ export default function VoiceModeOverlay({ visible, onClose, onSend }: VoiceMode
             } else {
                 setState('idle');
             }
-        } catch {
+        } catch (e) {
+            console.warn('[VoiceMode] Failed to get response:', e);
             setErrorMsg('Failed to get response');
             setState('error');
         }

@@ -216,7 +216,7 @@ function MemoryLinksSection({ memoryId, legacyLinkedIds }: { memoryId: string; l
   const [links, setLinks] = React.useState<EntityLink[]>([]);
 
   React.useEffect(() => {
-    getLinksFor('memory', memoryId).then(setLinks).catch(() => {});
+    getLinksFor('memory', memoryId).then(setLinks).catch((e) => console.warn('[Memory] Failed to load memory links:', e));
   }, [memoryId]);
 
   const resolved = React.useMemo(() => {
@@ -499,7 +499,9 @@ export default function MemoryScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await fetchGatewayMemory();
-    } catch { }
+    } catch (e) {
+      console.warn('[Memory] Failed to sync gateway memory:', e);
+    }
     setSyncingMemory(false);
   }, [fetchGatewayMemory]);
 

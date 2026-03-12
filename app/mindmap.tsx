@@ -175,7 +175,8 @@ export default function MindMapScreen() {
           const map = await createMindMap('New Mind Map');
           setMindMap(map);
           router.replace({ pathname: '/mindmap', params: { id: map.id } } as any);
-        } catch {
+        } catch (e) {
+          console.warn('[MindMap] Failed to create mind map:', e);
           Alert.alert('Error', 'Failed to create mind map');
           router.back();
         }
@@ -423,7 +424,8 @@ export default function MindMapScreen() {
         setMindMap(updated);
         updateMindMap(updated);
       }
-    } catch {
+    } catch (e) {
+      console.warn('[MindMap] AI suggestion failed, using fallback:', e);
       await new Promise((r) => setTimeout(r, 400));
       const ideas = getSimulatedIdeas(nodeTexts);
       if (ideas.length > 0) {
@@ -512,7 +514,9 @@ export default function MindMapScreen() {
       if (entityId) {
         await addLink('mindmap', map.id, entityType, entityId, 'created_from');
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[MindMap] Failed to promote node to entity:', e);
+    }
   }, [selectedNodeId, pushUndo, createTask, createMemoryEntry, createCalendarEvent]);
 
   const panResponder = useMemo(

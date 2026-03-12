@@ -496,8 +496,8 @@ export class OpenClawGateway {
   }
 
   private requestGatewayInfo() {
-    this.fetchSessions().catch(() => { });
-    this.fetchConfig().catch(() => { });
+    this.fetchSessions().catch((e) => console.warn('[gateway] Failed to fetch sessions on connect:', e));
+    this.fetchConfig().catch((e) => console.warn('[gateway] Failed to fetch config on connect:', e));
   }
 
   private startPing(intervalMs: number = 15000) {

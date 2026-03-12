@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
   StyleSheet,
   Text,
@@ -1910,7 +1911,7 @@ const inboxStyles = StyleSheet.create({
   },
 });
 
-export default function VaultScreen() {
+function VaultScreenInner() {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const { openTaskId, openMemoryId } = useLocalSearchParams<{ openTaskId?: string; openMemoryId?: string }>();
@@ -3338,6 +3339,14 @@ export default function VaultScreen() {
         </View>
       )}
     </View>
+  );
+}
+
+export default function VaultScreen() {
+  return (
+    <ErrorBoundary onError={(error, stack) => console.error('[VaultScreen] Render error:', error, stack)}>
+      <VaultScreenInner />
+    </ErrorBoundary>
   );
 }
 

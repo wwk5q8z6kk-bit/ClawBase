@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
   StyleSheet,
   View,
@@ -1236,7 +1237,8 @@ function QuickActionsBar({
     try {
       await getGateway().invokeCommand(command);
       onToast(`${actionKey} completed`, 'success');
-    } catch {
+    } catch (e) {
+      console.warn(`[Automations] Action "${actionKey}" failed:`, e);
       onToast(`${actionKey} failed`, 'error');
     } finally {
       setLoadingAction(null);
@@ -1253,10 +1255,11 @@ function QuickActionsBar({
       const enabled = automations.filter(a => a.enabled);
       const gw = getGateway() as any;
       for (const a of enabled) {
-        await gw.rpc('automations.trigger', { id: a.id }).catch(() => { });
+        await gw.rpc('automations.trigger', { id: a.id }).catch((e: any) => console.warn(`[Automations] Failed to trigger ${a.id}:`, e));
       }
       onToast(`Triggered ${enabled.length} automations`, 'success');
-    } catch {
+    } catch (e) {
+      console.warn('[Automations] Run All failed:', e);
       onToast('Run All failed', 'error');
     } finally {
       setLoadingAction(null);
@@ -1656,7 +1659,7 @@ function AnalyticsCard({ cronOutputs }: { cronOutputs: CronOutput[] }) {
   );
 }
 
-export default function AutomationsScreen() {
+function AutomationsScreenInner() {
   const insets = useSafeAreaInsets();
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
   const { gatewayStatus } = useApp();
@@ -1732,7 +1735,9 @@ export default function AutomationsScreen() {
           type: a.type || 'cron',
         })));
       }
-    } catch { }
+    } catch (e) {
+      console.warn('[Automations] Failed to fetch automations list:', e);
+    }
 
     try {
       const approvalList = await gw.rpc('automations.approvals');
@@ -1746,7 +1751,9 @@ export default function AutomationsScreen() {
           source: a.source,
         })));
       }
-    } catch { }
+    } catch (e) {
+      console.warn('[Automations] Failed to fetch approvals:', e);
+    }
 
     try {
       const outputs = await gw.rpc('automations.outputs', { limit: 5 });
@@ -1760,7 +1767,9 @@ export default function AutomationsScreen() {
           duration: o.duration,
         })));
       }
-    } catch { }
+    } catch (e) {
+      console.warn('[Automations] Failed to fetch cron outputs:', e);
+    }
   }, [gatewayStatus]);
 
   useEffect(() => {
@@ -1840,7 +1849,9 @@ export default function AutomationsScreen() {
       try {
         const gw = getGateway() as any;
         await gw.rpc('automations.toggle', { id, enabled });
-      } catch { }
+      } catch (e) {
+        console.warn('[Automations] Failed to toggle automation:', e);
+      }
     }
   }, [gatewayStatus]);
 
@@ -1866,19 +1877,22 @@ export default function AutomationsScreen() {
       try {
         const gw = getGateway() as any;
         await gw.approveAction(id);
-      } catch { }
+      } catch (e) {
+        console.warn('[Automations] Failed to approve action:', e);
+      }
     }
     showToast('Action approved', 'success');
   }, [gatewayStatus, showToast]);
 
   const handleDeny = useCallback(async (id: string) => {
-    // Optimistically remove from UI
     setApprovals((prev) => prev.filter((a) => a.id !== id));
     if (gatewayStatus === 'connected') {
       try {
         const gw = getGateway() as any;
         await gw.denyAction(id);
-      } catch { }
+      } catch (e) {
+        console.warn('[Automations] Failed to deny action:', e);
+      }
     }
   }, [gatewayStatus]);
 
@@ -1892,7 +1906,9 @@ export default function AutomationsScreen() {
       for (const a of p3Approvals) {
         try {
           await gw.approveAction(a.id);
-        } catch { }
+        } catch (e) {
+          console.warn(`[Automations] Failed to approve P3 action ${a.id}:`, e);
+        }
       }
     }
     showToast(`Approved ${p3Approvals.length} low-risk items`, 'success');
@@ -1909,7 +1925,9 @@ export default function AutomationsScreen() {
       try {
         const gw = getGateway() as any;
         await gw.rpc('automations.pauseAll', { paused: newPaused });
-      } catch { }
+      } catch (e) {
+        console.warn('[Automations] Failed to pause/resume all:', e);
+      }
     }
     showToast(newPaused ? 'All automations paused' : 'All automations resumed', newPaused ? 'error' : 'success');
   }, [allPaused, gatewayStatus, showToast]);
@@ -2163,6 +2181,14 @@ export default function AutomationsScreen() {
         onSave={handleCreateRecipe}
       />
     </View>
+  );
+}
+
+export default function AutomationsScreen() {
+  return (
+    <ErrorBoundary onError={(error, stack) => console.error('[AutomationsScreen] Render error:', error, stack)}>
+      <AutomationsScreenInner />
+    </ErrorBoundary>
   );
 }
 

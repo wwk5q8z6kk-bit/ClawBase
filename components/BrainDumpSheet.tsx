@@ -125,7 +125,8 @@ export default function BrainDumpSheet({ visible, onClose }: BrainDumpSheetProps
       } else {
         showToast('info', 'AI couldn\'t parse this — try the local parser instead');
       }
-    } catch {
+    } catch (e) {
+      console.warn('[BrainDump] AI parsing failed:', e);
       if (parseRequestId.current === requestId) {
         showToast('error', 'AI parsing failed — try again or use local parser');
       }
@@ -154,7 +155,8 @@ export default function BrainDumpSheet({ visible, onClose }: BrainDumpSheetProps
 
       setText('');
       handleDismiss();
-    } catch {
+    } catch (e) {
+      console.warn('[BrainDump] Failed to save items:', e);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setSaving(false);

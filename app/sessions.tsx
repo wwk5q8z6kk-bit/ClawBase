@@ -195,13 +195,13 @@ export default function SessionsScreen() {
 
   useEffect(() => {
     if (gatewayStatus === 'connected') {
-      fetchGatewaySessions().catch(() => { });
+      fetchGatewaySessions().catch((e) => console.warn('[Sessions] Failed to fetch gateway sessions:', e));
     }
   }, [gatewayStatus, fetchGatewaySessions]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchGatewaySessions().catch(() => { });
+    await fetchGatewaySessions().catch((e) => console.warn('[Sessions] Failed to refresh gateway sessions:', e));
     setRefreshing(false);
   }, [fetchGatewaySessions]);
 

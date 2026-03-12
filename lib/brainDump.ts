@@ -369,7 +369,8 @@ function extractJsonArray(text: string): any[] | null {
     const arr = JSON.parse(cleaned.slice(bracketStart, bracketEnd + 1));
     if (!Array.isArray(arr)) return null;
     return arr;
-  } catch {
+  } catch (e) {
+    console.warn('[brainDump] Failed to parse JSON array from AI response:', e);
     return null;
   }
 }
@@ -450,7 +451,8 @@ export async function aiParseBrainDump(
     if (!arr) return null;
 
     return validateParsedItems(arr);
-  } catch {
+  } catch (e) {
+    console.warn('[brainDump] AI brain dump parsing failed:', e);
     cleanup();
     return null;
   }

@@ -14,7 +14,8 @@ export async function requestAudioPermission(): Promise<boolean> {
     try {
         const { granted } = await Audio.requestPermissionsAsync();
         return granted;
-    } catch {
+    } catch (e) {
+        console.warn('[voice] Failed to request audio permission:', e);
         return false;
     }
 }
@@ -53,7 +54,9 @@ export async function startRecording(opts?: { onChunk?: (base64: string) => void
                             position = info.size;
                             opts?.onChunk?.(b64);
                         }
-                    } catch { }
+                    } catch (e) {
+                        console.warn('[voice] Failed to read audio chunk:', e);
+                    }
                 }, 500);
             }
         }
@@ -89,7 +92,9 @@ export async function stopRecording(): Promise<{
                 base64 = await FileSystem.readAsStringAsync(uri, {
                     encoding: 'base64' as any,
                 });
-            } catch { }
+            } catch (e) {
+                console.warn('[voice] Failed to read recording as base64:', e);
+            }
         }
 
         recording = null;
