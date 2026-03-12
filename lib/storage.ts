@@ -592,6 +592,50 @@ export const inboxStorage = {
   async clear(): Promise<void> {
     await setJSON(KEYS.INBOX, []);
   },
+  async recoverStuckProcessing(): Promise<number> {
+    return withLock(KEYS.INBOX, async () => {
+      const all = await getJSON<InboxItem[]>(KEYS.INBOX, []);
+      let recovered = 0;
+      const updated = all.map((item) => {
+        if (item.status === 'processing') {
+          recovered++;
+          return { ...item, status: 'pending' as const };
+        }
+        return item;
+      });
+      if (recovered > 0) {
+        await setJSON(KEYS.INBOX, updated);
+        console.warn(`[storage] Recovered ${recovered} inbox items stuck in 'processing' state`);
+      }
+      return recovered;
+    });
+  },
+  async convertItem<T>(
+    itemId: string,
+    createEntity: () => Promise<T>,
+    deleteEntity: (entity: T) => Promise<void>,
+  ): Promise<T> {
+    await inboxStorage.update(itemId, { status: 'processing' });
+    let entity: T;
+    try {
+      entity = await createEntity();
+    } catch (e) {
+      await inboxStorage.update(itemId, { status: 'pending' });
+      throw e;
+    }
+    try {
+      await inboxStorage.update(itemId, { status: 'processed' });
+    } catch (e) {
+      try { await deleteEntity(entity); } catch (rollbackErr) {
+        console.warn('[storage] Rollback failed after inbox status update error:', rollbackErr);
+      }
+      await inboxStorage.update(itemId, { status: 'pending' }).catch((revertErr) => {
+        console.warn('[storage] Failed to revert inbox item to pending:', revertErr);
+      });
+      throw e;
+    }
+    return entity;
+  },
 };
 
 export const focusStorage = {

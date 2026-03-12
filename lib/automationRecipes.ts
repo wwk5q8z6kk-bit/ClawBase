@@ -227,6 +227,7 @@ export interface ActionExecutor {
   sendGatewayChat: (message: string, sessionKey?: string) => Promise<void>;
   showNotification: (title: string, body: string) => void;
   sendGatewayCommand?: (command: string, args?: Record<string, string>) => Promise<void>;
+  rollbackEntity?: (entityType: 'task' | 'memory', entityId: string) => Promise<void>;
 }
 
 export async function executeRecipeActions(
@@ -235,7 +236,7 @@ export async function executeRecipeActions(
 ): Promise<{ succeeded: number; failed: number }> {
   let succeeded = 0;
   let failed = 0;
-  const createdEntities: Array<{ type: string; id: string }> = [];
+  const completedActions: Array<{ type: string; entityId?: string }> = [];
 
   for (const action of recipe.actions) {
     try {
@@ -243,12 +244,13 @@ export async function executeRecipeActions(
         case 'send_chat': {
           const cfg = action.config as SendChatActionConfig;
           await executor.sendGatewayChat(cfg.message, cfg.sessionKey);
+          completedActions.push({ type: 'send_chat' });
           break;
         }
         case 'create_task': {
           const cfg = action.config as CreateTaskActionConfig;
           const task = await executor.createTask(cfg.title, 'todo', cfg.priority || 'medium', cfg.description);
-          createdEntities.push({ type: 'task', id: task.id });
+          completedActions.push({ type: 'create_task', entityId: task.id });
           break;
         }
         case 'create_memory': {
@@ -260,11 +262,13 @@ export async function executeRecipeActions(
             tags: cfg.tags || [],
             source: 'automation',
           });
+          completedActions.push({ type: 'create_memory' });
           break;
         }
         case 'notify': {
           const cfg = action.config as NotifyActionConfig;
           executor.showNotification(cfg.title, cfg.body);
+          completedActions.push({ type: 'notify' });
           break;
         }
         case 'gateway_command': {
@@ -272,6 +276,7 @@ export async function executeRecipeActions(
           if (executor.sendGatewayCommand) {
             await executor.sendGatewayCommand(cfg.command, cfg.args);
           }
+          completedActions.push({ type: 'gateway_command' });
           break;
         }
       }
@@ -279,12 +284,24 @@ export async function executeRecipeActions(
     } catch (err) {
       failed++;
       console.warn(`[AutomationEngine] Action ${action.type} failed for recipe "${recipe.name}":`, err);
+      if (executor.rollbackEntity) {
+        for (const completed of completedActions) {
+          if (completed.entityId) {
+            try {
+              await executor.rollbackEntity(completed.type === 'create_task' ? 'task' : 'memory', completed.entityId);
+            } catch (rollbackErr) {
+              console.warn(`[AutomationEngine] Rollback failed for ${completed.type}:`, rollbackErr);
+            }
+          }
+        }
+      }
+      break;
     }
   }
   if (succeeded > 0 || failed === 0) {
     await recordRun(recipe.id);
   } else {
-    console.warn(`[AutomationEngine] All ${failed} actions failed for recipe "${recipe.name}", run not recorded`);
+    console.warn(`[AutomationEngine] All actions failed for recipe "${recipe.name}", run not recorded`);
   }
   return { succeeded, failed };
 }

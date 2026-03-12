@@ -545,6 +545,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           throw e;
         }
       },
+      rollbackEntity: async (entityType, entityId) => {
+        try {
+          if (entityType === 'task') {
+            await taskStorage.remove(entityId);
+            setTasks((prev) => prev.filter((t) => t.id !== entityId));
+          } else if (entityType === 'memory') {
+            await memoryStorage.remove(entityId);
+            setMemoryEntries((prev) => prev.filter((m) => m.id !== entityId));
+          }
+        } catch (e) {
+          console.warn(`[automation] Rollback of ${entityType} ${entityId} failed:`, e);
+          throw e;
+        }
+      },
     };
     automationExecutorRef.current = executor;
     return executor;

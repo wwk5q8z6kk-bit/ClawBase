@@ -29,6 +29,7 @@ import {
   formatParsedDate,
 } from '@/lib/brainDump';
 import type { GatewayMemoryFile } from '@/lib/gateway';
+import { inboxStorage } from '@/lib/storage';
 import { getLinksFor, addLink, removeLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
 import { getAllMindMaps, createMindMap, deleteMindMap, type MindMap } from '@/lib/mindmap';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -1591,6 +1592,9 @@ function InboxSegment({
 
   const filteredItems = useMemo(() => {
     if (filter === 'all') return inboxItems;
+    if (filter === 'pending') {
+      return inboxItems.filter(i => i.status === 'pending' || i.status === 'processing');
+    }
     return inboxItems.filter(i => i.status === filter);
   }, [inboxItems, filter]);
 
@@ -1918,60 +1922,96 @@ export default function VaultScreen() {
     inboxItems, updateInboxItem, deleteInboxItem, clearInbox,
   } = useApp();
 
-  const convertItemToTask = useCallback(async (item: InboxItem): Promise<void> => {
-    const task = await createTask(
-      item.parsedTitle || item.rawText,
-      'todo',
-      item.parsedPriority || 'medium',
-      undefined,
-      { source: 'braindump' },
+  useEffect(() => {
+    inboxStorage.recoverStuckProcessing().catch((e) =>
+      console.warn('[vault] Failed to recover stuck inbox items:', e),
     );
+  }, []);
+
+  const convertItemToTask = useCallback(async (item: InboxItem): Promise<void> => {
+    await updateInboxItem(item.id, { status: 'processing' });
+    let task;
     try {
+      task = await createTask(
+        item.parsedTitle || item.rawText,
+        'todo',
+        item.parsedPriority || 'medium',
+        undefined,
+        { source: 'braindump' },
+      );
       if (item.parsedDueDate) {
         await updateTask(task.id, { dueDate: item.parsedDueDate });
       }
+    } catch (e) {
+      await updateInboxItem(item.id, { status: 'pending' });
+      throw e;
+    }
+    try {
       await updateInboxItem(item.id, { status: 'processed' });
     } catch (e) {
       try { await deleteTask(task.id); } catch (rollbackErr) {
         console.warn('[vault] Rollback failed after task conversion error:', rollbackErr);
       }
+      await updateInboxItem(item.id, { status: 'pending' }).catch((revertErr) =>
+        console.warn('[vault] Failed to revert inbox item to pending:', revertErr),
+      );
       throw e;
     }
   }, [createTask, updateTask, updateInboxItem, deleteTask]);
 
   const convertItemToEvent = useCallback(async (item: InboxItem): Promise<void> => {
+    await updateInboxItem(item.id, { status: 'processing' });
     const startTime = item.parsedDueDate || Date.now() + 3600000;
-    const event = await createCalendarEvent({
-      title: item.parsedTitle || item.rawText,
-      startTime,
-      endTime: startTime + 3600000,
-      source: 'manual',
-    });
+    let event;
+    try {
+      event = await createCalendarEvent({
+        title: item.parsedTitle || item.rawText,
+        startTime,
+        endTime: startTime + 3600000,
+        source: 'manual',
+      });
+    } catch (e) {
+      await updateInboxItem(item.id, { status: 'pending' });
+      throw e;
+    }
     try {
       await updateInboxItem(item.id, { status: 'processed' });
     } catch (e) {
       try { await deleteCalendarEvent(event.id); } catch (rollbackErr) {
         console.warn('[vault] Rollback failed after event conversion error:', rollbackErr);
       }
+      await updateInboxItem(item.id, { status: 'pending' }).catch((revertErr) =>
+        console.warn('[vault] Failed to revert inbox item to pending:', revertErr),
+      );
       throw e;
     }
   }, [createCalendarEvent, deleteCalendarEvent, updateInboxItem]);
 
   const convertItemToMemory = useCallback(async (item: InboxItem): Promise<void> => {
-    const entry = await createMemoryEntry({
-      type: 'note',
-      title: item.parsedTitle || item.rawText,
-      content: item.rawText,
-      source: 'braindump',
-      tags: ['from:braindump'],
-      reviewStatus: 'unread',
-    });
+    await updateInboxItem(item.id, { status: 'processing' });
+    let entry;
+    try {
+      entry = await createMemoryEntry({
+        type: 'note',
+        title: item.parsedTitle || item.rawText,
+        content: item.rawText,
+        source: 'braindump',
+        tags: ['from:braindump'],
+        reviewStatus: 'unread',
+      });
+    } catch (e) {
+      await updateInboxItem(item.id, { status: 'pending' });
+      throw e;
+    }
     try {
       await updateInboxItem(item.id, { status: 'processed' });
     } catch (e) {
       try { await deleteMemoryEntry(entry.id); } catch (rollbackErr) {
         console.warn('[vault] Rollback failed after memory conversion error:', rollbackErr);
       }
+      await updateInboxItem(item.id, { status: 'pending' }).catch((revertErr) =>
+        console.warn('[vault] Failed to revert inbox item to pending:', revertErr),
+      );
       throw e;
     }
   }, [createMemoryEntry, deleteMemoryEntry, updateInboxItem]);

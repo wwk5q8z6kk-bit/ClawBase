@@ -103,7 +103,7 @@ export interface InboxItem {
   id: string;
   rawText: string;
   createdAt: number;
-  status: 'pending' | 'processed' | 'dismissed';
+  status: 'pending' | 'processing' | 'processed' | 'dismissed';
   parsedTitle?: string;
   parsedCategory?: 'task' | 'event' | 'note';
   parsedPriority?: 'low' | 'medium' | 'high' | 'urgent';
