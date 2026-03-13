@@ -367,9 +367,14 @@ export default function SettingsScreen() {
       if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('ws://') && !url.startsWith('wss://')) {
         url = 'http://' + url;
       }
-      const testGw = new (gateway.constructor as any)();
-      const ok = await testGw.healthCheck.call({ url: url.replace(/^ws/, 'http') });
-      if (ok) {
+      const httpUrl = url.replace(/^ws:\/\//, 'http://').replace(/^wss:\/\//, 'https://');
+      const hasPort = /:\d+$/.test(httpUrl) || /:\d+\//.test(httpUrl);
+      const healthUrl = hasPort ? `${httpUrl}/health` : `${httpUrl}:18789/health`;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const resp = await fetch(healthUrl, { signal: controller.signal });
+      clearTimeout(timer);
+      if (resp.ok) {
         setTestResult({ ok: true, msg: 'Gateway is reachable!' });
       } else {
         setTestResult({ ok: false, msg: 'Gateway not responding. Check URL.' });
@@ -379,7 +384,7 @@ export default function SettingsScreen() {
       setTestResult({ ok: false, msg: 'Could not reach gateway.' });
     }
     setTestingConnection(false);
-  }, [connUrl, gateway]);
+  }, [connUrl]);
 
   const handleManualConnect = useCallback(async () => {
     if (!activeConnection) return;
@@ -462,6 +467,8 @@ export default function SettingsScreen() {
         const keys = await AsyncStorage.getAllKeys();
         const clawKeys = keys.filter(k => k.startsWith('@clawbase:'));
         await AsyncStorage.multiRemove(clawKeys);
+        const { clearQueue } = await import('@/lib/offlineQueue');
+        await clearQueue();
         await refreshAll();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch (e) {

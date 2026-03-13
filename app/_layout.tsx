@@ -155,7 +155,7 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <AppProvider>
           <AppLockWrapper>
-            <GestureHandlerRootView>
+            <GestureHandlerRootView style={{ flex: 1 }}>
               <ToastProvider>
                 <OfflineQueueBridge />
                 <RootLayoutNav />

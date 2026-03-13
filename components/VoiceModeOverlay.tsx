@@ -131,6 +131,9 @@ export default function VoiceModeOverlay({ visible, onClose, onSend }: VoiceMode
     const [responseText, setResponseText] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
     const fadeAnim = useSharedValue(0);
+    const overlayAnimStyle = useAnimatedStyle(() => ({
+        opacity: fadeAnim.value,
+    }));
 
     useEffect(() => {
         if (visible) {
@@ -267,7 +270,7 @@ export default function VoiceModeOverlay({ visible, onClose, onSend }: VoiceMode
             onRequestClose={handleClose}
             statusBarTranslucent
         >
-            <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+            <Animated.View style={[styles.overlay, overlayAnimStyle]}>
                 <View style={styles.blurFill}>
                     {/* Close button */}
                     <Pressable style={styles.closeBtn} onPress={handleClose}>
