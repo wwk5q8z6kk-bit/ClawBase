@@ -968,7 +968,7 @@ export default function ChatDetailScreen() {
         ],
       );
     }
-  }, []);
+  }, [id]);
 
   const openActionMenu = useCallback((messageId: string) => {
     const msg = messages.find((m) => m.id === messageId);
@@ -999,29 +999,35 @@ export default function ChatDetailScreen() {
     ? ['Summarize my inbox', 'What tasks are pending?', 'System health check', "What's my schedule today?", 'Run a system health check', 'Summarize recent activity']
     : [];
 
-  const shouldShowAvatar = (index: number) => {
-    if (messages[index].role === 'user') return false;
-    if (index === 0) return true;
-    return messages[index - 1].role !== 'assistant';
+  const invertedMessages = useMemo(() => [...messages].reverse(), [messages]);
+
+  const shouldShowAvatar = (invertedIndex: number) => {
+    const originalIndex = messages.length - 1 - invertedIndex;
+    if (messages[originalIndex].role === 'user') return false;
+    if (originalIndex === 0) return true;
+    return messages[originalIndex - 1].role !== 'assistant';
   };
 
-  const isTightTop = (index: number) => {
-    if (index === 0) return false;
-    const prev = messages[index - 1];
-    const curr = messages[index];
+  const isTightTop = (invertedIndex: number) => {
+    const originalIndex = messages.length - 1 - invertedIndex;
+    if (originalIndex === 0) return false;
+    const prev = messages[originalIndex - 1];
+    const curr = messages[originalIndex];
     return prev.role === curr.role && isSameDay(prev.timestamp, curr.timestamp);
   };
 
-  const shouldShowDateSeparator = (index: number) => {
-    if (index === 0) return true;
-    return !isSameDay(messages[index - 1].timestamp, messages[index].timestamp);
+  const shouldShowDateSeparator = (invertedIndex: number) => {
+    const originalIndex = messages.length - 1 - invertedIndex;
+    if (originalIndex === 0) return true;
+    return !isSameDay(messages[originalIndex - 1].timestamp, messages[originalIndex].timestamp);
   };
 
-  const shouldShowActionChips = (index: number) => {
-    const msg = messages[index];
+  const shouldShowActionChips = (invertedIndex: number) => {
+    const originalIndex = messages.length - 1 - invertedIndex;
+    const msg = messages[originalIndex];
     if (msg.role !== 'assistant') return false;
-    if (index === messages.length - 1) return true;
-    return messages[index + 1].role !== 'assistant';
+    if (originalIndex === messages.length - 1) return true;
+    return messages[originalIndex + 1].role !== 'assistant';
   };
 
   const newMessageStartIndex = prevMessageCountRef.current;
@@ -1116,10 +1122,13 @@ export default function ChatDetailScreen() {
         >
           <FlatList
             ref={flatListRef}
-            data={messages}
+            data={invertedMessages}
+            inverted
             keyExtractor={(item) => item.id}
-            renderItem={({ item, index }) => (
-              <AnimatedMessageWrapper shouldAnimate={index >= newMessageStartIndex && newMessageStartIndex > 0}>
+            renderItem={({ item, index }) => {
+              const originalIndex = messages.length - 1 - index;
+              return (
+              <AnimatedMessageWrapper shouldAnimate={originalIndex >= newMessageStartIndex && newMessageStartIndex > 0}>
                 <View>
                   {shouldShowDateSeparator(index) && (
                     <DateSeparator label={getDateLabel(item.timestamp)} />
@@ -1137,14 +1146,15 @@ export default function ChatDetailScreen() {
                   />
                 </View>
               </AnimatedMessageWrapper>
-            )}
+              );
+            }}
             contentContainerStyle={[
               styles.messageList,
               messages.length === 0 && styles.emptyMessages,
             ]}
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
-            ListFooterComponent={
+            ListHeaderComponent={
               isStreaming && streamingText ? (
                 <StreamingBubble text={streamingText} />
               ) : isSending ? (
