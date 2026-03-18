@@ -264,7 +264,7 @@ export class OpenClawGateway {
         minProtocol: 3,
         maxProtocol: 3,
         client: {
-          id: 'clawbase-mobile',
+          id: 'meridian-mobile',
           version: '2.0.0',
           platform: Platform.OS,
           mode: 'node',
@@ -274,13 +274,13 @@ export class OpenClawGateway {
         auth,
         device: {
           id: this.deviceId,
-          name: 'ClawBase Mobile',
+          name: 'Meridian Mobile',
           type: 'mobile',
           platform: Platform.OS,
         },
         capabilities: ['chat', 'tasks', 'memory', 'calendar', 'crm', 'canvas', 'notifications'],
         locale: 'en-US',
-        userAgent: 'ClawBase/2.0.0',
+        userAgent: 'Meridian/2.0.0',
       },
     });
   }
@@ -961,8 +961,8 @@ export class OpenClawGateway {
         webchat: { icon: 'globe', color: '#00D4FF' },
         imessage: { icon: 'chatbubble', color: '#34C759' },
         signal: { icon: 'shield-checkmark', color: '#3A76F0' },
-        main: { icon: 'terminal', color: '#FF6B4A' },
-        dm: { icon: 'chatbubbles', color: '#FF6B4A' },
+        main: { icon: 'terminal', color: '#4F6BF6' },
+        dm: { icon: 'chatbubbles', color: '#4F6BF6' },
       };
 
       return Array.from(channelMap.entries()).map(([type, data]) => ({

@@ -31,12 +31,12 @@ export function generateSeedTasks(): Omit<Task, 'id'>[] {
 
 export function generateSeedEvents(): Omit<CalendarEvent, 'id'>[] {
   return [
-    { title: 'Standup', startTime: todayAt(9, 0), endTime: todayAt(9, 15), color: '#00D4AA', source: 'google', recurring: true, tags: ['from:google'] },
-    { title: 'Design Review', startTime: todayAt(10, 30), endTime: todayAt(11, 30), color: '#5B7FFF', source: 'google', attendees: ['Alex M.', 'Jordan L.'], tags: ['from:google'] },
-    { title: 'Lunch with Marcus', startTime: todayAt(12, 0), endTime: todayAt(13, 0), color: '#FF7B5C', source: 'manual', location: 'Sushi Palace', tags: ['from:manual'] },
+    { title: 'Standup', startTime: todayAt(9, 0), endTime: todayAt(9, 15), color: '#10B981', source: 'google', recurring: true, tags: ['from:google'] },
+    { title: 'Design Review', startTime: todayAt(10, 30), endTime: todayAt(11, 30), color: '#4F6BF6', source: 'google', attendees: ['Alex M.', 'Jordan L.'], tags: ['from:google'] },
+    { title: 'Lunch with Marcus', startTime: todayAt(12, 0), endTime: todayAt(13, 0), color: '#E8A951', source: 'manual', location: 'Sushi Palace', tags: ['from:manual'] },
     { title: 'Investor Call', startTime: todayAt(14, 0), endTime: todayAt(15, 0), color: '#FFB020', source: 'google', description: 'Q4 review with Acme Ventures', attendees: ['Pat R.', 'Sam T.'], tags: ['from:google'] },
-    { title: 'Focus Time', startTime: todayAt(15, 30), endTime: todayAt(17, 0), color: '#8B7FFF', source: 'google', tags: ['from:google'] },
-    { title: 'Board Meeting Prep', startTime: todayAt(8, 0) + 86400000, endTime: todayAt(9, 0) + 86400000, color: '#FF5A3C', source: 'google', tags: ['from:google'] },
+    { title: 'Focus Time', startTime: todayAt(15, 30), endTime: todayAt(17, 0), color: '#8B5CF6', source: 'google', tags: ['from:google'] },
+    { title: 'Board Meeting Prep', startTime: todayAt(8, 0) + 86400000, endTime: todayAt(9, 0) + 86400000, color: '#4F6BF6', source: 'google', tags: ['from:google'] },
     { title: 'Dentist', startTime: todayAt(11, 0) + 2 * 86400000, endTime: todayAt(12, 0) + 2 * 86400000, color: '#FF9F5A', source: 'apple', location: 'Downtown Dental', tags: ['from:apple'] },
   ];
 }

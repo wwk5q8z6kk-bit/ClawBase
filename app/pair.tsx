@@ -190,7 +190,7 @@ export default function PairScreen() {
     if (!deeplinkUrl?.trim()) return;
 
     autoConnectTriggered.current = true;
-    const name = deeplinkName?.trim() || 'OpenClaw Gateway';
+    const name = deeplinkName?.trim() || 'AI Gateway';
     const token = deeplinkToken?.trim() || undefined;
     void finishPairing(name, deeplinkUrl.trim(), token);
   }, [fromParam, deeplinkUrl, deeplinkToken, deeplinkName, finishPairing]);
@@ -201,11 +201,11 @@ export default function PairScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     try {
-      if (data.startsWith('clawbase://') || data.startsWith('openclaw://')) {
+      if (data.startsWith('meridian://') || data.startsWith('clawbase://') || data.startsWith('openclaw://')) {
         const url = new URL(data);
         const gwUrl = url.searchParams.get('url') || url.searchParams.get('gateway') || '';
         const token = url.searchParams.get('token') || '';
-        const name = url.searchParams.get('name') || 'OpenClaw Gateway';
+        const name = url.searchParams.get('name') || 'AI Gateway';
         if (gwUrl) {
           finishPairing(name, gwUrl, token);
           return;
@@ -216,12 +216,12 @@ export default function PairScreen() {
       try { parsed = JSON.parse(data); } catch (_) { /* QR data is not JSON, will try URL match */ }
 
       if (parsed?.url) {
-        finishPairing(parsed.name || 'OpenClaw Gateway', parsed.url, parsed.token);
+        finishPairing(parsed.name || 'AI Gateway', parsed.url, parsed.token);
         return;
       }
 
       if (data.match(/^(https?:\/\/|wss?:\/\/|[\d.]+[:\d]*)/)) {
-        finishPairing('OpenClaw Gateway', data);
+        finishPairing('AI Gateway', data);
         return;
       }
 
@@ -259,7 +259,7 @@ export default function PairScreen() {
       const data = await resp.json();
       const gwUrl = data.url || baseUrl;
       const token = data.token || '';
-      const name = data.name || data.agentName || 'OpenClaw Gateway';
+      const name = data.name || data.agentName || 'AI Gateway';
       setLookingUp(false);
       await finishPairing(name, gwUrl, token);
     } catch (e: any) {
@@ -324,7 +324,7 @@ export default function PairScreen() {
           </Typography>
           <View style={styles.unreachableTips}>
             <Typography style={[styles.tipText, { fontFamily: 'Inter_500Medium', color: C.coral }]}>
-              openclaw nodes pending{'\n'}openclaw nodes approve {'<requestId>'}
+              gateway nodes pending{'\n'}gateway nodes approve {'<requestId>'}
             </Typography>
           </View>
           <Typography style={[styles.phaseUrl, { marginTop: 8 }]}>{pendingConnection?.url}</Typography>
@@ -414,7 +414,7 @@ export default function PairScreen() {
 
           <View style={styles.helpCmdCard}>
             <Ionicons name="terminal-outline" size={14} color={C.textTertiary} />
-            <Typography style={styles.helpCmdText}>Need help? Run{'\n'}openclaw gateway --bind 0.0.0.0 --port 18789{'\n'}to make your gateway accessible on your network</Typography>
+            <Typography style={styles.helpCmdText}>Need help? Run{'\n'}gateway --bind 0.0.0.0 --port 18789{'\n'}to make your gateway accessible on your network</Typography>
           </View>
 
           <View style={styles.unreachableActions}>
@@ -457,7 +457,7 @@ export default function PairScreen() {
               <Ionicons name="camera-outline" size={48} color={C.textTertiary} />
             </View>
             <Typography style={styles.fallbackTitle}>Camera not available on web</Typography>
-            <Typography style={styles.fallbackSub}>Use ClawBase on your phone to scan QR codes, or try manual setup.</Typography>
+            <Typography style={styles.fallbackSub}>Use Meridian on your phone to scan QR codes, or try manual setup.</Typography>
             <Pressable onPress={() => setMethod('manual')} style={({ pressed }) => [styles.fallbackBtn, pressed && { opacity: 0.8 }]}>
               <Ionicons name="code-slash-outline" size={18} color={C.secondary} />
               <Typography style={[styles.fallbackBtnText, { color: C.secondary }]}>Manual Setup</Typography>
@@ -528,7 +528,7 @@ export default function PairScreen() {
                 <Typography style={styles.scanErrorText}>{error}</Typography>
               </View>
             )}
-            <Typography style={styles.scanHint}>Point at the QR code on your OpenClaw gateway</Typography>
+            <Typography style={styles.scanHint}>Point at the QR code on your AI gateway</Typography>
           </View>
         </View>
       </View>
@@ -880,7 +880,7 @@ export default function PairScreen() {
         <View style={styles.deepLinkHint}>
           <Ionicons name="link-outline" size={14} color={C.textTertiary} />
           <Typography style={styles.deepLinkHintText}>
-            You can also tap a clawbase:// link from your gateway to connect automatically.
+            You can also tap a meridian:// link from your gateway to connect automatically.
           </Typography>
         </View>
       </ScrollView>

@@ -3312,7 +3312,7 @@ function VaultScreenInner() {
                 <Ionicons name="folder-open-outline" size={40} color={C.secondary} />
               </View>
               <Text style={styles.emptyTitle}>No files synced</Text>
-              <Text style={styles.emptySubtitle}>Connect to your OpenClaw gateway to browse agent files</Text>
+              <Text style={styles.emptySubtitle}>Connect to your AI gateway to browse agent files</Text>
             </View>
           )}
 

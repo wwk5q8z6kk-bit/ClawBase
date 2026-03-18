@@ -290,7 +290,7 @@ function HeroHeader() {
     <View style={styles.heroHeader}>
       <View style={styles.heroTopRow}>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={styles.heroTitle}>ClawBase</Text>
+          <Text style={styles.heroTitle}>Meridian</Text>
           <View style={[styles.heartbeatDot, connected ? styles.heartbeatActive : styles.heartbeatInactive]}>
             {connected ? (
               <PulsingDot color={C.success} size={7} />
@@ -2056,7 +2056,7 @@ export default function DashboardScreen() {
             <ProactiveAlert
               type="warn"
               icon="link"
-              message="Connect to your OpenClaw gateway to unlock all features"
+              message="Connect to your AI gateway to unlock all features"
               onPress={() => router.push('/(tabs)/settings')}
               priority="P1"
             />

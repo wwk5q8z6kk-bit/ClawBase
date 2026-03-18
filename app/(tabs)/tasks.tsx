@@ -496,7 +496,7 @@ function TaskDetailModal({
               </LinearGradient>
             </Pressable>
 
-            {task.assignee !== 'OpenClaw' && (
+            {task.assignee !== 'AI Agent' && (
               <Pressable
                 onPress={() => {
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -747,7 +747,7 @@ export default function TasksScreen() {
   }, [updateTask]);
 
   const handleAssignAgent = useCallback((task: Task) => {
-    updateTask(task.id, { assignee: 'OpenClaw' });
+    updateTask(task.id, { assignee: 'AI Agent' });
     const message = `Please help me with this task: "${task.title}"\n${task.description ? `Description: ${task.description}` : ''}`;
     sendMessage('agent:main:main', message);
   }, [updateTask, sendMessage]);

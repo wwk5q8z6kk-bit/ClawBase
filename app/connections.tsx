@@ -247,7 +247,7 @@ export default function ConnectionsScreen() {
         <View style={[s.empty, Platform.OS === 'web' && { paddingBottom: 34 }]}>
           <MaterialCommunityIcons name="graph-outline" size={48} color={C.textTertiary} />
           <Text style={s.emptyTitle}>No connections yet</Text>
-          <Text style={s.emptySubtitle}>Entity links will appear here as you use ClawBase</Text>
+          <Text style={s.emptySubtitle}>Entity links will appear here as you use Meridian</Text>
         </View>
       ) : (
         <FlatList

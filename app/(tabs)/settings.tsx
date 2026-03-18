@@ -409,7 +409,7 @@ export default function SettingsScreen() {
       const exportData = {
         meta: {
           exportDate: new Date().toISOString(),
-          app: 'ClawBase',
+          app: 'Meridian',
           version: '1.0',
           counts: {
             tasks: tasks.length,
@@ -435,19 +435,19 @@ export default function SettingsScreen() {
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement('a');
         anchor.href = url;
-        anchor.download = 'clawbase-backup.json';
+        anchor.download = 'meridian-backup.json';
         document.body.appendChild(anchor);
         anchor.click();
         document.body.removeChild(anchor);
         URL.revokeObjectURL(url);
       } else {
-        const backupFile = new FileSystem.File(FileSystem.Paths.document, 'clawbase-backup.json');
+        const backupFile = new FileSystem.File(FileSystem.Paths.document, 'meridian-backup.json');
         backupFile.create({ overwrite: true, intermediates: true });
         backupFile.write(jsonString, { encoding: 'utf8' });
 
         await Sharing.shareAsync(backupFile.uri, {
           mimeType: 'application/json',
-          dialogTitle: 'Export ClawBase Data',
+          dialogTitle: 'Export Meridian Data',
           UTI: 'public.json',
         });
       }
@@ -465,7 +465,7 @@ export default function SettingsScreen() {
     const doClear = async () => {
       try {
         const keys = await AsyncStorage.getAllKeys();
-        const clawKeys = keys.filter(k => k.startsWith('@clawbase:'));
+        const clawKeys = keys.filter(k => k.startsWith('@clawbase:') || k.startsWith('@meridian:'));
         await AsyncStorage.multiRemove(clawKeys);
         const { clearQueue } = await import('@/lib/offlineQueue');
         await clearQueue();
@@ -1029,9 +1029,9 @@ export default function SettingsScreen() {
           <LinearGradient colors={C.gradient.lobster} style={styles.brandLogo}>
             <Ionicons name="sparkles" size={20} color="#fff" />
           </LinearGradient>
-          <Typography style={styles.brandText}>ClawBase</Typography>
+          <Typography style={styles.brandText}>Meridian</Typography>
           <Typography style={styles.brandSub}>
-            Mission control for your self-hosted agent
+            Your professional-grade productivity command center
           </Typography>
         </View>
       </ScrollView>
@@ -1169,7 +1169,7 @@ export default function SettingsScreen() {
             <View style={styles.hintRow}>
               <Ionicons name="information-circle-outline" size={16} color={C.textTertiary} />
               <Typography style={styles.hintText}>
-                Enter your OpenClaw Gateway address and optional auth token. Supports local IP, Tailscale, or Cloudflare Tunnel URLs.
+                Enter your AI Gateway address and optional auth token. Supports local IP, Tailscale, or Cloudflare Tunnel URLs.
               </Typography>
             </View>
 

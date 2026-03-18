@@ -39,7 +39,7 @@ export function setupApiRoutes(app: any) {
         res.json({
             url: state.gatewayConfig.url,
             token: state.gatewayConfig.token,
-            name: state.gatewayInfo?.agentName || state.gatewayInfo?.name || 'OpenClaw Gateway',
+            name: state.gatewayInfo?.agentName || state.gatewayInfo?.name || 'AI Gateway',
         });
     });
 

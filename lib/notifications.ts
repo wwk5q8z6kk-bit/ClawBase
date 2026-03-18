@@ -87,7 +87,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
             name: 'Approval Requests',
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#FF6B4A',
+            lightColor: '#4F6BF6',
             sound: 'default',
         });
 

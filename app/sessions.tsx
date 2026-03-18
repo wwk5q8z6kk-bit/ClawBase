@@ -277,7 +277,7 @@ export default function SessionsScreen() {
               <>
                 <Ionicons name="cloud-offline-outline" size={40} color={C.textTertiary} />
                 <Text style={styles.emptyTitle}>Not connected</Text>
-                <Text style={styles.emptySubtitle}>Connect to your OpenClaw gateway to see active sessions</Text>
+                <Text style={styles.emptySubtitle}>Connect to your AI gateway to see active sessions</Text>
                 <Pressable
                   onPress={() => router.push('/(tabs)/settings')}
                   style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.8 }]}

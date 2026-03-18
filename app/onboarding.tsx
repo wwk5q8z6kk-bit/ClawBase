@@ -85,7 +85,7 @@ export default function OnboardingScreen() {
               <Ionicons name="sparkles" size={40} color="#FFF" />
             </LinearGradient>
           </View>
-          <Typography style={styles.title}>ClawBase</Typography>
+          <Typography style={styles.title}>Meridian</Typography>
           <Typography style={styles.tagline}>
             The mission control your self-hosted agent deserves
           </Typography>
@@ -154,7 +154,7 @@ export default function OnboardingScreen() {
           <Ionicons name="server-outline" size={32} color={C.accent} />
         </View>
         <Typography style={styles.stepDesc}>
-          Connect to your OpenClaw gateway instantly, or set up manually.
+          Connect to your AI gateway instantly, or set up manually.
         </Typography>
 
         <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
@@ -234,7 +234,7 @@ export default function OnboardingScreen() {
           autoCorrect={false}
           keyboardType="url"
         />
-        <Typography style={styles.helperText}>Default port is :18789 for OpenClaw Gateway</Typography>
+        <Typography style={styles.helperText}>Default port is :18789 for AI Gateway</Typography>
       </View>
 
       <View style={[styles.bottomActions, { paddingBottom: Platform.OS === 'web' ? 34 : insets.bottom + 20 }]}>

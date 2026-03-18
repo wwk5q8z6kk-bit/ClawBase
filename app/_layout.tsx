@@ -77,7 +77,7 @@ export default function RootLayout() {
   useEffect(() => {
     const handleDeepLink = (event: { url: string }) => {
       const { url } = event;
-      if (url && (url.startsWith('clawbase://connect') || url.startsWith('openclaw://connect'))) {
+      if (url && (url.startsWith('meridian://connect') || url.startsWith('clawbase://connect') || url.startsWith('openclaw://connect'))) {
         const parsed = Linking.parse(url);
         const gwUrl = getFirstParam(parsed.queryParams?.url) || getFirstParam(parsed.queryParams?.gateway);
         if (gwUrl) {

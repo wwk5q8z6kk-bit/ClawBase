@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const QUEUE_KEY = 'clawbase_offline_queue';
+const QUEUE_KEY = 'clawbase_offline_queue'; // legacy key retained for data continuity
 
 let lockChain: Promise<void> = Promise.resolve();
 function withQueueLock<T>(fn: () => Promise<T>): Promise<T> {

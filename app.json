@@ -1,26 +1,26 @@
 {
   "expo": {
-    "name": "ClawBase",
-    "slug": "clawbase",
-    "version": "1.0.0",
+    "name": "Meridian",
+    "slug": "meridian",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "clawbase",
+    "scheme": "meridian",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0A0E1A"
+      "backgroundColor": "#0B1120"
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.clawbase"
+      "bundleIdentifier": "com.meridianapp"
     },
     "android": {
-      "package": "com.clawbase",
+      "package": "com.meridianapp",
       "adaptiveIcon": {
-        "backgroundColor": "#0A0E1A",
+        "backgroundColor": "#0B1120",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -42,14 +42,14 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow ClawBase to use the camera for QR code scanning"
+          "cameraPermission": "Allow Meridian to use the camera for QR code scanning"
         }
       ],
       [
         "expo-notifications",
         {
           "icon": "./assets/images/notification-icon.png",
-          "color": "#FF6B4A"
+          "color": "#4F6BF6"
         }
       ]
     ],

@@ -361,7 +361,7 @@ export default function SearchScreen() {
       {query.trim().length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="search" size={48} color={C.textTertiary} />
-          <Text style={styles.emptyTitle}>Search ClawBase</Text>
+          <Text style={styles.emptyTitle}>Search Meridian</Text>
           <Text style={styles.emptySubtitle}>Find conversations, tasks, memories, events, and contacts</Text>
         </View>
       ) : results.length === 0 ? (

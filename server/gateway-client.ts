@@ -63,7 +63,7 @@ export function handleGatewayMessage(raw: string) {
                     const payload = data.params || data.data || data.payload;
                     if (payload) {
                         sendPushNotification({
-                            title: payload.title || 'ClawBase',
+                            title: payload.title || 'Meridian',
                             body: payload.body || 'New notification from your agent',
                             data: {
                                 approvalId: payload.approvalId,
@@ -82,7 +82,7 @@ export function handleGatewayMessage(raw: string) {
             const payload = data.data || data.payload || data;
             if (payload) {
                 sendPushNotification({
-                    title: payload.title || 'ClawBase',
+                    title: payload.title || 'Meridian',
                     body: payload.body || 'New notification from your agent',
                     data: {
                         approvalId: payload.approvalId,
@@ -193,7 +193,7 @@ export function connectToGateway() {
 
     const ws = new WebSocket(state.gatewayConfig.url, {
         headers: {
-            'User-Agent': 'ClawBase Relay 1.0',
+            'User-Agent': 'Meridian Relay 1.0',
         },
     });
     state.gatewayWs = ws;

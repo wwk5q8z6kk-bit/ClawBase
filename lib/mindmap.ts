@@ -31,11 +31,11 @@ export interface MindMap {
 const STORAGE_KEY = '@clawbase:mindmaps';
 
 export const NODE_TYPE_COLORS: Record<MindMapNodeType, string> = {
-  idea: '#5B7FFF',
-  task: '#FF5A3C',
-  memory: '#00D4AA',
-  event: '#FFB020',
-  contact: '#8B7FFF',
+  idea: '#4F6BF6',
+  task: '#EF4444',
+  memory: '#10B981',
+  event: '#F59E0B',
+  contact: '#8B5CF6',
 };
 
 export const ALL_NODE_TYPES: MindMapNodeType[] = ['idea', 'task', 'memory', 'event', 'contact'];

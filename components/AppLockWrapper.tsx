@@ -56,7 +56,7 @@ export function AppLockWrapper({ children }: { children: React.ReactNode }) {
             }
 
             const result = await LocalAuthentication.authenticateAsync({
-                promptMessage: 'Unlock ClawBase',
+                promptMessage: 'Unlock Meridian',
                 fallbackLabel: 'Use Passcode',
                 disableDeviceFallback: false,
                 cancelLabel: 'Cancel',
@@ -83,7 +83,7 @@ export function AppLockWrapper({ children }: { children: React.ReactNode }) {
                         <View style={styles.iconCircle}>
                             <Ionicons name="lock-closed" size={48} color={C.coral} />
                         </View>
-                        <Text style={styles.title}>ClawBase is Locked</Text>
+                        <Text style={styles.title}>Meridian is Locked</Text>
                         <Text style={styles.subtitle}>Unlock to access your secure remote environment and agent data.</Text>
 
                         <Pressable

@@ -72,7 +72,7 @@ export async function validateGatewayHandshake(
   return new Promise((resolve) => {
     let socket: WebSocket | null = null;
     let done = false;
-    let requestId = `clawbase-probe-${Date.now().toString()}-${Math.random().toString(36).substr(2, 9)}`;
+    let requestId = `meridian-probe-${Date.now().toString()}-${Math.random().toString(36).substr(2, 9)}`;
 
     const finish = (result: GatewayHandshakeResult) => {
       if (done) return;
@@ -83,7 +83,7 @@ export async function validateGatewayHandshake(
     };
 
     const timeout = setTimeout(() => {
-      finish({ valid: false, error: 'Server reachable, but no OpenClaw handshake was completed' });
+      finish({ valid: false, error: 'Server reachable, but no gateway handshake was completed' });
     }, timeoutMs);
 
     const sendConnect = (nonce?: string) => {
@@ -99,7 +99,7 @@ export async function validateGatewayHandshake(
           minProtocol: 3,
           maxProtocol: 3,
           client: {
-            id: 'clawbase-validation',
+            id: 'meridian-validation',
             version: '2.0.0',
             platform: Platform.OS,
             mode: 'probe',
@@ -108,7 +108,7 @@ export async function validateGatewayHandshake(
           scopes: ['operator.read'],
           auth,
           locale: 'en-US',
-          userAgent: 'ClawBase-Probe/2.0.0',
+          userAgent: 'Meridian-Probe/2.0.0',
         },
       };
 

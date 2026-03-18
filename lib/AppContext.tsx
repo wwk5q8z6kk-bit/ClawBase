@@ -459,7 +459,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const unsub = gateway.on('notification', (event) => {
       const { title, body, approvalId, category } = event.data || {};
       showLocalNotification({
-        title: title || 'ClawBase',
+        title: title || 'Meridian',
         body: body || 'New notification from your agent',
         data: approvalId ? { approvalId } : {},
         categoryIdentifier: category || (approvalId ? 'approval' : 'alert'),

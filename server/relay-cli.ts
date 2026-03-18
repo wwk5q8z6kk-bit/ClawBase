@@ -27,7 +27,7 @@ setupRelay(app, httpServer);
 const PORT = process.env.RELAY_PORT || 3000;
 
 httpServer.listen(PORT, () => {
-    console.log(`\n🚀 ClawBase Relay CLI started!`);
+    console.log(`\n🚀 Meridian Relay CLI started!`);
     console.log(`📡 Listening on http://0.0.0.0:${PORT}`);
 
     if (process.env.RELAY_SETUP_TOKEN) {
