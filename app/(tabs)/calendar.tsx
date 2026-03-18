@@ -22,6 +22,13 @@ import { useApp } from '@/lib/AppContext';
 import type { CalendarEvent } from '@/lib/types';
 import { getLinksFor, addLink, removeLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
 import { router, useLocalSearchParams } from 'expo-router';
+import { ViewSwitcher, type ViewOption } from '@/components/ViewSwitcher';
+
+const CAL_VIEW_OPTIONS: ViewOption[] = [
+  { key: 'month', label: 'Month', icon: 'calendar-outline' },
+  { key: 'week', label: 'Week', icon: 'today-outline' },
+  { key: 'day', label: 'Day', icon: 'time-outline' },
+];
 
 const C = Colors.dark;
 
@@ -436,7 +443,25 @@ export default function CalendarTab() {
     );
   }, [calendarEvents]);
 
+  const tasksByDay = useMemo(() => {
+    const map: Record<number, typeof tasks> = {};
+    for (const t of tasks) {
+      if (t.dueDate && t.status !== 'done' && t.status !== 'archived') {
+        const d = new Date(t.dueDate);
+        const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        if (!map[dayStart]) map[dayStart] = [];
+        map[dayStart].push(t);
+      }
+    }
+    return map;
+  }, [tasks]);
+
   const selectedDayEvents = useMemo(() => eventsForDate(selectedDate), [selectedDate, eventsForDate]);
+
+  const selectedDayTasks = useMemo(() => {
+    const dayStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate()).getTime();
+    return tasksByDay[dayStart] || [];
+  }, [selectedDate, tasksByDay]);
 
   const todayEvents = useMemo(() => eventsForDate(new Date()), [eventsForDate]);
   const nextUpcomingEvent = useMemo(() => {
@@ -657,7 +682,10 @@ export default function CalendarTab() {
       const isToday = isSameDay(date, today);
       const isSelected = isSameDay(date, selectedDate);
       const dayEvents = eventsForDate(date);
+      const dayStart = new Date(currentYear, currentMonth, day).getTime();
+      const dayTaskList = tasksByDay[dayStart] || [];
       const hasEvents = dayEvents.length > 0;
+      const hasTasks = dayTaskList.length > 0;
 
       cells.push(
         <Pressable
@@ -679,11 +707,14 @@ export default function CalendarTab() {
           ) : (
             <Text style={styles.dayText}>{day}</Text>
           )}
-          {hasEvents && (
+          {(hasEvents || hasTasks) && (
             <View style={styles.eventDots}>
-              {dayEvents.slice(0, 3).map((e, i) => (
-                <View key={i} style={[styles.eventDot, { backgroundColor: e.color || C.coral }]} />
+              {dayEvents.slice(0, 2).map((e, i) => (
+                <View key={`e${i}`} style={[styles.eventDot, { backgroundColor: e.color || C.coral }]} />
               ))}
+              {hasTasks && (
+                <View style={[styles.eventDot, { backgroundColor: C.amber }]} />
+              )}
             </View>
           )}
         </Pressable>,
@@ -971,21 +1002,13 @@ export default function CalendarTab() {
           </View>
         </View>
 
-        <View style={styles.calViewToggle}>
-          {(['month', 'week', 'day'] as ViewMode[]).map((mode) => (
-            <Pressable
-              key={mode}
-              style={[styles.calViewToggleBtn, viewMode === mode && styles.calViewToggleBtnActive]}
-              onPress={() => {
-                setViewMode(mode);
-                Haptics.selectionAsync();
-              }}
-            >
-              <Text style={[styles.calViewToggleText, viewMode === mode && styles.calViewToggleTextActive]}>
-                {mode.charAt(0).toUpperCase() + mode.slice(1)}
-              </Text>
-            </Pressable>
-          ))}
+        <View style={{ paddingHorizontal: 16, marginBottom: 4 }}>
+          <ViewSwitcher
+            options={CAL_VIEW_OPTIONS}
+            selected={viewMode}
+            onSelect={(key) => setViewMode(key as ViewMode)}
+            compact
+          />
         </View>
 
         <View style={styles.summaryBar}>
@@ -1032,11 +1055,34 @@ export default function CalendarTab() {
 
           <View style={styles.selectedDateHeader}>
             <Text style={styles.selectedDateText}>{formatDateHeader(selectedDate)}</Text>
-            <Text style={styles.eventCount}>{selectedDayEvents.length} event{selectedDayEvents.length !== 1 ? 's' : ''}</Text>
+            <Text style={styles.eventCount}>
+              {selectedDayEvents.length} event{selectedDayEvents.length !== 1 ? 's' : ''}
+              {selectedDayTasks.length > 0 ? ` · ${selectedDayTasks.length} task${selectedDayTasks.length !== 1 ? 's' : ''} due` : ''}
+            </Text>
           </View>
 
           <View style={styles.eventsList}>
-            {selectedDayEvents.length === 0 ? (
+            {selectedDayTasks.map(task => (
+              <View key={`task-${task.id}`} style={[styles.eventCard, C.shadow.card, { borderLeftWidth: 3, borderLeftColor: C.amber }]}>
+                <View style={[styles.eventColorBar, { backgroundColor: C.amber }]} />
+                <View style={styles.eventContent}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                    <View style={{ backgroundColor: C.amber + '20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: C.amber }}>TASK DUE</Text>
+                    </View>
+                    {task.priority === 'urgent' || task.priority === 'high' ? (
+                      <Ionicons name="flag" size={12} color={task.priority === 'urgent' ? '#FF4444' : C.coral} />
+                    ) : null}
+                  </View>
+                  <Text style={styles.eventTitle}>{task.title}</Text>
+                  <View style={styles.eventMeta}>
+                    <Ionicons name="checkbox-outline" size={13} color={C.textTertiary} />
+                    <Text style={styles.eventTimeText}>{task.status === 'in_progress' ? 'In Progress' : task.status === 'todo' ? 'To Do' : task.status}</Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+            {selectedDayEvents.length === 0 && selectedDayTasks.length === 0 ? (
               <View style={styles.emptyDay}>
                 <View style={[styles.emptyIconWrap, { backgroundColor: C.accent + '15' }]}>
                   <Ionicons name="calendar-outline" size={40} color={C.accent} />
@@ -1044,44 +1090,43 @@ export default function CalendarTab() {
                 <Text style={styles.emptyDayTitle}>No events</Text>
                 <Text style={styles.emptyDayText}>Tap + to create an event</Text>
               </View>
-            ) : (
-              selectedDayEvents.map((event) => (
-                <Pressable
-                  key={event.id}
-                  style={[styles.eventCard, C.shadow.card]}
-                  onPress={() => openEventDetail(event)}
-                  onLongPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                    deleteCalendarEvent(event.id);
-                  }}
-                >
-                  <View style={[styles.eventColorBar, { backgroundColor: event.color || C.coral }]} />
-                  <View style={styles.eventContent}>
-                    <Text style={styles.eventTitle}>{event.title}</Text>
-                    <View style={styles.eventMeta}>
-                      <Ionicons name="time-outline" size={13} color={C.textTertiary} />
-                      <Text style={styles.eventTimeText}>
-                        {event.allDay ? 'All Day' : `${formatTime(event.startTime)} - ${formatTime(event.endTime)}`}
-                      </Text>
-                    </View>
-                    {event.location && (
-                      <View style={styles.eventMeta}>
-                        <Ionicons name="location-outline" size={13} color={C.textTertiary} />
-                        <Text style={styles.eventTimeText}>{event.location}</Text>
-                      </View>
-                    )}
-                    {event.description && (
-                      <Text style={styles.eventDesc} numberOfLines={2}>{event.description}</Text>
-                    )}
+            ) : null}
+            {selectedDayEvents.map((event) => (
+              <Pressable
+                key={event.id}
+                style={[styles.eventCard, C.shadow.card]}
+                onPress={() => openEventDetail(event)}
+                onLongPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  deleteCalendarEvent(event.id);
+                }}
+              >
+                <View style={[styles.eventColorBar, { backgroundColor: event.color || C.coral }]} />
+                <View style={styles.eventContent}>
+                  <Text style={styles.eventTitle}>{event.title}</Text>
+                  <View style={styles.eventMeta}>
+                    <Ionicons name="time-outline" size={13} color={C.textTertiary} />
+                    <Text style={styles.eventTimeText}>
+                      {event.allDay ? 'All Day' : `${formatTime(event.startTime)} - ${formatTime(event.endTime)}`}
+                    </Text>
                   </View>
-                  {event.source && (
-                    <View style={[styles.sourceBadge, { backgroundColor: (event.color || C.coral) + '20' }]}>
-                      <Text style={[styles.sourceText, { color: event.color || C.coral }]}>{event.source}</Text>
+                  {event.location && (
+                    <View style={styles.eventMeta}>
+                      <Ionicons name="location-outline" size={13} color={C.textTertiary} />
+                      <Text style={styles.eventTimeText}>{event.location}</Text>
                     </View>
                   )}
-                </Pressable>
-              ))
-            )}
+                  {event.description && (
+                    <Text style={styles.eventDesc} numberOfLines={2}>{event.description}</Text>
+                  )}
+                </View>
+                {event.source && (
+                  <View style={[styles.sourceBadge, { backgroundColor: (event.color || C.coral) + '20' }]}>
+                    <Text style={[styles.sourceText, { color: event.color || C.coral }]}>{event.source}</Text>
+                  </View>
+                )}
+              </Pressable>
+            ))}
           </View>
         </ScrollView>
       )}

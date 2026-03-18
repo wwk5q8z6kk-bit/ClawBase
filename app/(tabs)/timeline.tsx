@@ -4,6 +4,7 @@ import {
   Text,
   View,
   FlatList,
+  SectionList,
   ScrollView,
   Pressable,
   Platform,
@@ -21,6 +22,7 @@ import { getAllLinks, type EntityLink } from '@/lib/entityLinks';
 const C = Colors.dark;
 
 type EventType = 'alert' | 'action' | 'job' | 'error' | 'info' | 'chat';
+type EntityFilter = 'all' | 'task' | 'memory' | 'calendar' | 'contact' | 'conversation';
 
 interface TimelineEvent {
   id: string;
@@ -41,6 +43,15 @@ const EVENT_CONFIG: Record<EventType, { icon: string; color: string; label: stri
   info: { icon: 'information-circle', color: C.textSecondary, label: 'Info' },
   chat: { icon: 'chatbubble', color: C.coral, label: 'Chat' },
 };
+
+const ENTITY_FILTERS: { key: EntityFilter; label: string; icon: string; color: string }[] = [
+  { key: 'all', label: 'All', icon: 'layers-outline', color: C.text },
+  { key: 'task', label: 'Tasks', icon: 'checkmark-circle-outline', color: C.amber },
+  { key: 'memory', label: 'Memories', icon: 'book-outline', color: '#8B7FFF' },
+  { key: 'calendar', label: 'Events', icon: 'calendar-outline', color: C.coral },
+  { key: 'contact', label: 'CRM', icon: 'person-outline', color: C.accent },
+  { key: 'conversation', label: 'Chats', icon: 'chatbubble-outline', color: C.secondary },
+];
 
 const FILTERS: { key: string; label: string; color: string }[] = [
   { key: 'all', label: 'All', color: C.text },
@@ -150,14 +161,36 @@ function getSourceIcon(source: string): any {
 
 
 
+function formatDayHeader(ts: number): string {
+  const d = new Date(ts);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
+}
+
+function getEntityIcon(entityType?: string): { icon: string; color: string } {
+  switch (entityType) {
+    case 'task': return { icon: 'checkmark-circle-outline', color: C.amber };
+    case 'memory': return { icon: 'book-outline', color: '#8B7FFF' };
+    case 'calendar': return { icon: 'calendar-outline', color: C.coral };
+    case 'contact': return { icon: 'person-outline', color: C.accent };
+    case 'conversation': return { icon: 'chatbubble-outline', color: C.secondary };
+    default: return { icon: 'ellipse-outline', color: C.textTertiary };
+  }
+}
+
 export default function TimelineScreen() {
   const insets = useSafeAreaInsets();
-  const { conversations, tasks, memoryEntries, gateway, gatewayStatus } = useApp();
-  const [activeFilter, setActiveFilter] = useState('all');
+  const { conversations, tasks, memoryEntries, calendarEvents, crmContacts, gateway, gatewayStatus } = useApp();
+  const [entityFilter, setEntityFilter] = useState<EntityFilter>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [gatewayEvents, setGatewayEvents] = useState<TimelineEvent[]>([]);
-  const [showFilters, setShowFilters] = useState(true);
 
   const webTopPad = Platform.OS === 'web' ? 67 : 0;
 
@@ -222,8 +255,37 @@ export default function TimelineScreen() {
       });
     }
 
+    for (const e of calendarEvents) {
+      events.push({
+        id: `cal-${e.id}`,
+        type: 'info',
+        description: `${e.allDay ? 'All-day' : 'Event'}: ${e.title}`,
+        source: e.source || 'calendar',
+        timestamp: e.startTime,
+        raw: JSON.stringify({ id: e.id, start: new Date(e.startTime).toISOString(), end: new Date(e.endTime).toISOString(), location: e.location }, null, 2),
+        entityType: 'calendar',
+        entityId: e.id,
+      });
+    }
+
+    for (const c of crmContacts) {
+      if (c.interactions.length > 0) {
+        const latest = [...c.interactions].sort((a, b) => b.timestamp - a.timestamp)[0];
+        events.push({
+          id: `crm-${c.id}-${latest.id}`,
+          type: 'action',
+          description: `${latest.type}: ${latest.title} (${c.name})`,
+          source: 'crm',
+          timestamp: latest.timestamp,
+          raw: JSON.stringify({ contactId: c.id, name: c.name, stage: c.stage, interaction: latest }, null, 2),
+          entityType: 'contact',
+          entityId: c.id,
+        });
+      }
+    }
+
     return events;
-  }, [conversations, tasks, memoryEntries]);
+  }, [conversations, tasks, memoryEntries, calendarEvents, crmContacts]);
 
   const fetchGatewayEvents = useCallback(async () => {
     if (gatewayStatus !== 'connected') return;
@@ -253,13 +315,37 @@ export default function TimelineScreen() {
       seen.add(e.id);
       return true;
     });
-    if (activeFilter !== 'all') {
-      return deduped
-        .filter((e) => e.type === activeFilter)
-        .sort((a, b) => b.timestamp - a.timestamp);
+    let filtered = deduped;
+    if (entityFilter !== 'all') {
+      filtered = filtered.filter((e) => e.entityType === entityFilter);
     }
-    return deduped.sort((a, b) => b.timestamp - a.timestamp);
-  }, [localEvents, gatewayEvents, activeFilter]);
+    return filtered.sort((a, b) => b.timestamp - a.timestamp);
+  }, [localEvents, gatewayEvents, entityFilter]);
+
+  const sections = useMemo(() => {
+    const groups: Record<string, TimelineEvent[]> = {};
+    for (const event of allEvents) {
+      const dayKey = new Date(event.timestamp).toDateString();
+      if (!groups[dayKey]) groups[dayKey] = [];
+      groups[dayKey].push(event);
+    }
+    return Object.entries(groups).map(([key, data]) => ({
+      title: formatDayHeader(data[0].timestamp),
+      dayKey: key,
+      data,
+    }));
+  }, [allEvents]);
+
+  const todaySummary = useMemo(() => {
+    const todayStr = new Date().toDateString();
+    const todayEvents = allEvents.filter(e => new Date(e.timestamp).toDateString() === todayStr);
+    const byType: Record<string, number> = {};
+    for (const e of todayEvents) {
+      const key = e.entityType || 'other';
+      byType[key] = (byType[key] || 0) + 1;
+    }
+    return { total: todayEvents.length, byType };
+  }, [allEvents]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -275,64 +361,80 @@ export default function TimelineScreen() {
     <View style={[styles.container, { paddingTop: insets.top + webTopPad }]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Timeline</Text>
-        <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setShowFilters((v) => !v);
-          }}
-          style={({ pressed }) => [styles.filterToggle, pressed && { opacity: 0.7 }]}
-        >
-          <Ionicons
-            name={showFilters ? 'funnel' : 'funnel-outline'}
-            size={20}
-            color={showFilters ? C.coral : C.textSecondary}
-          />
-        </Pressable>
       </View>
 
-      {showFilters && (
-        <View style={{ height: 52, flexShrink: 0 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBar}>
-            {FILTERS.map((item) => {
-              const isActive = activeFilter === item.key;
+      {todaySummary.total > 0 && (
+        <View style={styles.todaySummaryCard}>
+          <View style={styles.todaySummaryHeader}>
+            <Ionicons name="today-outline" size={16} color={C.coral} />
+            <Text style={styles.todaySummaryTitle}>Today's Activity</Text>
+            <View style={styles.todaySummaryCount}>
+              <Text style={styles.todaySummaryCountText}>{todaySummary.total}</Text>
+            </View>
+          </View>
+          <View style={styles.todaySummaryChips}>
+            {Object.entries(todaySummary.byType).map(([type, count]) => {
+              const ei = getEntityIcon(type);
               return (
-                <Pressable
-                  key={item.key}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setActiveFilter(item.key);
-                  }}
-                  style={[
-                    styles.filterPill,
-                    isActive
-                      ? { backgroundColor: item.color + '20', borderColor: item.color }
-                      : { borderColor: C.border },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.filterPillText,
-                      { color: isActive ? item.color : C.textSecondary },
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                </Pressable>
+                <View key={type} style={[styles.todaySummaryChip, { backgroundColor: ei.color + '15' }]}>
+                  <Ionicons name={ei.icon as any} size={12} color={ei.color} />
+                  <Text style={[styles.todaySummaryChipText, { color: ei.color }]}>{count}</Text>
+                </View>
               );
             })}
-          </ScrollView>
+          </View>
         </View>
       )}
 
-      <FlatList
-        data={allEvents}
+      <View style={{ height: 44, flexShrink: 0 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBar}>
+          {ENTITY_FILTERS.map((item) => {
+            const isActive = entityFilter === item.key;
+            return (
+              <Pressable
+                key={item.key}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setEntityFilter(item.key);
+                }}
+                style={[
+                  styles.filterPill,
+                  isActive
+                    ? { backgroundColor: item.color + '20', borderColor: item.color }
+                    : { borderColor: C.border },
+                ]}
+              >
+                <Ionicons name={item.icon as any} size={13} color={isActive ? item.color : C.textSecondary} style={{ marginRight: 4 }} />
+                <Text
+                  style={[
+                    styles.filterPillText,
+                    { color: isActive ? item.color : C.textSecondary },
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => {
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionHeaderText}>{section.title}</Text>
+            <View style={styles.sectionHeaderLine} />
+            <Text style={styles.sectionHeaderCount}>{section.data.length}</Text>
+          </View>
+        )}
+        renderItem={({ item, index, section }) => {
           const connKey = item.entityType && item.entityId ? `${item.entityType}:${item.entityId}` : '';
           return (
             <TimelineItem
               item={item}
-              isLast={index === allEvents.length - 1}
+              isLast={index === section.data.length - 1}
               expanded={expandedId === item.id}
               onToggle={() => toggleExpand(item.id)}
               connCount={connKey ? (linkCounts[connKey] || 0) : 0}
@@ -349,7 +451,7 @@ export default function TimelineScreen() {
             icon="pulse-outline"
             iconColor={C.textTertiary}
             title="No Activity Yet"
-            subtitle="Your agent's activity will appear here"
+            subtitle="Your activity across all apps will appear here"
           />
         }
         refreshControl={
@@ -361,7 +463,7 @@ export default function TimelineScreen() {
           />
         }
         showsVerticalScrollIndicator={false}
-        scrollEnabled={allEvents.length > 0}
+        stickySectionHeadersEnabled={false}
       />
     </View>
   );
@@ -385,22 +487,15 @@ const styles = StyleSheet.create({
     fontSize: 28,
     color: C.text,
   },
-  filterToggle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: C.surface,
-  },
   filterBar: {
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 8,
     gap: 8,
   },
   filterPill: {
     height: 32,
-    paddingHorizontal: 14,
+    flexDirection: 'row' as const,
+    paddingHorizontal: 12,
     borderRadius: 16,
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
@@ -408,7 +503,78 @@ const styles = StyleSheet.create({
   },
   filterPillText: {
     fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+  },
+  sectionHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    gap: 8,
+  },
+  sectionHeaderText: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
+    color: C.textSecondary,
+  },
+  sectionHeaderLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: C.border,
+  },
+  sectionHeaderCount: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: C.textTertiary,
+  },
+  todaySummaryCard: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: C.card,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+  },
+  todaySummaryHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    marginBottom: 8,
+  },
+  todaySummaryTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: C.text,
+    flex: 1,
+  },
+  todaySummaryCount: {
+    backgroundColor: C.coral + '20',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  todaySummaryCountText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+    color: C.coral,
+  },
+  todaySummaryChips: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 6,
+  },
+  todaySummaryChip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  todaySummaryChipText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
   },
   listContent: {
     paddingHorizontal: 16,

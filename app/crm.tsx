@@ -20,6 +20,9 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { CRMContact, CRMInteraction } from '@/lib/types';
 import { getLinksFor, addLink, removeLink, type EntityLink, type EntityType } from '@/lib/entityLinks';
+import { ViewSwitcher, type ViewOption } from '@/components/ViewSwitcher';
+import { FunnelChart } from '@/components/charts/FunnelChart';
+import { DonutChart } from '@/components/charts/DonutChart';
 
 const C = Colors.dark;
 
@@ -186,8 +189,14 @@ function ContactLinksSection({ contactId }: { contactId: string }) {
   );
 }
 
-type ViewMode = 'list' | 'pipeline';
+type ViewMode = 'list' | 'pipeline' | 'funnel';
 type StageFilter = 'all' | CRMContact['stage'];
+
+const CRM_VIEW_OPTIONS: ViewOption[] = [
+  { key: 'list', label: 'List', icon: 'list' },
+  { key: 'pipeline', label: 'Pipeline', icon: 'git-branch' },
+  { key: 'funnel', label: 'Funnel', icon: 'funnel-outline' },
+];
 
 const STAGES: { key: CRMContact['stage']; label: string; color: string }[] = [
   { key: 'lead', label: 'Lead', color: C.amber },
@@ -729,21 +738,12 @@ export default function CRMScreen() {
         </View>
       </LinearGradient>
 
-      <View style={styles.viewToggle}>
-        <Pressable
-          style={[styles.viewToggleBtn, viewMode === 'list' && styles.viewToggleBtnActive]}
-          onPress={() => { setViewMode('list'); Haptics.selectionAsync(); }}
-        >
-          <Ionicons name="list" size={16} color={viewMode === 'list' ? C.coral : C.textSecondary} />
-          <Text style={[styles.viewToggleText, viewMode === 'list' && styles.viewToggleTextActive]}>List</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.viewToggleBtn, viewMode === 'pipeline' && styles.viewToggleBtnActive]}
-          onPress={() => { setViewMode('pipeline'); Haptics.selectionAsync(); }}
-        >
-          <Ionicons name="git-branch" size={16} color={viewMode === 'pipeline' ? C.coral : C.textSecondary} />
-          <Text style={[styles.viewToggleText, viewMode === 'pipeline' && styles.viewToggleTextActive]}>Pipeline</Text>
-        </Pressable>
+      <View style={{ paddingHorizontal: 20, marginTop: 8 }}>
+        <ViewSwitcher
+          options={CRM_VIEW_OPTIONS}
+          selected={viewMode}
+          onSelect={(key) => setViewMode(key as ViewMode)}
+        />
       </View>
 
       <View style={styles.statsCard}>
@@ -810,6 +810,88 @@ export default function CRMScreen() {
             </View>
           ) : (
             filteredContacts.map(renderContactCard)
+          )}
+        </ScrollView>
+      ) : viewMode === 'funnel' ? (
+        <ScrollView
+          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20, gap: 16 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {crmContacts.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="funnel-outline" size={40} color={C.textTertiary} />
+              <Text style={styles.emptyTitle}>No funnel data</Text>
+              <Text style={styles.emptySubtitle}>Add contacts to see your conversion funnel</Text>
+            </View>
+          ) : (
+            <>
+              <View style={{ backgroundColor: C.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.borderLight }}>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: C.text, marginBottom: 12 }}>Conversion Funnel</Text>
+                <FunnelChart
+                  steps={STAGES.filter(s => s.key !== 'archived').map(s => ({
+                    label: s.label,
+                    value: stageCounts[s.key] || 0,
+                    color: s.color,
+                  }))}
+                  height={180}
+                />
+              </View>
+              <View style={{ backgroundColor: C.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.borderLight }}>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: C.text, marginBottom: 12 }}>Stage Distribution</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                  <DonutChart
+                    segments={STAGES.filter(s => s.key !== 'archived').map(s => ({
+                      value: stageCounts[s.key] || 0,
+                      color: s.color,
+                    }))}
+                    size={90}
+                    strokeWidth={10}
+                    centerValue={`${crmContacts.filter(c => c.stage !== 'archived').length}`}
+                    centerLabel="total"
+                  />
+                  <View style={{ flex: 1, gap: 6 }}>
+                    {STAGES.filter(s => s.key !== 'archived').map(s => {
+                      const count = stageCounts[s.key] || 0;
+                      const total = crmContacts.filter(c => c.stage !== 'archived').length || 1;
+                      const pct = Math.round((count / total) * 100);
+                      return (
+                        <View key={s.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: s.color }} />
+                          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: C.text, flex: 1 }}>{s.label}</Text>
+                          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: s.color }}>{count}</Text>
+                          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary, width: 32, textAlign: 'right' }}>{pct}%</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              </View>
+              {(() => {
+                const leadCount = stageCounts['lead'] || 0;
+                const prospectCount = stageCounts['prospect'] || 0;
+                const activeCount = stageCounts['active'] || 0;
+                const customerCount = stageCounts['customer'] || 0;
+                const conversionRates = [];
+                if (leadCount > 0) conversionRates.push({ from: 'Lead', to: 'Prospect', rate: leadCount > 0 ? Math.round((prospectCount / leadCount) * 100) : 0, color: C.accent });
+                if (prospectCount > 0) conversionRates.push({ from: 'Prospect', to: 'Active', rate: prospectCount > 0 ? Math.round((activeCount / prospectCount) * 100) : 0, color: C.secondary });
+                if (activeCount > 0) conversionRates.push({ from: 'Active', to: 'Customer', rate: activeCount > 0 ? Math.round((customerCount / activeCount) * 100) : 0, color: C.coral });
+                if (conversionRates.length === 0) return null;
+                return (
+                  <View style={{ backgroundColor: C.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: C.borderLight, gap: 10 }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: C.text }}>Conversion Rates</Text>
+                    {conversionRates.map((cr, i) => (
+                      <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: C.textSecondary, flex: 1 }}>{cr.from} → {cr.to}</Text>
+                        <View style={{ width: 80, height: 6, borderRadius: 3, backgroundColor: C.surface, overflow: 'hidden' }}>
+                          <View style={{ width: `${cr.rate}%`, height: 6, borderRadius: 3, backgroundColor: cr.color }} />
+                        </View>
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: cr.color, width: 36, textAlign: 'right' }}>{cr.rate}%</Text>
+                      </View>
+                    ))}
+                  </View>
+                );
+              })()}
+            </>
           )}
         </ScrollView>
       ) : (

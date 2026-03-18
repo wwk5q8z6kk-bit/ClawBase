@@ -24,6 +24,9 @@ import { PulsingDot } from '@/components/PulsingDot';
 import type { TaskStatus, Task } from '@/lib/types';
 import { generateInsights, generateLinkSuggestions, type Insight, type InlineAction, type LinkSuggestion } from '@/lib/insights';
 import { getAllLinks, addLink, getDismissedInsights, dismissInsight, type EntityLink, type EntityType } from '@/lib/entityLinks';
+import { SparkLine } from '@/components/charts/SparkLine';
+import { DonutChart } from '@/components/charts/DonutChart';
+import { BarChart } from '@/components/charts/BarChart';
 
 const C = Colors.dark;
 
@@ -1427,6 +1430,235 @@ function formatTimeAgo(ts: number) {
   return `${Math.floor(hrs / 24)}d`;
 }
 
+const KPIDashboardWidget = React.memo(function KPIDashboardWidget() {
+  const { tasks, memoryEntries, calendarEvents, crmContacts } = useApp();
+
+  const now = Date.now();
+  const dayMs = 86400000;
+  const weekAgo = now - 7 * dayMs;
+  const twoWeeksAgo = now - 14 * dayMs;
+
+  const stats = useMemo(() => {
+    const completedThisWeek = tasks.filter(t => t.status === 'done' && t.updatedAt >= weekAgo).length;
+    const completedLastWeek = tasks.filter(t => t.status === 'done' && t.updatedAt >= twoWeeksAgo && t.updatedAt < weekAgo).length;
+    const activeTasks = tasks.filter(t => t.status === 'in_progress').length;
+    const overdueTasks = tasks.filter(t => t.dueDate && t.dueDate < now && t.status !== 'done' && t.status !== 'archived').length;
+    const unreadMemories = memoryEntries.filter(m => m.reviewStatus === 'unread').length;
+    const totalMemories = memoryEntries.length;
+
+    const todayStart = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).getTime();
+    const todayEnd = todayStart + dayMs;
+    const upcomingEvents = calendarEvents.filter(e => e.startTime >= todayStart && e.startTime < todayEnd + 7 * dayMs).length;
+
+    const crmByStage = {
+      lead: crmContacts.filter(c => c.stage === 'lead').length,
+      prospect: crmContacts.filter(c => c.stage === 'prospect').length,
+      active: crmContacts.filter(c => c.stage === 'active').length,
+      customer: crmContacts.filter(c => c.stage === 'customer').length,
+    };
+
+    const weeklyTrend: number[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const dayStart = now - (i + 1) * dayMs;
+      const dayEnd = now - i * dayMs;
+      weeklyTrend.push(tasks.filter(t => t.status === 'done' && t.updatedAt >= dayStart && t.updatedAt < dayEnd).length);
+    }
+
+    const completionRate = tasks.length > 0
+      ? Math.round((tasks.filter(t => t.status === 'done').length / tasks.length) * 100)
+      : 0;
+
+    const trendDir = completedThisWeek > completedLastWeek ? 'up' : completedThisWeek < completedLastWeek ? 'down' : 'flat';
+    const trendPct = completedLastWeek > 0 ? Math.round(((completedThisWeek - completedLastWeek) / completedLastWeek) * 100) : 0;
+
+    return {
+      completedThisWeek, completedLastWeek, activeTasks, overdueTasks,
+      unreadMemories, totalMemories, upcomingEvents,
+      crmByStage, weeklyTrend, completionRate, trendDir, trendPct,
+    };
+  }, [tasks, memoryEntries, calendarEvents, crmContacts, weekAgo, twoWeeksAgo, now]);
+
+  return (
+    <View style={kpiStyles.container}>
+      <View style={kpiStyles.header}>
+        <View style={kpiStyles.titleRow}>
+          <Ionicons name="analytics" size={18} color={C.accent} />
+          <Text style={styles.widgetTitle}>Weekly Pulse</Text>
+        </View>
+      </View>
+
+      <View style={kpiStyles.kpiRow}>
+        <View style={kpiStyles.kpiCard}>
+          <View style={kpiStyles.kpiTop}>
+            <AnimatedCounter target={stats.completedThisWeek} style={kpiStyles.kpiValue} />
+            {stats.trendDir !== 'flat' && (
+              <View style={[kpiStyles.trendBadge, { backgroundColor: stats.trendDir === 'up' ? C.successMuted : C.errorMuted }]}>
+                <Ionicons
+                  name={stats.trendDir === 'up' ? 'trending-up' : 'trending-down'}
+                  size={10}
+                  color={stats.trendDir === 'up' ? C.success : C.error}
+                />
+                <Text style={[kpiStyles.trendText, { color: stats.trendDir === 'up' ? C.success : C.error }]}>
+                  {Math.abs(stats.trendPct)}%
+                </Text>
+              </View>
+            )}
+          </View>
+          <Text style={kpiStyles.kpiLabel}>Completed</Text>
+          <SparkLine data={stats.weeklyTrend} width={70} height={20} color={C.success} />
+        </View>
+
+        <View style={kpiStyles.kpiCard}>
+          <AnimatedCounter target={stats.activeTasks} style={[kpiStyles.kpiValue, { color: C.amber }]} />
+          <Text style={kpiStyles.kpiLabel}>In Progress</Text>
+          {stats.overdueTasks > 0 && (
+            <View style={kpiStyles.overdueBadge}>
+              <Ionicons name="warning" size={10} color={C.error} />
+              <Text style={kpiStyles.overdueText}>{stats.overdueTasks} overdue</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={kpiStyles.kpiCard}>
+          <DonutChart
+            segments={[
+              { value: tasks.filter(t => t.status === 'done').length, color: C.success },
+              { value: tasks.filter(t => t.status === 'in_progress').length, color: C.amber },
+              { value: tasks.filter(t => t.status === 'todo').length, color: C.textTertiary },
+            ]}
+            size={48}
+            strokeWidth={5}
+            centerValue={`${stats.completionRate}%`}
+            centerLabel=""
+          />
+          <Text style={kpiStyles.kpiLabel}>Done Rate</Text>
+        </View>
+      </View>
+
+      {(crmContacts.length > 0 || memoryEntries.length > 0 || calendarEvents.length > 0) && (
+        <View style={kpiStyles.metricsRow}>
+          {memoryEntries.length > 0 && (
+            <Pressable style={kpiStyles.metricChip} onPress={() => router.push('/(tabs)/vault')}>
+              <MaterialCommunityIcons name="brain" size={14} color={C.purple} />
+              <Text style={kpiStyles.metricValue}>{stats.unreadMemories}</Text>
+              <Text style={kpiStyles.metricLabel}>unread</Text>
+            </Pressable>
+          )}
+          {calendarEvents.length > 0 && (
+            <Pressable style={kpiStyles.metricChip} onPress={() => router.push('/(tabs)/calendar')}>
+              <Ionicons name="calendar" size={14} color={C.coral} />
+              <Text style={kpiStyles.metricValue}>{stats.upcomingEvents}</Text>
+              <Text style={kpiStyles.metricLabel}>upcoming</Text>
+            </Pressable>
+          )}
+          {crmContacts.length > 0 && (
+            <Pressable style={kpiStyles.metricChip} onPress={() => router.push('/crm' as any)}>
+              <Ionicons name="people" size={14} color={C.secondary} />
+              <Text style={kpiStyles.metricValue}>{crmContacts.length}</Text>
+              <Text style={kpiStyles.metricLabel}>contacts</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+    </View>
+  );
+});
+
+const kpiStyles = StyleSheet.create({
+  container: {
+    backgroundColor: C.card,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: C.borderLight,
+    gap: 14,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  kpiRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  kpiCard: {
+    flex: 1,
+    backgroundColor: C.surface,
+    borderRadius: 12,
+    padding: 10,
+    alignItems: 'center',
+    gap: 4,
+  },
+  kpiTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  kpiValue: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 22,
+    color: C.text,
+  },
+  kpiLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    color: C.textTertiary,
+  },
+  trendBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  trendText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 9,
+  },
+  overdueBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 2,
+  },
+  overdueText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 9,
+    color: C.error,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  metricChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 8,
+    paddingVertical: 6,
+  },
+  metricValue: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: C.text,
+  },
+  metricLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    color: C.textTertiary,
+  },
+});
+
 const RecentActivityWidget = React.memo(function RecentActivityWidget() {
   const { conversations, tasks, memoryEntries } = useApp();
 
@@ -1861,30 +2093,34 @@ export default function DashboardScreen() {
         )}
 
         <FadeInWidget delay={100}>
-          <KanbanProgressWidget />
+          <KPIDashboardWidget />
         </FadeInWidget>
 
         <FadeInWidget delay={150}>
-          <CalendarAgendaWidget />
+          <KanbanProgressWidget />
         </FadeInWidget>
 
         <FadeInWidget delay={200}>
-          <QuickActionsRow />
+          <CalendarAgendaWidget />
         </FadeInWidget>
 
         <FadeInWidget delay={250}>
-          <SystemHealthWidget />
+          <QuickActionsRow />
         </FadeInWidget>
 
         <FadeInWidget delay={300}>
-          <RecentActivityWidget />
+          <SystemHealthWidget />
         </FadeInWidget>
 
         <FadeInWidget delay={350}>
-          <CRMHighlightsWidget />
+          <RecentActivityWidget />
         </FadeInWidget>
 
         <FadeInWidget delay={400}>
+          <CRMHighlightsWidget />
+        </FadeInWidget>
+
+        <FadeInWidget delay={450}>
           <DeferredPKMWidget />
         </FadeInWidget>
       </ScrollView>

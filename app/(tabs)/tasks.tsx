@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { Task, TaskStatus } from '@/lib/types';
+import { ViewSwitcher, type ViewOption } from '@/components/ViewSwitcher';
 
 const C = Colors.dark;
 
@@ -47,6 +48,11 @@ const PRIORITY_CONFIG: Record<string, { color: string; label: string }> = {
 
 type ViewMode = 'list' | 'board';
 type SortMode = 'priority' | 'dueDate' | 'newest' | 'alphabetical';
+
+const TASK_VIEW_OPTIONS: ViewOption[] = [
+  { key: 'list', label: 'List', icon: 'list' },
+  { key: 'board', label: 'Board', icon: 'grid-outline' },
+];
 
 const SORT_OPTIONS: { key: SortMode; label: string; icon: string }[] = [
   { key: 'priority', label: 'Priority', icon: 'flag-outline' },
@@ -749,20 +755,6 @@ export default function TasksScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Tasks</Text>
           <View style={styles.headerActions}>
-            <View style={styles.viewToggle}>
-              <Pressable
-                style={[styles.viewBtn, viewMode === 'list' && styles.viewBtnActive]}
-                onPress={() => setViewMode('list')}
-              >
-                <Ionicons name="list" size={18} color={viewMode === 'list' ? C.text : C.textTertiary} />
-              </Pressable>
-              <Pressable
-                style={[styles.viewBtn, viewMode === 'board' && styles.viewBtnActive]}
-                onPress={() => setViewMode('board')}
-              >
-                <Ionicons name="grid-outline" size={16} color={viewMode === 'board' ? C.text : C.textTertiary} />
-              </Pressable>
-            </View>
             <Pressable onPress={() => setShowSortModal(true)}>
               <Ionicons name="swap-vertical-outline" size={22} color={C.textSecondary} />
             </Pressable>
@@ -778,6 +770,14 @@ export default function TasksScreen() {
           </View>
         </View>
       </LinearGradient>
+
+      <View style={{ paddingHorizontal: 20, marginTop: 8 }}>
+        <ViewSwitcher
+          options={TASK_VIEW_OPTIONS}
+          selected={viewMode}
+          onSelect={(key) => setViewMode(key as ViewMode)}
+        />
+      </View>
 
       <StatsBar tasks={tasks} />
 
