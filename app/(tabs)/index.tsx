@@ -2096,6 +2096,29 @@ export default function DashboardScreen() {
           <KPIDashboardWidget />
         </FadeInWidget>
 
+        <FadeInWidget delay={120}>
+          <Pressable
+            style={styles.analyticsLink}
+            onPress={() => router.push('/analytics' as any)}
+          >
+            <LinearGradient
+              colors={[C.accent + '15', C.purple + '10']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.analyticsLinkGradient}
+            >
+              <View style={styles.analyticsLinkLeft}>
+                <Ionicons name="bar-chart" size={18} color={C.accent} />
+                <View>
+                  <Text style={styles.analyticsLinkTitle}>Full Analytics Dashboard</Text>
+                  <Text style={styles.analyticsLinkSub}>Charts, heatmaps, graphs, tables & more</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={C.textTertiary} />
+            </LinearGradient>
+          </Pressable>
+        </FadeInWidget>
+
         <FadeInWidget delay={150}>
           <KanbanProgressWidget />
         </FadeInWidget>
@@ -2285,4 +2308,10 @@ const styles = StyleSheet.create({
 
   viewAllInsights: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, borderWidth: 1, borderColor: C.borderLight },
   viewAllInsightsText: { fontFamily: 'Inter_500Medium', fontSize: 12, color: C.accent },
+
+  analyticsLink: { borderRadius: 14, overflow: 'hidden' },
+  analyticsLinkGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: C.accent + '20' },
+  analyticsLinkLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  analyticsLinkTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.text },
+  analyticsLinkSub: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textSecondary, marginTop: 1 },
 });

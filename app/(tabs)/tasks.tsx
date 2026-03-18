@@ -20,6 +20,8 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/lib/AppContext';
 import type { Task, TaskStatus } from '@/lib/types';
 import { ViewSwitcher, type ViewOption } from '@/components/ViewSwitcher';
+import { GanttChart } from '@/components/charts/GanttChart';
+import { DataTable } from '@/components/DataTable';
 
 const C = Colors.dark;
 
@@ -46,12 +48,15 @@ const PRIORITY_CONFIG: Record<string, { color: string; label: string }> = {
   low: { color: C.textSecondary, label: 'Low' },
 };
 
-type ViewMode = 'list' | 'board';
+type ViewMode = 'list' | 'board' | 'gantt' | 'table' | 'gallery';
 type SortMode = 'priority' | 'dueDate' | 'newest' | 'alphabetical';
 
 const TASK_VIEW_OPTIONS: ViewOption[] = [
   { key: 'list', label: 'List', icon: 'list' },
   { key: 'board', label: 'Board', icon: 'grid-outline' },
+  { key: 'gantt', label: 'Gantt', icon: 'bar-chart-outline' },
+  { key: 'table', label: 'Table', icon: 'reader-outline' },
+  { key: 'gallery', label: 'Gallery', icon: 'images-outline' },
 ];
 
 const SORT_OPTIONS: { key: SortMode; label: string; icon: string }[] = [
@@ -893,6 +898,119 @@ export default function TasksScreen() {
         </View>
       )}
 
+      {viewMode === 'gantt' && (
+        <View style={styles.ganttContainer}>
+          <GanttChart
+            tasks={filteredTasks
+              .filter(t => t.status !== 'archived')
+              .slice(0, 15)
+              .map(t => ({
+                id: t.id,
+                label: t.title,
+                start: t.createdAt,
+                end: t.dueDate || t.createdAt + 86400000 * 3,
+                color: PRIORITY_CONFIG[t.priority]?.color || C.accent,
+                progress: t.status === 'done' ? 1 : t.status === 'in_progress' ? 0.5 : 0,
+                isMilestone: false,
+              }))}
+            width={600}
+            rowHeight={36}
+          />
+          {filteredTasks.filter(t => t.status !== 'archived').length === 0 && (
+            <View style={styles.emptyGantt}>
+              <Ionicons name="bar-chart-outline" size={36} color={C.textTertiary} />
+              <Text style={styles.emptyGanttText}>Add tasks with due dates to see the Gantt chart</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {viewMode === 'table' && (
+        <View style={styles.tableContainer}>
+          <DataTable
+            data={filteredTasks}
+            columns={[
+              { key: 'title', label: 'Title', width: 160, sortable: true },
+              { key: 'status', label: 'Status', width: 90, sortable: true, render: (t: Task) => (
+                <Pressable onPress={() => handleMoveTask(t)}>
+                  <View style={[styles.tableBadge, { backgroundColor: STATUS_CONFIG[t.status]?.color + '20' }]}>
+                    <Text style={[styles.tableBadgeText, { color: STATUS_CONFIG[t.status]?.color }]}>{STATUS_CONFIG[t.status]?.label}</Text>
+                  </View>
+                </Pressable>
+              )},
+              { key: 'priority', label: 'Priority', width: 80, sortable: true, render: (t: Task) => (
+                <Text style={{ color: PRIORITY_CONFIG[t.priority]?.color, fontFamily: 'Inter_500Medium', fontSize: 11 }}>{PRIORITY_CONFIG[t.priority]?.label}</Text>
+              )},
+              { key: 'dueDate', label: 'Due', width: 80, sortable: true, render: (t: Task) => (
+                <Text style={{ color: t.dueDate && t.dueDate < Date.now() && t.status !== 'done' ? '#FF4444' : C.textSecondary, fontFamily: 'Inter_400Regular', fontSize: 11 }}>
+                  {t.dueDate ? new Date(t.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}
+                </Text>
+              )},
+              { key: 'tags', label: 'Tags', width: 100, render: (t: Task) => (
+                <Text style={{ color: C.textTertiary, fontFamily: 'Inter_400Regular', fontSize: 10 }} numberOfLines={1}>{t.tags?.join(', ') || '-'}</Text>
+              )},
+            ]}
+            keyExtractor={(t: Task) => t.id}
+            searchable
+            searchKeys={['title', 'status', 'priority']}
+            pageSize={10}
+            selectable
+          />
+        </View>
+      )}
+
+      {viewMode === 'gallery' && (
+        <View style={styles.galleryContainer}>
+          <FlatList
+            data={filteredTasks}
+            numColumns={2}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.galleryContent}
+            columnWrapperStyle={styles.galleryRow}
+            renderItem={({ item: task }) => {
+              const priorityCfg = PRIORITY_CONFIG[task.priority];
+              const statusCfg = STATUS_CONFIG[task.status];
+              return (
+                <Pressable
+                  style={styles.galleryCard}
+                  onPress={() => { setDetailTask(task); setShowDetailModal(true); }}
+                >
+                  <LinearGradient colors={C.gradient.card} style={styles.galleryCardInner}>
+                    <View style={[styles.galleryStrip, { backgroundColor: priorityCfg?.color || C.accent }]} />
+                    <Text style={styles.galleryTitle} numberOfLines={2}>{task.title}</Text>
+                    {task.description ? <Text style={styles.galleryDesc} numberOfLines={2}>{task.description}</Text> : null}
+                    <View style={styles.galleryFooter}>
+                      <View style={[styles.galleryStatusDot, { backgroundColor: statusCfg?.color }]} />
+                      <Text style={[styles.galleryStatusText, { color: statusCfg?.color }]}>{statusCfg?.label}</Text>
+                    </View>
+                    {task.dueDate && (
+                      <Text style={[styles.galleryDue, task.dueDate < Date.now() && task.status !== 'done' && { color: '#FF4444' }]}>
+                        Due {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </Text>
+                    )}
+                    {task.tags && task.tags.length > 0 && (
+                      <View style={styles.galleryTags}>
+                        {task.tags.slice(0, 2).map(tag => (
+                          <View key={tag} style={styles.galleryTag}>
+                            <Text style={styles.galleryTagText}>{tag}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </LinearGradient>
+                </Pressable>
+              );
+            }}
+            ListEmptyComponent={
+              <View style={styles.emptyGantt}>
+                <Ionicons name="images-outline" size={36} color={C.textTertiary} />
+                <Text style={styles.emptyGanttText}>No tasks to show</Text>
+              </View>
+            }
+          />
+        </View>
+      )}
+
       <MoveToModal
         visible={showMoveModal}
         task={moveTask}
@@ -1223,4 +1341,26 @@ const styles = StyleSheet.create({
   deleteBtnText: { fontFamily: 'Inter_500Medium', fontSize: 14, color: C.primary },
   assignAgentBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: C.coral, borderRadius: 12, paddingVertical: 14, marginTop: 4, gap: 8 },
   assignAgentBtnText: { fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' },
+
+  ganttContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
+  emptyGantt: { alignItems: 'center', paddingVertical: 40, gap: 8 },
+  emptyGanttText: { fontFamily: 'Inter_400Regular', fontSize: 13, color: C.textTertiary, textAlign: 'center' },
+  tableContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
+  tableBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, alignSelf: 'flex-start' },
+  tableBadgeText: { fontFamily: 'Inter_500Medium', fontSize: 10 },
+  galleryContainer: { flex: 1 },
+  galleryContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20 },
+  galleryRow: { gap: 10, marginBottom: 10 },
+  galleryCard: { flex: 1, borderRadius: 14, overflow: 'hidden' },
+  galleryCardInner: { padding: 14, borderRadius: 14, borderWidth: 1, borderColor: C.borderLight, gap: 6, minHeight: 120 },
+  galleryStrip: { width: 24, height: 3, borderRadius: 2, marginBottom: 2 },
+  galleryTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: C.text, lineHeight: 18 },
+  galleryDesc: { fontFamily: 'Inter_400Regular', fontSize: 11, color: C.textSecondary, lineHeight: 15 },
+  galleryFooter: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  galleryStatusDot: { width: 6, height: 6, borderRadius: 3 },
+  galleryStatusText: { fontFamily: 'Inter_500Medium', fontSize: 10 },
+  galleryDue: { fontFamily: 'Inter_400Regular', fontSize: 10, color: C.textTertiary },
+  galleryTags: { flexDirection: 'row', gap: 4, marginTop: 2 },
+  galleryTag: { backgroundColor: C.cardElevated, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  galleryTagText: { fontFamily: 'Inter_400Regular', fontSize: 9, color: C.textSecondary },
 });
